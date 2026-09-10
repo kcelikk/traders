@@ -137,13 +137,16 @@ class Api:
         self.staleness_s = rec_cfg.get("staleness_s", {})
         self._cache = (0.0, None)
 
-    def _symbols(self) -> list[str]:
+    def _last_run(self) -> dict:
         r = self.run_dir / "runs.jsonl"
         if r.exists():
             lines = [l for l in r.read_text().splitlines() if l.strip()]
             if lines:
-                return json.loads(lines[-1]).get("symbols", [])
-        return []
+                return json.loads(lines[-1])
+        return {}
+
+    def _symbols(self) -> list[str]:
+        return self._last_run().get("symbols", [])
 
     def start(self):
         self.tailer.start()
@@ -161,6 +164,8 @@ class Api:
             return self._cache[1]
         with self.lock:
             snap = self.view.snapshot(time.time_ns())
+        run = self._last_run()
+        snap["recorder"].update({k: run.get(k) for k in ("run_id", "restart_no", "git_sha", "config_hash", "start_ns")})
         self.kill = KillSwitch(self.kill.path)   # dosyadan taze oku (elle sıfırlama görünsün)
         phases_md = (ROOT / "docs" / "PHASE.md").read_text() if (ROOT / "docs" / "PHASE.md").exists() else ""
         lat_md = (ROOT / "docs" / "latency-baseline.generated.md").read_text() if (ROOT / "docs" / "latency-baseline.generated.md").exists() else ""
