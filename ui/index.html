@@ -559,7 +559,12 @@ class Component extends DCLogic {
   componentDidUpdate() { this.observe(); }
   componentWillUnmount() { clearInterval(this.t); if (this.ro) this.ro.disconnect(); }
   poll() { fetch('/api/state', { cache: 'no-store' }).then(r => r.json()).then(api => this.setState(s => ({ api, err: null, tickN: s.tickN + 1, sym: s.sym || (api.universe[0] && api.universe[0].sym) || 'BTCUSDT' }))).catch(e => this.setState({ err: String(e) })); }
-  post(path, body) { return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(() => this.poll()); }
+  token() { try { return localStorage.getItem('fbot_token') || ''; } catch (e) { return ''; } }
+  post(path, body) {
+    let t = this.token();
+    if (!t) { t = window.prompt('Konsol yazma token\'ı (FBOT_UI_TOKEN):') || ''; if (t) { try { localStorage.setItem('fbot_token', t); } catch (e) {} } }
+    return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Fbot-Token': t }, body: JSON.stringify(body || {}) })
+      .then(r => { if (r.status === 401) { try { localStorage.removeItem('fbot_token'); } catch (e) {} alert('Token geçersiz ya da yazma uçları kapalı.'); } return this.poll(); }); }
   observe() { [this.chartRef.current, this.equityRef.current].forEach(el => { if (el && !el.__obs) { el.__obs = true; this.ro.observe(el); } }); this.measure(); }
   measure() { const c = this.chartRef.current ? Math.round(this.chartRef.current.getBoundingClientRect().width) : 0, e = this.equityRef.current ? Math.round(this.equityRef.current.getBoundingClientRect().width) : 0; if ((c && c !== this.state.cw) || (e && e !== this.state.ew)) this.setState({ cw: c || this.state.cw, ew: e || this.state.ew }); }
   fmt(n, d) { if (n == null || isNaN(n)) return '—'; n = Number(n); if (d === undefined) d = Math.abs(n) < 0.01 ? 5 : Math.abs(n) < 1 ? 4 : Math.abs(n) < 100 ? 2 : Math.abs(n) < 10000 ? 1 : 0; return n.toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d }); }

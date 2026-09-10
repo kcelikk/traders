@@ -15,6 +15,7 @@ import tomllib
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from fbot.api.auth import AuthConfig, check as auth_check
 from fbot.api.live_view import LiveView, parse_phase_table
 from fbot.api.paper_view import paper_snapshot
 from fbot.api.tail import GrowingGzipReader
@@ -134,8 +135,10 @@ class Tailer(threading.Thread):
 
 
 class Api:
-    def __init__(self, run_dir: Path, ui_dir: Path, history_files: int):
+    def __init__(self, run_dir: Path, ui_dir: Path, history_files: int, auth: AuthConfig | None = None):
         self.run_dir, self.ui_dir = run_dir, ui_dir
+        self.auth = auth or AuthConfig(token=os.environ.get("FBOT_UI_TOKEN") or None,
+                                       protect_reads=os.environ.get("FBOT_UI_PROTECT_READS", "") == "1")
         rec_cfg = tomllib.loads((ROOT / "config" / "recorder.toml").read_text())
         res_cfg = tomllib.loads((ROOT / "config" / "research.toml").read_text())
         symbols = self._symbols()
@@ -225,7 +228,15 @@ def make_handler(api: Api):
             self.end_headers()
             self.wfile.write(body)
 
+        def _authorized(self) -> bool:
+            ok, why = auth_check(self.command, self.path, dict(self.headers), api.auth)
+            if not ok:
+                self._json({"error": why}, 401)
+            return ok
+
         def do_GET(self):
+            if not self._authorized():
+                return
             if self.path.startswith("/api/state"):
                 return self._json(api.state())
             if self.path.startswith("/api/health"):
@@ -235,6 +246,8 @@ def make_handler(api: Api):
             return super().do_GET()
 
         def do_POST(self):
+            if not self._authorized():
+                return
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}
             if self.path == "/api/kill":
@@ -265,11 +278,16 @@ def main(argv):
     ap.add_argument("--bind", default=os.environ.get("FBOT_UI_BIND", "127.0.0.1"))
     ap.add_argument("--port", type=int, default=int(os.environ.get("FBOT_UI_PORT", "8787")))
     ap.add_argument("--history-files", type=int, default=5, help="başlangıçta oynatılacak kapalı dosya sayısı (saat)")
+    ap.add_argument("--protect-reads", action="store_true", help="okuma uçlarını da token ile koru")
     a = ap.parse_args(argv)
-    api = Api(Path(a.run_dir), Path(a.ui_dir), a.history_files)
+    token = os.environ.get("FBOT_UI_TOKEN") or None
+    api = Api(Path(a.run_dir), Path(a.ui_dir), a.history_files,
+              AuthConfig(token=token, protect_reads=a.protect_reads or os.environ.get("FBOT_UI_PROTECT_READS", "") == "1"))
     api.start()
     srv = ThreadingHTTPServer((a.bind, a.port), make_handler(api))
-    print(json.dumps({"msg": "konsol", "url": f"http://{a.bind}:{a.port}/", "run_dir": a.run_dir}), flush=True)
+    print(json.dumps({"msg": "konsol", "url": f"http://{a.bind}:{a.port}/", "run_dir": a.run_dir,
+                      "yazma_uçları": "token ile açık" if token else "KAPALI (FBOT_UI_TOKEN yok)",
+                      "okuma_koruması": bool(api.auth.protect_reads)}), flush=True)
     srv.serve_forever()
 
 
