@@ -56,3 +56,11 @@ def test_list_mode_requires_symbols(tmp_path):
     p = tmp_path / "r.toml"; p.write_text(GOOD.replace('mode = "top"', 'mode = "list"'))
     with pytest.raises(ConfigError):
         load_recorder_config(p)
+
+
+def test_tick_ms_default_and_override(tmp_path):
+    p = tmp_path / "r.toml"; p.write_text(GOOD)
+    cfg, _ = load_recorder_config(p)
+    assert cfg.tick_ms == 1000
+    p.write_text(GOOD.replace("[run]", "[run]\ntick_ms = 250"))
+    assert load_recorder_config(p)[0].tick_ms == 250

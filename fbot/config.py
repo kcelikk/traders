@@ -27,6 +27,7 @@ class RecorderConfig:
     backoff_max_s: float
     depth_snapshot_limit: int = 1000
     stats_interval_s: float = 10.0
+    tick_ms: int = 1000
 
 
 def _need(d: dict, key: str, section: str):
@@ -67,5 +68,6 @@ def load_recorder_config(path: str | Path) -> tuple[RecorderConfig, str]:
         backoff_max_s=float(_need(rc, "backoff_max_s", "reconnect")),
         depth_snapshot_limit=int(run.get("depth_snapshot_limit", 1000)),
         stats_interval_s=float(run.get("stats_interval_s", 10.0)),
+        tick_ms=int(run.get("tick_ms", 1000)),
     )
     return cfg, h

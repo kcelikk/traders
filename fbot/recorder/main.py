@@ -136,6 +136,14 @@ class Recorder:
                 elif age <= thr:
                     self.stale_flag[cat] = False
 
+    async def tick_task(self):
+        """Periyodik tick olayı: zaman aşımı ve yedek stop kuralları için (replay'de aynı akışta)."""
+        n = 0
+        while not self.stop_ev.is_set():
+            await asyncio.sleep(self.cfg.tick_ms / 1000)
+            n += 1
+            self.ctrl("tick", {"n": n})
+
     async def stats_task(self):
         interval = 0.1
         last_stats = time.monotonic()
@@ -181,7 +189,7 @@ class Recorder:
                                                  self.cfg.backoff_initial_s, self.cfg.backoff_max_s)
         wt = asyncio.create_task(self.writer_task())
         tasks = [asyncio.create_task(c.run()) for c in self.conns.values()]
-        tasks += [asyncio.create_task(self.snapshot_task()), asyncio.create_task(self.staleness_task()), asyncio.create_task(self.stats_task())]
+        tasks += [asyncio.create_task(self.snapshot_task()), asyncio.create_task(self.staleness_task()), asyncio.create_task(self.stats_task()), asyncio.create_task(self.tick_task())]
         print(json.dumps({"msg": "recorder started", **{k: v for k, v in start_info.items() if k != "streams"}}), flush=True)
         try:
             await asyncio.wait_for(self.stop_ev.wait(), timeout=self.duration)

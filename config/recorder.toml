@@ -7,6 +7,7 @@ rotate_minutes = 60
 snapshot_interval_s = 600      # depth snapshot (limit 1000, ağırlık 20) her sembol için
 depth_snapshot_limit = 1000
 stats_interval_s = 10
+tick_ms = 1000                 # ctrl/tick olayı (Faz 4 kuralları; replay'de aynı akışta)
 
 [universe]
 mode = "top"                   # "top" | "list"
