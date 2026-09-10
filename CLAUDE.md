@@ -199,6 +199,10 @@ make replay REC=<run_id> MAXF=<dosya>
 # Faz 3 araştırma
 make export-bars REC=<run_id>
 make research-report REC=<run_id>
+make fetch-history / build-history-bars   # Binance geçmiş aggTrades (ADR 0009)
+
+# Faz 4
+make replay-positions REC=<run_id> SL=0.5 TP=1.0 W=120
 
 # (Faz 7+ ile gelecek: run-paper)
 ```
@@ -217,8 +221,8 @@ make research-report REC=<run_id>
 | 1 | Temel + ham veri kaydı | kapandı 2026-09-10 (kapı ≥1 saat, ADR 0006) |
 | 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
 | 3 | Offline araştırma (bilgilendirici; kapı **kaldırıldı**, ADR 0010) | tamamlandı 2026-09-10: 0/48 hücrede maliyet üstü beklenti; araştırma paralelde sürer |
-| 4 | Pozisyon yönetimi ve çıkış | **AKTİF** (2026-09-10) |
-| 5 | Risk Engine | — |
+| 4 | Pozisyon yönetimi ve çıkış | teslim edildi 2026-09-10 |
+| 5 | Risk Engine | **AKTİF** |
 | 6 | Giriş mantığı | — |
 | 7 | Paper trading (2 hafta ara rapor, 4 hafta hedef) | — |
 | 8 | Gözlemlenebilirlik | — |

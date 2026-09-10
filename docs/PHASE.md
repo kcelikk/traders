@@ -6,8 +6,8 @@
 | 1 | Temel + ham veri kaydı | **KAPANDI** 2026-09-10 (kapı raporu `docs/recording-gate-report.md`; kayıt sürüyor) | ≥1 saat kesintisiz kayıt (ADR 0006) |
 | 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (bilgilendirici) | **KAPANDI** 2026-09-10: 0/48 hücrede maliyet üstü beklenti; kapı kaldırıldı (ADR 0010); araştırma paralelde sürer | — |
-| 4 | Pozisyon yönetimi ve çıkış | **AKTİF** (2026-09-10; tasarım notu `docs/design/faz4-cikis-kurallari.md`) | replay'de sabit TP/SL'ye göre iyileşme |
-| 5 | Risk Engine | bekliyor (tasarım notu: `docs/design/faz5-risk-engine.md`) | hata enjeksiyon testleri |
+| 4 | Pozisyon yönetimi ve çıkış | **teslim edildi** 2026-09-10, onay bekliyor | replay'de sabit TP/SL'ye göre iyileşme |
+| 5 | Risk Engine | **AKTİF** (2026-09-10): assess K1–K18, runaway, kill switch, mutabakat yazıldı; engine entegrasyonu bekliyor | hata enjeksiyon testleri |
 | 6 | Giriş mantığı | bekliyor (tasarım notu: `docs/design/faz6-giris-mantigi.md`) | replay maliyet dahil pozitif |
 | 7 | Paper trading (min 4 hafta) | bekliyor (tasarım notu: `docs/design/faz7-paper-trading.md`) | backtest ile tutarlı |
 | 8 | Gözlemlenebilirlik | bekliyor (tasarım notu: `docs/design/faz8-gozlemlenebilirlik.md`) | tüm metrikler yayında |
@@ -185,6 +185,31 @@ scripts/research_report.py # rapor üretimi
 config/research.toml       # W, p_lo, p_hi, ufuklar, maliyet senaryoları, seed, keşif oranı
 tests/test_features_lookahead.py test_states.py test_forward_returns.py test_stats.py
 ```
+
+## Faz 4 ilerleme (2026-09-10) — teslim edildi, onay bekliyor
+
+| Kriter | Sonuç |
+|---|---|
+| 1–4 durum makinesi, kurallar, değiştirme sırası | `fbot/core/position.py`, 10 test |
+| 5 deterministik id'ler | `p1-SL-v1`, `p1-TP-v1`, `p1-X-v1`; ≤ 36 karakter |
+| 6 net PnL | komisyon + funding (markPrice `T` değişiminde işlenir) + slippage tahmini; `Decimal` |
+| 7 engine exec/tick | `exec` olayları ve `ctrl/tick`; bayatlıkta FROZEN; 139 test yeşil, determinizm korunuyor |
+| 8 recorder tick | `tick_ms=1000`; container yeniden başlatıldı (restart 1, seq devam) |
+| 9 replay karşılaştırması (bilgilendirici) | 9 saat, S1/S2 girişleri, SL 0.5 / TP 1.0, 80 USDT, taker/taker — aşağıda |
+| ek | user data payload doğrulaması (§12) ve `exec` eşlemesi; dolum simülatörü (Faz 7 çekirdeği); parse hızı 10k → 67k olay/s |
+
+Replay karşılaştırması (`docs/design/faz4-replay-karsilastirma.md`):
+
+| ölçüt | statik SL/TP | statik + R1/R3/R5 |
+|---|---|---|
+| pozisyon | 87 | 143 |
+| net ort. / pozisyon | −0.245 % | −0.187 % |
+| kazanma oranı | 24 % | 36 % |
+| kârdayken (> +0.10 % net) zararla kapanan oranı | **67 %** | **44 %** |
+| SL değiştirme sayısı | 0 | 140 |
+| çıkış nedenleri | tp 21, sl 66 | sl 121, tp 11, timeout 11 |
+
+Yorum: kâr kilidi kârdan zarara dönmeyi belirgin düşürüyor ve pozisyon başına net sonucu iyileştiriyor; ancak girişlerde avantaj olmadığı için (Faz 3) daha çok işlem = daha çok komisyon, toplam yine negatif. Çıkış mekaniği tasarlandığı işi yapıyor; kârlılık girişe bağlı. **Kârlılık gösterilmedi.**
 
 ## Faz 4 — hedef
 
