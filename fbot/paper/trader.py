@@ -15,6 +15,7 @@ from fbot.core.commands import CancelAlgo, CancelOrder, PlaceAlgo, PlaceOrder, S
 from fbot.core.engine import CoreState
 from fbot.core.position import PosState as PosStateEnum
 from fbot.events import RawEvent
+from fbot.orderbook import LocalOrderBook
 
 ORDER_CMDS = (PlaceOrder, PlaceAlgo, CancelAlgo, CancelOrder)
 
@@ -39,6 +40,8 @@ class PaperTrader:
         self._verdicts_seen = 0
         self.exit_price: dict = {}          # pos_id → gerçekleşen çıkış fiyatı (net PnL için)
         self.closed_ns: dict = {}
+        self.books: dict[str, LocalOrderBook] = {}   # sembol → L2 defter (dolum simülasyonu, ADR 0013)
+        self.book_levels = 20
 
     # ---------------- akış
     def on_event(self, ev: RawEvent, now_ns: int) -> None:
@@ -80,15 +83,56 @@ class PaperTrader:
         self._record_positions()
 
     def _feed_sim_from(self, ev: RawEvent, now_ns: int) -> None:
+        if ev.cat == "ctrl":
+            if ev.stream == "snapshot":
+                self._on_snapshot(ev, now_ns)
+            return
         d = self.engine_state.last_data
-        if ev.cat == "ctrl" or not d:
+        if not d:
             return
         e = d.get("e")
         if e == "bookTicker":
             self.sim.on_book(d["s"], Decimal(d["b"]), Decimal(d["a"]), now_ns)
+        elif e == "depthUpdate":
+            self._on_depth(d, now_ns)
         elif e == "markPriceUpdate":
+            self._sync_positions()
             for out in self.sim.on_mark(d["s"], Decimal(d["p"]), now_ns):
                 self._emit_exec(out, now_ns)
+
+    # ---------------- L2 defter (dolum simülasyonunun girdisi)
+    def _on_snapshot(self, ev: RawEvent, now_ns: int) -> None:
+        try:
+            info = json.loads(ev.raw)
+        except ValueError:
+            return
+        if info.get("status") != 200 or not isinstance(info.get("body"), dict):
+            return
+        sym = info["symbol"].lower()
+        ob = self.books.setdefault(sym, LocalOrderBook())
+        ob.apply_snapshot(info["body"])
+        self._push_book(sym, now_ns)
+
+    def _on_depth(self, d: dict, now_ns: int) -> None:
+        sym = d["s"].lower()
+        ob = self.books.setdefault(sym, LocalOrderBook())
+        if ob.feed(d) == "applied":
+            self._push_book(sym, now_ns)
+
+    def _push_book(self, sym: str, now_ns: int) -> None:
+        ob = self.books[sym]
+        if not ob.synced or not ob.bids or not ob.asks:
+            return
+        n = self.book_levels
+        bids = sorted(ob.bids.items(), key=lambda x: -x[0])[:n]
+        asks = sorted(ob.asks.items(), key=lambda x: x[0])[:n]
+        self.sim.on_depth(sym.upper(), bids, asks, now_ns)
+
+    def _sync_positions(self) -> None:
+        """closePosition emirleri simülatörde miktarı bilmeli."""
+        for pid, p in self.engine_state.positions.items():
+            if p.state != PosStateEnum.CLOSED:
+                self.sim.set_position(pid, p.symbol, p.qty)
 
     def _drain_sim(self, now_ns: int) -> None:
         for out in self.sim.poll(now_ns):

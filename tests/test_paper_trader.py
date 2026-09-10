@@ -53,19 +53,42 @@ class Host:
         return ev
 
 
+def depth_levels(px):
+    """L2 defter: her iki tarafta 3 seviye, dolum simülasyonu için yeterli derinlik (ADR 0013)."""
+    bids = [[f"{px - 0.01 * k:.2f}", "50"] for k in range(1, 4)]
+    asks = [[f"{px + 0.01 * k:.2f}", "50"] for k in range(1, 4)]
+    return bids, asks
+
+
 def market_events(n=90):
     out = []
+    u = 0
     for i in range(1, n):
         px = 100 + (i % 11) - 5
         out.append(("market", "xusdt@aggTrade", {"e": "aggTrade", "s": "XUSDT", "a": i, "p": str(px), "q": "1", "T": i * 60_000, "E": 1, "m": i % 3 == 0}))
         out.append(("public", "xusdt@bookTicker", {"e": "bookTicker", "s": "XUSDT", "u": i, "b": str(px - 0.01), "B": "5", "a": str(px + 0.01), "A": "5", "E": 1}))
+        b, a = depth_levels(px)
+        # tam defter: her seferinde önceki seviyeler sıfırlanır ki defter fiyatı izlesin
+        clear_b, clear_a = depth_levels(100 + ((i - 1) % 11) - 5)
+        out.append(("public", "xusdt@depth@100ms", {"e": "depthUpdate", "s": "XUSDT", "U": u + 1, "u": u + 2, "pu": u,
+                                                    "b": [[p, "0"] for p, _ in clear_b] + b, "a": [[p, "0"] for p, _ in clear_a] + a, "E": 1, "T": 1}))
+        u += 2
         out.append(("market", "xusdt@markPrice@1s", {"e": "markPriceUpdate", "s": "XUSDT", "p": str(px), "r": "0.0001", "T": 10**13, "E": 1}))
     return out
+
+
+def snapshot_event(host, trader):
+    """Defterin ilk kurulumu: kayıttaki ctrl/snapshot olayının aynısı."""
+    body = {"lastUpdateId": 0, "bids": depth_levels(100)[0], "asks": depth_levels(100)[1]}
+    raw = json.dumps({"symbol": "XUSDT", "status": 200, "body": body}).encode()
+    ev = host.emit("ctrl", "snapshot", raw)
+    trader.on_event(ev, host.now)
 
 
 def live_run(cells):
     host = Host()
     trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit)
+    snapshot_event(host, trader)
     for cat, s, d in market_events():
         host.now += 200_000_000       # 200 ms
         ev = host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode())
@@ -148,6 +171,7 @@ def test_store_receives_decisions_orders_fills_positions(tmp_path):
     host = Host()
     store = PaperStore(tmp_path / "p.db", run_id="t1")
     trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit, store=store)
+    snapshot_event(host, trader)
     for cat, s, d in market_events():
         host.now += 200_000_000
         trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
@@ -169,6 +193,7 @@ def test_closed_position_net_uses_exit_price_not_mark(tmp_path):
     host = Host()
     store = PaperStore(tmp_path / "n.db", run_id="t2")
     trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit, store=store)
+    snapshot_event(host, trader)
     for cat, s, d in market_events():
         host.now += 200_000_000
         trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
@@ -177,8 +202,14 @@ def test_closed_position_net_uses_exit_price_not_mark(tmp_path):
     store.flush()
     closed = [p for p in store.recent_positions(50) if p["state"] == "CLOSED"]
     assert closed
+    fills = {f[0]: f[1] for f in store.con.execute("select client_id, price from fills where kind='exit_fill'").fetchall()}
     for p in closed:
         assert p["closed_ns"] is not None and p["closed_ns"] >= p["opened_ns"]
-        # net = brüt − maliyet; TP çıkışında pozitif, SL çıkışında negatif olmalı
-        net = float(p["net_pct"])
-        assert (net > 0) == (p["exit_reason"] == "tp"), (p["exit_reason"], net)
+        # net, mark'tan değil GERÇEKLEŞEN çıkış fiyatından hesaplanır: net = brüt − maliyet (0.10)
+        exit_px = float(next(v for k, v in fills.items() if k.startswith(p["pos_id"])))
+        entry = float(p["entry_price"])
+        gross = (exit_px / entry - 1) * 100 * (1 if p["side"] == "long" else -1)
+        assert abs(float(p["net_pct"]) - (gross - 0.10)) < 1e-6, (p["exit_reason"], p["net_pct"], gross)
+    # Defter yürüyüşlü modelde TP tetiği kârlı dolum garanti etmez (tetik ile dolum arası kayma) — ADR 0013
+    tp_nets = [float(p["net_pct"]) for p in closed if p["exit_reason"] == "tp"]
+    assert tp_nets, "TP çıkışı yok"
