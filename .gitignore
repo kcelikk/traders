@@ -7,3 +7,4 @@ data/
 !data/.gitkeep
 data/ui.log
 data/ui.pid
+.env.ui

@@ -22,7 +22,7 @@ status:                  # arka plan süreçleri ve veri durumu
 
 ui:                      # konsol: http://127.0.0.1:8787 (SSH tüneli: ssh -L 8787:127.0.0.1:8787 <sunucu>)
                          # HIST_FILES: başlangıçta oynatılacak saat; durum etiketi için ≥ 2W bar (W=240 → 8 saat) gerekir
-	@nohup $(PY) -m fbot.api.server --run-dir data/recordings/$(REC) --history-files $(or $(HIST_FILES),24) > data/ui.log 2>&1 & echo $$! > data/ui.pid
+	@set -a; [ -f .env.ui ] && . ./.env.ui; set +a; nohup $(PY) -m fbot.api.server --run-dir data/recordings/$(REC) --history-files $(or $(HIST_FILES),24) > data/ui.log 2>&1 & echo $$! > data/ui.pid
 	@sleep 2; curl -s http://127.0.0.1:8787/api/health; echo
 
 ui-stop:                 # pidfile ile (pkill -f pattern'i kendi shell'ini de öldürebiliyor)

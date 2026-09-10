@@ -4,7 +4,9 @@
       "Bash(apt-get install *)",
       "Bash(docker --version)",
       "Bash(docker compose *)",
-      "Bash(docker run *)"
+      "Bash(docker run *)",
+      "Bash(nginx -v)",
+      "Bash(set *)"
     ]
   }
 }
