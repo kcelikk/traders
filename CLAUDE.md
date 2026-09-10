@@ -225,8 +225,8 @@ make ui REC=<run_id> / make ui-stop   # 127.0.0.1:8787
 | 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
 | 3 | Offline araştırma (bilgilendirici; kapı **kaldırıldı**, ADR 0010) | tamamlandı 2026-09-10: 0/48 hücrede maliyet üstü beklenti; araştırma paralelde sürer |
 | 4 | Pozisyon yönetimi ve çıkış | kapandı 2026-09-10 |
-| 5 | Risk Engine | **AKTİF** |
-| 6 | Giriş mantığı | — |
+| 5 | Risk Engine | teslim edildi 2026-09-10 |
+| 6 | Giriş mantığı | teslim edildi 2026-09-10 (allowed_cells boş) |
 | 7 | Paper trading (2 hafta ara rapor, 4 hafta hedef) | — |
 | 8 | Gözlemlenebilirlik | — |
 | 9 | Testnet execution (test planı + ≥100 emir, beklenmeyen hata 0) | — |

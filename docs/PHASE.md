@@ -7,8 +7,8 @@
 | 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (bilgilendirici) | **KAPANDI** 2026-09-10: 0/48 hücrede maliyet üstü beklenti; kapı kaldırıldı (ADR 0010); araştırma paralelde sürer | — |
 | 4 | Pozisyon yönetimi ve çıkış | **KAPANDI** 2026-09-10 (ADR 0012) | replay'de sabit TP/SL'ye göre iyileşme |
-| 5 | Risk Engine | **AKTİF** (2026-09-10): assess K1–K18, runaway, kill switch, mutabakat yazıldı; engine entegrasyonu bekliyor | hata enjeksiyon testleri |
-| 6 | Giriş mantığı | bekliyor (tasarım notu: `docs/design/faz6-giris-mantigi.md`) | replay maliyet dahil pozitif |
+| 5 | Risk Engine | **teslim edildi** 2026-09-10: assess K1–K18, runaway, kalıcı kill switch, mutabakat; çekirdeğe bağlandı (giriş zinciri) | hata enjeksiyon testleri |
+| 6 | Giriş mantığı | **teslim edildi** 2026-09-10: State Engine çekirdekte (araştırma ile bit-eşit), Decision Engine D1–D3, zincir bağlı; `allowed_cells` boş (Faz 3: 0/48) | replay maliyet dahil pozitif |
 | 7 | Paper trading (min 4 hafta) | bekliyor (tasarım notu: `docs/design/faz7-paper-trading.md`) | backtest ile tutarlı |
 | 8 | Gözlemlenebilirlik | **kısmen başladı** 2026-09-10: fbot Console (ui/ + fbot/api, kayıt tail, /api/state, kill switch); Prometheus/Grafana/alarmlar bekliyor | tüm metrikler yayında |
 | 9 | Testnet canlı execution | bekliyor (tasarım notu: `docs/design/faz9-testnet-execution.md`) | 2 hafta hatasız |
@@ -237,3 +237,20 @@ Hedef: bağımsız, veto yetkili, saf Risk Engine (`assess`), kalıcı kill swit
 4. Kill switch: dosyada kalıcı, restart sonrası okunur, yalnızca elle sıfırlanır (`fbot/gateway/killswitch.py`, I/O kenarı; çekirdek yalnızca bayrağı okur).
 5. Runaway dedektörü: kayan pencerede emir sayısı ve ardışık ret sayısı eşikleri → `KillSwitchTriggered` komutu.
 6. Determinizm: aynı girdi aynı karar (test).
+
+## Faz 5–6 teslim (2026-09-10)
+
+| Kriter | Sonuç |
+|---|---|
+| Risk Engine saf, K1–K18, gerekçe sırası | `fbot/core/risk.py`, 12 test; çıkışlar yalnızca K12'den geçer |
+| Kalıcı kill switch | `fbot/gateway/killswitch.py`, atomik yazım + geçmiş; restart testi |
+| Mutabakat | `fbot/core/reconcile.py`: pozisyon/algo/kaldıraç/mod farkları, korumasız pozisyon listesi |
+| State Engine ≡ araştırma | `tests/test_state_engine.py`: aynı bar dizisinde etiketler ve feature'lar bit-eşit |
+| Decision Engine D1–D3 | `fbot/core/decision.py`, 8 test; ağırlıklı skorlama yok; sl/tp yoksa intent yok |
+| Zincir | bar → durum → karar → risk → PlaceOrder; dolumda sl/tp intent yüzdesinden; 5 test |
+| Determinizm | zincir iki kez oynatıldığında aynı komut dizisi |
+| Toplam test | 167 |
+
+**Yakalanan hata (2W penceresi):** durum motoru kayan pencereyi `W + N_long` bar tutuyordu; `vol_ratio` ve `spread` persentilleri W bar geçmiş isteyip kendileri de W bar pencere gerektirdiği için `pct_vol_ratio`/`pct_spread` sessizce `None` kalıyor, **S3 ve S4 hiç etiketlenmiyordu**. Pencere `2W + N_long + 2` yapıldı; aynı hata `fbot/api/live_view.py` ve `scripts/replay_positions.py` içinde de düzeltildi. Faz 5'teki "ısınma = 2W bar" kuralının kaynağı budur.
+
+**Kârlılık gösterilmedi (ADR 0010).** `allowed_cells` boş olduğu için zincir hiçbir giriş emri üretmez; Faz 3'te maliyet üstü beklenti gösteren hücre çıkmadı.
