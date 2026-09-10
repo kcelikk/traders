@@ -6,12 +6,19 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup test test-determinism replay export-bars research-report research-scan measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup status test test-determinism replay export-bars research-report research-scan measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
 	$(PIP) install -q -r requirements-dev.txt
 	$(PY) -c "import websockets, pytest; print('ok', websockets.__version__, pytest.__version__)"
+
+status:                  # arka plan süreçleri ve veri durumu
+	@date -u '+%Y-%m-%dT%H:%MZ'
+	@docker inspect -f 'recorder: {{.State.Status}} restarts={{.RestartCount}} started={{.State.StartedAt}}' fbot-recorder 2>/dev/null || echo "recorder: yok"
+	@du -sh data/recordings/$(REC) 2>/dev/null | awk '{print "kayıt:", $$1}'; ls data/recordings/$(REC)/*.gz 2>/dev/null | wc -l | awk '{print "kayıt dosyası:", $$1}'
+	@echo "gecikme ölçümü process: $$(pgrep -cf '[m]easure_latency --duration')"; wc -l < data/latency/$(RUN)/rest_keepalive.jsonl 2>/dev/null | awk '{print "REST örnek:", $$1, "(24 s ≈ 43200)"}'
+	@echo "sonraki: 2026-09-11 07:39Z gecikme nihai raporu; 08:00Z sonrası 24 s araştırma ön raporu; 2026-09-13 08:00Z sonrası nihai/DUR"
 
 test:
 	$(PYTEST) -q tests
