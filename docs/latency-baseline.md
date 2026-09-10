@@ -48,3 +48,11 @@ Saat bazında `/public` recv − E: 07:xx p95 195 / p99 403; 08:xx p95 380 / p99
 - 24 saat tamamlanmadı; gün içi ve funding saatleri kapsanmadı.
 - Kimlikli WS API (`session.logon` sonrası `order.place`) gecikmesi ölçülmedi (anahtar gerekir, Faz 9).
 - 08:xx'teki kuyruk tepesinin kaynağı ayrıştırılmadı.
+
+## Ek: 08:xx tepesi ve iki modlu gecikme (ayrıştırma, 10:50 UTC)
+
+Dakika bazında `/public` recv − E incelendi (`ws_public.jsonl`) ve recorder'ın aynı dakikalardaki `ctrl/stats` loop lag'i ile karşılaştırıldı.
+
+- **Gecikme iki modlu:** dakikaların bir kısmında p95 ≈ 145–160 ms, diğerlerinde p95 ≈ 350–420 ms (yaklaşık +280 ms ikinci mod). Bu desen recorder başlamadan **önce de** var (07:41–07:43, 07:52–07:53, 07:56–07:57). p50 her iki modda da ≈ 141 ms; yani tüm mesajlar değil, dakika içindeki bir alt küme gecikiyor.
+- **08:05 tepesi (p99 6.9 s, maks 7.15 s):** aynı dakikada recorder loop lag maks 25 ms, kuyruk 0. Tepe yerel süreçten kaynaklanmıyor; ağ yolu ya da Binance yayın tarafı. 10:56'da benzer bir tepe (p99 1.0 s) tekrarlandı.
+- **Sonuç:** hot path tasarımı 0.4 s p99'u olağan, çok saniyelik tepeleri seyrek-ama-gerçek kabul etmeli. Bayatlık eşiği için 24 saatlik en uzun sessizlik ölçümü beklenecek; 30 s başlangıç değeri bu tepelerin üstünde. İkinci modun kaynağı (TCP alım penceresi mi, Binance batch yayını mı) Faz 1 kaydındaki `E − T` ve alım aralıklarıyla ayrıca incelenecek.
