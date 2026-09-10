@@ -82,7 +82,7 @@ def test_risk_veto_blocks_entry_and_is_counted():
     st, cmds = run(c, stream())
     assert not [x for x in cmds if isinstance(x, PlaceOrder) and not x.reduce_only]
     assert st.intents_rejected >= 1
-    assert any("K11_margin" in r for r in st.last_verdicts[0]["reasons"])
+    assert any("K11_margin" in r for v in st.last_verdicts for r in v["reasons"])
 
 
 def test_pipeline_is_deterministic():
@@ -153,6 +153,9 @@ def test_all_verdicts_are_countable_not_capped():
     labels = {c.to_state for c in run(cfg(()), stream())[1] if isinstance(c, StateChanged)}
     cells = tuple(Cell(state=s, dir=d, h=15) for s in labels - {"S0"} for d in ("long", "short"))
     st, _ = run(cfg(cells, account={"available_balance": "0", "paper": True}), stream())
-    assert st.verdicts_total == st.intents_rejected + st.intents_made
+    # verdicts_total artık NO_INTENT kayıtlarını da sayar; değişmez olan: kayıp yok ve sıra monoton
+    assert st.verdicts_total >= st.intents_rejected + st.intents_made > 0
     assert st.verdicts_total > len(st.last_verdicts)
-    assert all("n" in v for v in st.last_verdicts)
+    ns = [v["n"] for v in st.last_verdicts]
+    assert ns == sorted(ns, reverse=True) and len(set(ns)) == len(ns)
+    assert {"REJECT", "NO_INTENT"} & {v["kind"] for v in st.last_verdicts}

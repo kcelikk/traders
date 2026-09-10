@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from fbot.core.commands import BarClosed, PlaceOrder, StalenessChanged
-from fbot.core.decision import DecisionConfig, decide
+from fbot.core.decision import DecisionConfig, decide_explain
 from fbot.core.market import SymbolMarket
 from fbot.core.position import Filters, Position, PositionConfig, PositionManager, PosState
 from fbot.core.risk import EntryIntent as RiskIntent, RiskConfig, RiskInputs, assess
@@ -42,7 +42,9 @@ class CoreState:
     intents_made: int = 0
     intents_rejected: int = 0
     verdicts_total: int = 0
+    no_intent: dict = field(default_factory=dict)
     verdicts_total: int = 0
+    no_intent: dict = field(default_factory=dict)
     last_verdicts: list = field(default_factory=list)
     pending_entries: set = field(default_factory=set)
     kill_switch: bool = False
@@ -229,8 +231,15 @@ class Engine:
                 "best_bid": m.best_bid, "best_ask": m.best_ask, "spread_bps": spread_bps,
                 "stale": any(state.stale.values()), "now_ms": bar.end_ms, "next_funding_ms": m.next_funding_ms,
                 "bar_end_ms": bar.end_ms, "has_position": has_pos}
-        intent = decide(view, self.cfg.decision)
+        intent, blocked = decide_explain(view, self.cfg.decision)
         if intent is None:
+            state.no_intent[blocked] = state.no_intent.get(blocked, 0) + 1
+            if blocked not in ("S0_durum_yok", "allowed_cells_bos", "pozisyon_acik"):
+                state.verdicts_total += 1
+                state.last_verdicts.insert(0, {"n": state.verdicts_total, "t_ms": bar.end_ms, "symbol": sym,
+                                               "kind": "NO_INTENT", "reasons": [blocked], "cell": f"{label}/?",
+                                               "explain": f"spread={spread_bps} ref={self.cfg.decision.research_spread_bps.get(sym)} yaş={se.bars_in_state} bar"})
+                del state.last_verdicts[20:]
             return []
         verdict = assess(RiskIntent(symbol=sym, side=intent.side, notional=intent.notional, price=intent.price,
                                     reduce_only=False, entry_state=label), self._risk_inputs(state, bar, m, spread_bps), self.cfg.risk)

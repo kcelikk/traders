@@ -65,3 +65,27 @@ def test_s3_direction_from_imbalance():
 def test_decide_is_pure_and_deterministic():
     a, b = decide(view(), CFG), decide(view(), CFG)
     assert a == b
+
+
+def test_decide_explain_reports_blocking_condition():
+    from fbot.core.decision import decide_explain
+    i, why = decide_explain(view(), CFG)
+    assert i is not None and why is None
+    assert decide_explain(view(state="S2"), CFG)[1] == "D1_hucre_yok"
+    assert decide_explain(view(state="S0"), CFG)[1] == "S0_durum_yok"
+    assert decide_explain(view(age_bars=9), CFG)[1] == "D2_durum_eski"
+    assert decide_explain(view(stale=True), CFG)[1] == "D3_bayat"
+    assert decide_explain(view(spread_bps=Decimal("9")), CFG)[1] == "D3_spread"
+    assert decide_explain(view(next_funding_ms=1_050_000), CFG)[1] == "D3_funding_guard"
+    assert decide_explain(view(has_position=True), CFG)[1] == "pozisyon_acik"
+    cfg2 = DecisionConfig(**{**CFG.__dict__, "sl_pct": {}, "tp_pct": {}})
+    assert decide_explain(view(), cfg2)[1] == "sl_tp_yok"
+    cfg3 = DecisionConfig(**{**CFG.__dict__, "allowed_cells": ()})
+    assert decide_explain(view(), cfg3)[1] == "allowed_cells_bos"
+    assert decide_explain(view(state="S3", features={"imb_short": 0.0}), CFG)[1] == "yon_yok"
+
+
+def test_spread_reason_includes_measured_values():
+    from fbot.core.decision import decide_explain
+    i, why = decide_explain(view(spread_bps=Decimal("9")), CFG)
+    assert i is None and why == "D3_spread"

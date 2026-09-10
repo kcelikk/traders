@@ -51,39 +51,46 @@ class EntryIntent:
 
 
 def decide(v: dict, cfg: DecisionConfig) -> EntryIntent | None:
+    return decide_explain(v, cfg)[0]
+
+
+def decide_explain(v: dict, cfg: DecisionConfig) -> tuple[EntryIntent | None, str | None]:
+    """(intent, engelleyen_koşul). Sessiz `None` yerine nedeni de döndürür — gözlemlenebilirlik için."""
     sym, state = v["symbol"], v["state"]
     if v.get("has_position"):
-        return None
-    if state == "S0" or not cfg.allowed_cells:
-        return None
+        return None, "pozisyon_acik"
+    if not cfg.allowed_cells:
+        return None, "allowed_cells_bos"
+    if state == "S0":
+        return None, "S0_durum_yok"
     # yön: durum kuralından (araştırma kodu), hücre listesiyle kesiştirilir
     dirs = [d for d, _tag in directions(state, v.get("features") or {})]
     if not dirs:
-        return None
+        return None, "yon_yok"
     cell = next((c for c in cfg.allowed_cells if c.state == state and c.dir in dirs), None)
     if cell is None:
-        return None
+        return None, "D1_hucre_yok"
     d1 = f"D1 hücre {cell.key()} izinli"
     # D2: durum yeni girildi
     age = v.get("age_bars")
     if cfg.max_state_age_bars is not None and (age is None or age > cfg.max_state_age_bars):
-        return None
+        return None, "D2_durum_eski"
     d2 = f"D2 durum yaşı {age} bar ≤ {cfg.max_state_age_bars}"
     # D3: yürütme uygunluğu
     if v.get("stale"):
-        return None
+        return None, "D3_bayat"
     sp, ref = v.get("spread_bps"), cfg.research_spread_bps.get(sym)
     if sp is None or ref is None or sp > ref * cfg.spread_mult:
-        return None
+        return None, "D3_spread"
     nf, now = v.get("next_funding_ms"), v["now_ms"]
     if cfg.funding_guard_ms is not None and nf is not None and 0 <= nf - now < cfg.funding_guard_ms:
-        return None
+        return None, "D3_funding_guard"
     d3 = f"D3 spread {sp} ≤ {ref}×{cfg.spread_mult} · bayatlık yok · funding guard geçti"
     sl, tp = cfg.sl_pct.get(state), cfg.tp_pct.get(state)
     if sl is None or tp is None:
-        return None   # ölçülmemiş eşikle pozisyon açılmaz
+        return None, "sl_tp_yok"   # ölçülmemiş eşikle pozisyon açılmaz
     price = v["best_ask"] if cell.dir == "long" else v["best_bid"]
     cid = f"e{sym}{v['bar_end_ms']}{'L' if cell.dir == 'long' else 'S'}"
     return EntryIntent(symbol=sym, side=cell.dir, notional=cfg.notional_usdt, price=price, horizon_min=cell.h,
                        sl_pct=sl, tp_pct=tp, entry_state=state, cell=cell.key(), client_order_id=cid[:36],
-                       explain=" · ".join((d1, d2, d3)), report_hash=cfg.report_hash)
+                       explain=" · ".join((d1, d2, d3)), report_hash=cfg.report_hash), None

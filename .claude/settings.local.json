@@ -6,7 +6,9 @@
       "Bash(docker compose *)",
       "Bash(docker run *)",
       "Bash(nginx -v)",
-      "Bash(set *)"
+      "Bash(set *)",
+      "Bash(.venv/bin/python -m scripts.paper_summary data/recordings/paper-demo-20260910/paper.db)",
+      "Bash(.venv/bin/python -)"
     ]
   }
 }
