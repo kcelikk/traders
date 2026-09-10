@@ -41,6 +41,8 @@ class CoreState:
     last_exit_was_loss: dict = field(default_factory=dict)
     intents_made: int = 0
     intents_rejected: int = 0
+    verdicts_total: int = 0
+    verdicts_total: int = 0
     last_verdicts: list = field(default_factory=list)
     pending_entries: set = field(default_factory=set)
     kill_switch: bool = False
@@ -232,8 +234,9 @@ class Engine:
             return []
         verdict = assess(RiskIntent(symbol=sym, side=intent.side, notional=intent.notional, price=intent.price,
                                     reduce_only=False, entry_state=label), self._risk_inputs(state, bar, m, spread_bps), self.cfg.risk)
-        state.last_verdicts.insert(0, {"t_ms": bar.end_ms, "symbol": sym, "kind": verdict.kind, "reasons": verdict.reasons,
-                                       "cell": intent.cell, "explain": intent.explain})
+        state.verdicts_total += 1
+        state.last_verdicts.insert(0, {"n": state.verdicts_total, "t_ms": bar.end_ms, "symbol": sym, "kind": verdict.kind,
+                                       "reasons": verdict.reasons, "cell": intent.cell, "explain": intent.explain})
         del state.last_verdicts[20:]
         if verdict.kind == "REJECT" or verdict.qty is None or verdict.qty <= 0:
             state.intents_rejected += 1
@@ -246,13 +249,21 @@ class Engine:
 
     def _risk_inputs(self, state: CoreState, bar: BarClosed, m: SymbolMarket, spread_bps) -> RiskInputs:
         acc = self.cfg.account or {}
+        lev_view = acc.get("leverage") or {}
+        if acc.get("paper") and not lev_view:
+            # paper: borsa yok, kaldıraç görünümü config'in kendisidir (canlıda borsadan okunur)
+            lev_view = {bar.symbol: self.cfg.risk.leverage.get(bar.symbol, self.cfg.risk.default_leverage)}
+        lev_view = acc.get("leverage") or {}
+        if acc.get("paper") and not lev_view:
+            # paper: borsa yok, kaldıraç görünümü config'in kendisidir (canlıda borsadan okunur)
+            lev_view = {bar.symbol: self.cfg.risk.leverage.get(bar.symbol, self.cfg.risk.default_leverage)}
         open_pos = {pid: p.symbol for pid, p in state.positions.items() if p.state not in (PosState.CLOSED,)}
         gross = sum((p.qty * (p.entry_price or Decimal(0))) for p in state.positions.values() if p.state not in (PosState.CLOSED,))
         warm = {s: len(se.bars) for s, se in state.state_engines.items()}
         return RiskInputs(kill_switch=state.kill_switch, reconciled=state.reconciled, warmup_bars=warm,
                           stale=dict(state.stale), skew_ms=acc.get("skew_ms", 0), open_positions=open_pos,
                           pending_entries=set(state.pending_entries), gross_usdt=gross, beta_exposure_usdt=Decimal(0),
-                          betas={}, account_leverage=acc.get("leverage", {}),
+                          betas={}, account_leverage=lev_view,
                           available_balance=Decimal(str(acc["available_balance"])) if acc.get("available_balance") is not None else None,
                           filters=self.cfg.filters, spread_bps={bar.symbol: spread_bps} if spread_bps is not None else {},
                           depth_notional={}, slippage_bps={bar.symbol: Decimal(0)}, last_exit_ms=state.last_exit_ms,

@@ -130,13 +130,13 @@ class PaperTrader:
 
     # ---------------- kalıcılık (opsiyonel)
     def _record_verdicts(self) -> None:
+        """`last_verdicts` kırpılır; kayıt monoton `n` sayacına göre yapılır (kayıp yok)."""
         if self.store is None:
             return
-        total = len(self.engine_state.last_verdicts)
-        new = self.engine_state.last_verdicts[:max(0, total - self._verdicts_seen)] if total > self._verdicts_seen else []
-        for v in reversed(new):
+        new = [v for v in self.engine_state.last_verdicts if v.get("n", 0) > self._verdicts_seen]
+        for v in sorted(new, key=lambda x: x["n"]):
             self.store.record_decision(v)
-        self._verdicts_seen = min(total, len(self.engine_state.last_verdicts))
+            self._verdicts_seen = v["n"]
 
     def _record_positions(self) -> None:
         if self.store is None:

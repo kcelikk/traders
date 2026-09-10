@@ -52,7 +52,7 @@ def last_seq_from_manifest(out: Path) -> tuple[int, int]:
 
 
 class Recorder:
-    def __init__(self, cfg, cfg_hash: str, run_id: str, duration: float | None):
+    def __init__(self, cfg, cfg_hash: str, run_id: str, duration: float | None, trader=None):
         self.cfg = cfg
         self.cfg_hash = cfg_hash
         self.run_id = run_id
@@ -70,17 +70,25 @@ class Recorder:
         self.lag_samples: list[float] = []
         self.stale_flag = {"public": False, "market": False}
         self.symbols: list[str] = []
+        self.trader = trader          # opsiyonel PaperTrader (Faz 7); None ise saf kayıt
 
     # ---- tek sıralama noktası
-    def emit(self, cat: str, stream: str, raw: bytes, recv_ns: int | None = None, mono_ns: int | None = None):
+    def emit(self, cat: str, stream: str, raw: bytes, recv_ns: int | None = None, mono_ns: int | None = None, notify: bool = True):
+        """Tek sıralama noktası. `notify=False`: olayı trader'ın kendisi üretti, geri beslenmez (özyineleme yok)."""
         ev = self.seq.next(recv_ns or time.time_ns(), mono_ns or time.monotonic_ns(), cat, stream, raw)
         try:
             self.queue.put_nowait(ev)
         except asyncio.QueueFull:
             self.dropped += 1  # asla sessiz değil: stats'ta raporlanır
+        if notify and self.trader is not None:
+            try:
+                self.trader.on_event(ev, ev.recv_ns)
+            except Exception as e:  # noqa: BLE001 — trader hatası kaydı durdurmaz
+                self.ctrl("trader_error", {"err": repr(e), "seq": ev.seq})
+        return ev
 
-    def ctrl(self, kind: str, info: dict):
-        self.emit("ctrl", kind, json.dumps(info, separators=(",", ":")).encode())
+    def ctrl(self, kind: str, info: dict, notify: bool = True):
+        return self.emit("ctrl", kind, json.dumps(info, separators=(",", ":")).encode(), notify=notify)
 
     def on_frame_for(self, cat: str):
         def on_frame(raw: bytes, recv_ns: int, mono_ns: int):
@@ -113,7 +121,7 @@ class Recorder:
                     raw = head[:-1] + b',"body":' + (body if st == 200 else json.dumps(body.decode(errors="replace")).encode()) + b"}"
                     self.emit("ctrl", "snapshot", raw)
                 except Exception as e:  # noqa: BLE001
-                    self.ctrl("snapshot_error", {"symbol": sym, "err": repr(e)})
+                    self.ctrl("snapshot_error", {"symbol": sym, "err": repr(e)}, notify=False)
                 await asyncio.sleep(0.5)  # ağırlık 20/sembol; 2400/dk limitinin çok altında
             try:
                 await asyncio.wait_for(self.stop_ev.wait(), timeout=self.cfg.snapshot_interval_s)
@@ -158,7 +166,7 @@ class Recorder:
                     "queue": self.queue.qsize(), "dropped": self.dropped, "seq": self.seq.last_seq,
                     "frames": dict(self.frames), "connects": {c: k.connects for c, k in self.conns.items()},
                     "file": self.writer.current_file,
-                })
+                }, notify=False)
                 self.lag_samples.clear()
                 last_stats = time.monotonic()
 

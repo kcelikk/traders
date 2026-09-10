@@ -118,3 +118,41 @@ def test_entry_fill_uses_intent_sl_tp_and_clears_pending():
     assert st.pending_entries == set()
     pos = list(st.positions.values())[0]
     assert pos.entry_state in labels and pos.symbol == "XUSDT"
+
+
+def test_paper_account_assumes_config_leverage():
+    """Paper'da borsa yok: kaldıraç görünümü config'ten gelmezse K10 her girişi reddeder."""
+    labels = {c.to_state for c in run(cfg(()), stream())[1] if isinstance(c, StateChanged)}
+    cells = tuple(Cell(state=s, dir=d, h=15) for s in labels - {"S0"} for d in ("long", "short"))
+    c = cfg(cells, account={"available_balance": "1000", "paper": True})   # leverage yok
+    st, cmds = run(c, stream())
+    assert [x for x in cmds if isinstance(x, PlaceOrder) and not x.reduce_only], "paper hesabında K10 takıldı"
+    assert not any("K10_leverage" in v["reasons"] for v in st.last_verdicts)
+
+
+def test_all_verdicts_are_countable_not_capped():
+    labels = {c.to_state for c in run(cfg(()), stream())[1] if isinstance(c, StateChanged)}
+    cells = tuple(Cell(state=s, dir=d, h=15) for s in labels - {"S0"} for d in ("long", "short"))
+    st, _ = run(cfg(cells, account={"available_balance": "0", "paper": True}), stream())
+    assert st.verdicts_total == st.intents_rejected + st.intents_made
+    assert st.verdicts_total > len(st.last_verdicts)      # liste kırpılır, sayaç kırpılmaz
+    assert all("n" in v for v in st.last_verdicts)
+
+
+def test_paper_account_assumes_config_leverage():
+    """Paper'da borsa yok: kaldıraç görünümü config'ten gelmezse K10 her girişi reddeder."""
+    labels = {c.to_state for c in run(cfg(()), stream())[1] if isinstance(c, StateChanged)}
+    cells = tuple(Cell(state=s, dir=d, h=15) for s in labels - {"S0"} for d in ("long", "short"))
+    c = cfg(cells, account={"available_balance": "1000", "paper": True})
+    st, cmds = run(c, stream())
+    assert [x for x in cmds if isinstance(x, PlaceOrder) and not x.reduce_only], "paper hesabında K10 takıldı"
+    assert not any("K10_leverage" in v["reasons"] for v in st.last_verdicts)
+
+
+def test_all_verdicts_are_countable_not_capped():
+    labels = {c.to_state for c in run(cfg(()), stream())[1] if isinstance(c, StateChanged)}
+    cells = tuple(Cell(state=s, dir=d, h=15) for s in labels - {"S0"} for d in ("long", "short"))
+    st, _ = run(cfg(cells, account={"available_balance": "0", "paper": True}), stream())
+    assert st.verdicts_total == st.intents_rejected + st.intents_made
+    assert st.verdicts_total > len(st.last_verdicts)
+    assert all("n" in v for v in st.last_verdicts)
