@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup status test test-determinism replay export-bars research-report research-scan measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup status test test-determinism replay export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -33,6 +33,17 @@ replay:                  # gerçek kayıt; MAXF=dosya sayısı
 # ---- Faz 3
 export-bars:             # replay → data/research/$(REC)/bars.jsonl ; MAXF opsiyonel
 	$(PY) -m scripts.export_bars data/recordings/$(REC) data/research/$(REC)/bars.jsonl $(if $(MAXF),--max-files $(MAXF),)
+
+SYMS ?= BTCUSDT,ETHUSDT,ZECUSDT,SOLUSDT,IOSTUSDT,XRPUSDT,HYPEUSDT,DOGEUSDT,NEARUSDT,BNBUSDT
+START ?= 2026-08-09
+END ?= 2026-09-09
+HIST ?= hist-30d
+
+fetch-history:           # data.binance.vision günlük zip + checksum → data/history/
+	$(PY) -m scripts.fetch_history --symbols $(SYMS) --start $(START) --end $(END)
+
+build-history-bars:      # → data/research/$(HIST)/bars.jsonl (çekirdek SymbolMarket ile)
+	$(PY) -m scripts.build_history_bars --symbols $(SYMS) --start $(START) --end $(END) --out data/research/$(HIST)/bars.jsonl
 
 research-scan:           # yalnızca keşif bölümü; parametre duyarlılığı
 	$(PY) -m scripts.research_scan data/research/$(REC)/bars.jsonl
