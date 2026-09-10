@@ -12,7 +12,7 @@ Tarih: 2026-09-10 · Durum: kabul edildi (proje sahibi: "5,6 onay, 2 ve 4 kapal�
 |---|---|---|
 | Günlük net zarar limiti (`daily_loss_limit_pct`) | **kapalı** (`null`) | Kill switch tetikleyicisi olarak devrede değil; elle tetikleme ve diğer tetikleyiciler (418, mutabakat uyuşmazlığı, runaway, korumasız pozisyon) açık kalır |
 | Zararlı çıkış sonrası bekleme (`cooldown_loss_ms`) | **kapalı** (`null`) | Ölçüm yok; paper verisi biriktikçe yeniden değerlendirilir |
-| BTC-beta tavanı (`beta_cap_usdt`) | **ölçüldü, değer proje sahibinden bekleniyor** | Ölçüm aşağıda |
+| BTC-beta tavanı (`beta_cap_usdt`) | **750 USDT** (proje sahibi kararı, ölçüme dayalı) | Brüt tavanın (400) 1.9 katı: 5 pozisyona izin verir, aynı yönde aşırı yığılmayı keser |
 
 ## BTC-beta ölçümü (30 gün, 46.049 bar, 10 sembol, 240 barlık pencere)
 
@@ -28,7 +28,7 @@ Tarih: 2026-09-10 · Durum: kabul edildi (proje sahibi: "5,6 onay, 2 ve 4 kapal�
 - 750 USDT (ölçülen ortalama senaryo) → 5 pozisyona izin verir, aşırı yığılmayı keser. Orta.
 - 1000+ USDT → K9 pratikte hiç devreye girmez.
 
-Karar proje sahibinde; verilene kadar `beta_cap_usdt = null` (K9 kapalı) kalır ve bu her risk raporunda belirtilir.
+**Karar: 750 USDT.** Ölçülen ortalama senaryo (rastgele 5 sembol, aynı yön ≈ 765 USDT) hemen üstünde; en kötü senaryo (958 USDT) engellenir.
 
 ## Sonuçlar
 - Faz 7 (paper) tek açık iş; Faz 9 (testnet) proje sahibi onayıyla başlıyor.

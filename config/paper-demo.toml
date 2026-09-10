@@ -78,7 +78,8 @@ spread_max_bps = "5"
 reserve_orders = 3
 backoff_ms = 10000
 warmup_bars = 60              # 2W
-# beta_cap_usdt, cooldown_*, participation_max, slippage_max_bps: ölçülmedi → kapalı
+beta_cap_usdt = "750"          # ADR 0014: 30 günlük beta ölçümü (docs/research/beta-dagilimi.md)
+# cooldown_*, participation_max, slippage_max_bps: ölçülmedi → kapalı
 
 [sim]
 latency_ms = 400

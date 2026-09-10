@@ -1,0 +1,58 @@
+"""Rate limiter (Faz 9): iki ayrı sayaç, header'dan gerçek değerle senkron, 429 geri çekilme, 418 kill."""
+from fbot.core.rate_limit import Limits, RateLimiter
+
+
+def test_two_independent_counters():
+    r = RateLimiter(Limits(weight_1m=2400, orders_10s=300, orders_1m=1200))
+    assert r.allow_order(now_ms=0) and r.allow_weight(1, now_ms=0)
+    for i in range(300):
+        r.on_order(now_ms=i)
+    assert r.remaining(0)["orders_10s"] == 0
+    assert not r.allow_order(now_ms=5)          # 10 s sayacı doldu
+    assert r.allow_weight(100, now_ms=5)        # ağırlık sayacı ayrı, etkilenmez
+
+
+def test_windows_slide():
+    r = RateLimiter(Limits(weight_1m=10, orders_10s=2, orders_1m=100))
+    r.on_order(0); r.on_order(1)
+    assert not r.allow_order(2)
+    assert r.allow_order(10_001)                # 10 s geçti
+    r.on_weight(10, 0)
+    assert not r.allow_weight(1, 100)
+    assert r.allow_weight(1, 60_001)
+
+
+def test_header_sync_is_authoritative():
+    """Tahmini sayaç yetmez: header'dan gelen gerçek değer üzerine yazar (prompt 4.4)."""
+    r = RateLimiter(Limits(weight_1m=2400, orders_10s=300, orders_1m=1200))
+    r.on_order(0)
+    r.sync_headers({"x-mbx-used-weight-1m": "2350", "x-mbx-order-count-10s": "295", "x-mbx-order-count-1m": "40"}, now_ms=0)
+    rem = r.remaining(0)
+    assert rem["weight_1m"] == 50 and rem["orders_10s"] == 5 and rem["orders_1m"] == 1160
+    assert r.allow_order(0)
+    r.sync_headers({"x-mbx-order-count-10s": "300"}, now_ms=0)
+    assert not r.allow_order(0)
+
+
+def test_ws_rate_limits_payload_sync():
+    r = RateLimiter(Limits(weight_1m=2400, orders_10s=300, orders_1m=1200))
+    r.sync_ws([{"rateLimitType": "ORDERS", "interval": "SECOND", "intervalNum": 10, "limit": 300, "count": 299},
+               {"rateLimitType": "REQUEST_WEIGHT", "interval": "MINUTE", "intervalNum": 1, "limit": 2400, "count": 12}], now_ms=0)
+    assert r.remaining(0)["orders_10s"] == 1 and r.remaining(0)["weight_1m"] == 2388
+
+
+def test_429_backoff_and_418_kill():
+    r = RateLimiter(Limits(weight_1m=2400, orders_10s=300, orders_1m=1200), backoff_ms=5000)
+    assert r.on_response(429, now_ms=1000) == "backoff"
+    assert not r.allow_order(2000) and not r.allow_weight(1, 2000)
+    assert r.allow_order(6001)
+    assert r.on_response(418, now_ms=7000) == "kill_switch"
+    assert r.banned and not r.allow_order(10**9)
+
+
+def test_reserve_keeps_room_for_protection_orders():
+    r = RateLimiter(Limits(weight_1m=2400, orders_10s=10, orders_1m=1200), reserve_orders=3)
+    for i in range(7):
+        r.on_order(i)
+    assert not r.allow_order(8, entry=True)     # giriş için yer yok (rezerv korunur)
+    assert r.allow_order(8, entry=False)        # koruma/çıkış emri rezervi kullanabilir

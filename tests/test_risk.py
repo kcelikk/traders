@@ -114,3 +114,20 @@ def test_runaway_detector():
     d2 = RunawayDetector(window_ms=60_000, max_orders=100, max_consecutive_rejects=3)
     d2.on_reject(1); d2.on_reject(2); assert d2.on_reject(3) == "runaway_rejects"
     d2.on_ack(4); assert d2.on_reject(5) is None   # sayaç sıfırlandı
+
+
+def test_beta_cap_750_blocks_worst_case_stack():
+    """ADR 0014: 750 USDT tavan, aynı yönde yüksek beta'lı yığılmayı keser, normal pozisyona izin verir."""
+    cfg = RiskConfig(**{**CFG.__dict__, "beta_cap_usdt": Decimal("750")})
+    # ZEC beta 1.58: tek 80 USDT pozisyon → 126 USDT maruziyet, sorun yok
+    inp = inputs(betas={"ZECUSDT": Decimal("1.58")}, filters={"ZECUSDT": F}, spread_bps={"ZECUSDT": Decimal("0.5")},
+                 depth_notional={"ZECUSDT": Decimal("5000")}, slippage_bps={"ZECUSDT": Decimal("0.1")},
+                 warmup_bars={"ZECUSDT": 500}, account_leverage={"ZECUSDT": 5}, available_balance=Decimal("500"))
+    v = assess(intent(symbol="ZECUSDT", price=Decimal("1000")), inp, cfg)
+    assert v.kind == "APPROVE"
+    # zaten 700 USDT beta maruziyeti varsa aynı yönde ekleme kısılır
+    v = assess(intent(symbol="ZECUSDT", price=Decimal("1000")), inputs(**{**inp.__dict__, "beta_exposure_usdt": Decimal("700")}), cfg)
+    assert v.kind in ("RESIZE", "REJECT") and any(r.startswith("K9_beta") for r in v.reasons)
+    # ters yön maruziyeti azaltır → serbest
+    v = assess(intent(symbol="ZECUSDT", side="short", price=Decimal("1000")), inputs(**{**inp.__dict__, "beta_exposure_usdt": Decimal("700")}), cfg)
+    assert v.kind == "APPROVE"
