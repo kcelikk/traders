@@ -216,7 +216,7 @@ make research-report REC=<run_id>
 | 0 | Ölçüm, build-vs-buy, unit economics | kapandı 2026-09-10 |
 | 1 | Temel + ham veri kaydı | kapandı 2026-09-10 (kapı ≥1 saat, ADR 0006) |
 | 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
-| 3 | Offline araştırma (**DUR kapısı**) | **AKTİF** — kod hazır, veri birikiyor (ADR 0008) |
+| 3 | Offline araştırma (**DUR kapısı**) | **DUR sonucu** 2026-09-10 (0/48 hücre); karar proje sahibinde, `docs/research/faz3-karar.md` |
 | 4 | Pozisyon yönetimi ve çıkış | — |
 | 5 | Risk Engine | — |
 | 6 | Giriş mantığı | — |
