@@ -185,3 +185,19 @@ scripts/research_report.py # rapor üretimi
 config/research.toml       # W, p_lo, p_hi, ufuklar, maliyet senaryoları, seed, keşif oranı
 tests/test_features_lookahead.py test_states.py test_forward_returns.py test_stats.py
 ```
+
+## Faz 4 — hedef
+
+Strateji-bağımsız pozisyon yönetimi: pozisyon durum makinesi, açılışta borsa tarafı SL+TP (algo, `closePosition`), "önce yeni sonra eski iptal" değiştirme, yedek stop, kâr kilidi ratchet, kısmi azaltma, zaman aşımı, koruma ACK zaman aşımında acil kapatma, FROZEN modu; periyodik tick olayı; net (maliyet dahil) gerçekleşmemiş PnL. Tasarım: `docs/design/faz4-cikis-kurallari.md`. Kârlılık gösterilmedi (ADR 0010).
+
+## Faz 4 — kabul kriterleri
+
+1. `fbot/core/position.py` saf; tüm parametreler `PositionConfig`; `null` parametre = kural kapalı.
+2. Durum makinesi testleri: giriş fill → SL+TP komutları; iki ACK → MANAGED; SL tetik → TP iptal (ve tersi); koruma ACK `t_protect` içinde gelmezse reduceOnly MARKET; FROZEN'da komut yok.
+3. Değiştirme sırası testi: yeni SL `v{n+1}` **önce**, eski `v{n}` iptali **sonra**; `min_replace_interval` içinde ikinci değişiklik yok; ratchet yalnızca lehte yönde.
+4. R1 yedek stop, R4 kısmi azaltma (filtre altı → pas), R5 zaman aşımı (yalnızca net ≤ 0) testli.
+5. `clientAlgoId`/`clientOrderId` deterministik ve ≤ 36 karakter (Binance uzunluk kuralı Faz 9'da doğrulanır).
+6. Net PnL: komisyon (giriş gerçek, çıkış tahmini), funding, slippage tahmini düşülmüş; `Decimal`.
+7. Engine `exec` ve `tick` olaylarını işler; replay determinizmi korunur (mevcut testler + yeni fixture ile).
+8. Recorder `tick_ms` ile `ctrl/tick` üretir (replay'de aynı).
+9. Replay karşılaştırması (statik SL/TP vs kurallı): basit dolum modeliyle (mark tetik, bookTicker karşı taraf) rapor; **kapı değil**, bilgilendirici (ADR 0011).

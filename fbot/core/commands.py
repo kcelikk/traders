@@ -26,7 +26,49 @@ class StalenessChanged:
     age_ms: int
 
 
-Command = BarClosed | StalenessChanged
+@dataclass(frozen=True, slots=True)
+class PlaceOrder:
+    symbol: str
+    side: str            # BUY | SELL
+    type: str            # MARKET | LIMIT
+    qty: Decimal
+    price: Decimal | None
+    reduce_only: bool
+    client_id: str
+    time_in_force: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CancelOrder:
+    symbol: str
+    client_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlaceAlgo:
+    symbol: str
+    side: str
+    type: str            # STOP_MARKET | TAKE_PROFIT_MARKET
+    trigger_price: Decimal
+    close_position: bool
+    working_type: str    # MARK_PRICE | CONTRACT_PRICE
+    price_protect: bool
+    client_algo_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class CancelAlgo:
+    symbol: str
+    client_algo_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class Alarm:
+    kind: str
+    detail: str
+
+
+Command = BarClosed | StalenessChanged | PlaceOrder | CancelOrder | PlaceAlgo | CancelAlgo | Alarm
 
 
 def canonical(cmd) -> bytes:
