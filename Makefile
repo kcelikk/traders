@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup status test test-determinism replay export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup status test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -29,6 +29,10 @@ test-determinism:        # Rule Zero: fixture iki ayrı process'te, hash eşit; 
 # ---- Faz 2
 replay:                  # gerçek kayıt; MAXF=dosya sayısı
 	$(PY) -m scripts.replay data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),)
+
+# ---- Faz 4
+replay-positions:        # statik SL/TP vs kurallı yönetim (bilgilendirici); MAXF, SL, TP, W
+	$(PY) -m scripts.replay_positions data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),) --sl $(or $(SL),0.5) --tp $(or $(TP),1.0) --W $(or $(W),120) > docs/design/faz4-replay-karsilastirma.md
 
 # ---- Faz 3
 export-bars:             # replay → data/research/$(REC)/bars.jsonl ; MAXF opsiyonel
