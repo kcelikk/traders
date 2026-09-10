@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Bash(rm -rf:*)",
+      "Bash(docker system prune:*)"
+    ],
+    "ask": [
+      "Bash(sudo:*)",
+      "Bash(apt:*)",
+      "Bash(systemctl:*)",
+      "Bash(pip install:*)"
+    ],
+    "allow": [
+      "Bash(git:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "Bash(make:*)",
+      "WebSearch",
+      "WebFetch"
+    ]
+  }
+}
