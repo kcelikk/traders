@@ -94,3 +94,21 @@ def test_staleness_freezes_positions_and_unfreezes():
     st, out = run(events)
     assert st.positions["p1"].state == PosState.MANAGED     # iki kategori de taze → geri döndü
     assert any(getattr(c, "category", None) == "public" and c.stale for c in out[5])
+
+
+def test_funding_settlement_accrues_to_open_positions():
+    t = 10**12
+    events = [
+        ev(1, t, "exec", "entry_fill", {"pos_id": "p1", "symbol": "XUSDT", "side": "long", "price": "100", "qty": "1", "sl": "98", "tp": "103"}),
+        # funding anı 5000: oran +0.0001 → long öder
+        market(2, t + 1, "xusdt@markPrice@1s", {"e": "markPriceUpdate", "s": "XUSDT", "p": "100", "r": "0.0001", "T": 5000, "E": 1}),
+        market(3, t + 2, "xusdt@markPrice@1s", {"e": "markPriceUpdate", "s": "XUSDT", "p": "100", "r": "0.0002", "T": 5000, "E": 1}),
+        market(4, t + 3, "xusdt@markPrice@1s", {"e": "markPriceUpdate", "s": "XUSDT", "p": "100", "r": "0.0003", "T": 33800000, "E": 1}),  # T değişti → settlement, son oran 0.0002
+    ]
+    st, out = run(events)
+    assert st.positions["p1"].funding_accrued_pct == Decimal("0.02")   # 0.0002 × 100
+    events.append(ev(5, t + 4, "exec", "entry_fill", {"pos_id": "p2", "symbol": "XUSDT", "side": "short", "price": "100", "qty": "1", "sl": "102", "tp": "97"}))
+    events.append(market(6, t + 5, "xusdt@markPrice@1s", {"e": "markPriceUpdate", "s": "XUSDT", "p": "100", "r": "-0.0001", "T": 62600000, "E": 1}))
+    st, out = run(events)
+    assert st.positions["p2"].funding_accrued_pct == Decimal("-0.03")  # short, oran +0.0003 → alır (maliyet negatif)
+    assert st.positions["p1"].funding_accrued_pct == Decimal("0.05")   # 0.02 + 0.03

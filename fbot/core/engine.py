@@ -140,7 +140,14 @@ class Engine:
         if e == "bookTicker":
             return m.on_book_ticker(d)
         if e == "markPriceUpdate":
-            return m.on_mark_price(d)
+            prev_T, prev_r = m.next_funding_ms, m.funding_rate
+            out = m.on_mark_price(d)
+            # funding anı geçti: bir önceki (o ana ait) oran açık pozisyonlara işlenir; long pozitif oranı öder
+            if prev_T is not None and m.next_funding_ms is not None and m.next_funding_ms != prev_T and prev_r is not None:
+                for pos in state.positions.values():
+                    if pos.symbol == sym and pos.state not in (PosState.CLOSED,) and pos.entry_price is not None:
+                        pos.funding_accrued_pct += (prev_r if pos.side == "long" else -prev_r) * Decimal(100)
+            return out
         return []  # depthUpdate, forceOrder: Faz 2'de görünüme dahil değil
 
     def _staleness(self, state: CoreState, now_ns: int) -> list:
