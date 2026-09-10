@@ -39,6 +39,16 @@
 - API anahtarı gerektiren her şey (kimlikli WS API gecikmesi Faz 9'a ertelendi)
 - Trader kodu, gateway, çekirdek
 
+## Faz 1 ilerleme (2026-09-10)
+
+| Teslim | Durum |
+|---|---|
+| Docker (docker.io 29.1.3, compose 2.40.3) | kuruldu, hello-world doğrulandı |
+| Saf modüller (events, sequencer, universe, integrity, config) + writer + gateway | yazıldı, 46 test yeşil (sahte WS sunucusuyla yeniden bağlanma dahil) |
+| Recorder container `fbot-recorder`, run `rec-72h` | **başladı 2026-09-10 08:00 UTC**, git 8271224, config 75a167d5a57d; hedef bitiş ≥ 2026-09-13 08:00 UTC |
+| 45 s yerel duman testi | 89.597 olay, seq boşluğu 0, SHA OK, loop lag p99 3.85 ms, ~370 MB/saat gzip |
+| `scripts/verify_recording.py` | yazıldı; 72 saat sonunda kapı raporu üretir |
+
 ## Faz 1 — hedef
 
 TOP 10 sembolün ham market verisini kategori bazlı WS bağlantılarından tek sıralama noktasıyla geçirip append-only, sıkıştırılmış ve bütünlüğü doğrulanabilir biçimde diske kaydetmek; Docker altında 72 saat kesintisiz çalıştırmak. Bu kayıt Faz 2 replay'in ve Faz 3 araştırmasının tek girdisidir.
