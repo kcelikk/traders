@@ -159,3 +159,15 @@ def test_all_verdicts_are_countable_not_capped():
     ns = [v["n"] for v in st.last_verdicts]
     assert ns == sorted(ns, reverse=True) and len(set(ns)) == len(ns)
     assert {"REJECT", "NO_INTENT"} & {v["kind"] for v in st.last_verdicts}
+
+
+def test_beta_is_computed_and_feeds_k9():
+    """K9 beta bilmiyorsa fail-closed reddeder; çekirdek beta'yı barlardan üretmeli."""
+    labels = {c.to_state for c in run(cfg(()), stream())[1] if isinstance(c, StateChanged)}
+    cells = tuple(Cell(state=s, dir=d, h=15) for s in labels - {"S0"} for d in ("long", "short"))
+    c = cfg(cells, beta_ref="XUSDT", beta_min_n=5, risk=RiskConfig(**{**RCFG.__dict__, "beta_cap_usdt": Decimal("750")}),
+            account={"available_balance": "1000", "paper": True})
+    st, cmds = run(c, stream())
+    assert st.beta is not None and st.beta.beta("XUSDT") == 1.0
+    assert not any("K9_beta_unknown" in v["reasons"] for v in st.last_verdicts), "beta bilinmiyor olarak reddedildi"
+    assert [x for x in cmds if isinstance(x, PlaceOrder) and not x.reduce_only], "giriş üretilmedi"

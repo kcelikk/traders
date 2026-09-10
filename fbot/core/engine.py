@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from fbot.core.beta_tracker import BetaTracker
 from fbot.core.commands import BarClosed, PlaceOrder, StalenessChanged
 from fbot.core.decision import DecisionConfig, decide_explain
 from fbot.core.market import SymbolMarket
@@ -22,6 +23,9 @@ class CoreConfig:
     filters: dict[str, Filters] = field(default_factory=dict)
     tick_ms: int = 1000
     state_engine: StateEngineConfig | None = None
+    beta_ref: str = "BTCUSDT"
+    beta_window: int = 240
+    beta_min_n: int = 30
     decision: DecisionConfig | None = None
     risk: RiskConfig | None = None
     account: dict = field(default_factory=dict)   # paper/canlı hesap görünümü (bakiye, kaldıraç); I/O kenarından beslenir
@@ -36,6 +40,7 @@ class CoreState:
     positions: dict[str, Position] = field(default_factory=dict)
     market_state_label: dict[str, str] = field(default_factory=dict)
     state_engines: dict[str, SymbolStateEngine] = field(default_factory=dict)
+    beta: object = None
     entry_meta: dict = field(default_factory=dict)
     last_exit_ms: dict = field(default_factory=dict)
     last_exit_was_loss: dict = field(default_factory=dict)
@@ -213,6 +218,9 @@ class Engine:
         row = {"symbol": bar.symbol, "start_ms": bar.start_ms, "end_ms": bar.end_ms, "open": float(bar.open), "high": float(bar.high),
                "low": float(bar.low), "close": float(bar.close), "volume": float(bar.volume), "buy_volume": float(bar.buy_volume),
                "trades": bar.trades, "spread_bps": spread}
+        if state.beta is None:
+            state.beta = BetaTracker(ref=self.cfg.beta_ref, window=self.cfg.beta_window, min_n=self.cfg.beta_min_n)
+        state.beta.on_bar(bar.symbol, bar.start_ms, float(bar.close))
         label, feats, cmds = se.on_bar_cmds(row)
         state.market_state_label[bar.symbol] = label
         cmds += self._decide(state, bar, m, se, label, feats)
@@ -256,6 +264,14 @@ class Engine:
                                                     "tp_pct": str(intent.tp_pct), "state": label, "cell": intent.cell, "explain": intent.explain}
         return [PlaceOrder(sym, "BUY" if intent.side == "long" else "SELL", "MARKET", verdict.qty, None, False, intent.client_order_id, None)]
 
+    @staticmethod
+    def _betas(state: CoreState, symbol: str) -> dict:
+        """K9 girdisi: beta float üretir, risk Decimal ile çalışır."""
+        if state.beta is None:
+            return {}
+        b = state.beta.beta(symbol)
+        return {symbol: Decimal(str(round(b, 6)))} if b is not None else {}
+
     def _risk_inputs(self, state: CoreState, bar: BarClosed, m: SymbolMarket, spread_bps) -> RiskInputs:
         acc = self.cfg.account or {}
         lev_view = acc.get("leverage") or {}
@@ -272,7 +288,7 @@ class Engine:
         return RiskInputs(kill_switch=state.kill_switch, reconciled=state.reconciled, warmup_bars=warm,
                           stale=dict(state.stale), skew_ms=acc.get("skew_ms", 0), open_positions=open_pos,
                           pending_entries=set(state.pending_entries), gross_usdt=gross, beta_exposure_usdt=Decimal(0),
-                          betas={}, account_leverage=lev_view,
+                          betas=self._betas(state, bar.symbol), account_leverage=lev_view,
                           available_balance=Decimal(str(acc["available_balance"])) if acc.get("available_balance") is not None else None,
                           filters=self.cfg.filters, spread_bps={bar.symbol: spread_bps} if spread_bps is not None else {},
                           depth_notional={}, slippage_bps={bar.symbol: Decimal(0)}, last_exit_ms=state.last_exit_ms,
