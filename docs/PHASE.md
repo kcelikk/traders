@@ -21,9 +21,9 @@
 | Kurulum (python3-venv, make, venv, websockets 17.1, pytest 9.1.1) | tamam |
 | `docs/binance-api-verification.md` | tamam — 2 kritik sapma: user data stream (ADR 0003), koşullu emirler Algo Service'e taşındı |
 | Gecikme ölçümü | **sürüyor** — `baseline-24h-20260910`, başlangıç 07:33 UTC, 4 process; 1 saatlik ara rapor + 24 saat nihai |
-| `docs/decisions/0001-build-vs-buy.md` | yazıldı, onay bekliyor (öneri: sıfırdan, ince yüzey) |
+| `docs/decisions/0001-build-vs-buy.md` | **onaylandı** (C: sıfırdan, ince yüzey) |
 | `docs/unit-economics.md` | yazıldı; 3 girdi proje sahibinden bekleniyor |
-| Proje sahibi kararları | ADR 0003 seçeneği, ADR 0001 onayı, semboller, sermaye, komisyon kademesi |
+| Proje sahibi kararları | ADR 0003 A onaylandı; ADR 0001 onaylandı; ADR 0004 kaydedildi (4 açık soru); komisyon kademesi bilinmiyor |
 
 ## Faz 0 kabul kriterleri
 

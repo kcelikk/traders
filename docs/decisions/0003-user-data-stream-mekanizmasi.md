@@ -1,6 +1,6 @@
 # ADR 0003 — User data stream mekanizması: kilitli karar dokümanla çelişiyor
 
-Tarih: 2026-09-10 · Durum: **PROJE SAHİBİ KARARI BEKLİYOR**
+Tarih: 2026-09-10 · Durum: **KABUL EDİLDİ** (proje sahibi, 2026-09-10) — seçenek A
 
 ## Bağlam
 

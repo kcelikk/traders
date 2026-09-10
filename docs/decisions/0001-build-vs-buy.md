@@ -1,6 +1,6 @@
 # ADR 0001 — Build vs buy
 
-Tarih: 2026-09-10 · Durum: **öneri, proje sahibi onayı bekliyor**
+Tarih: 2026-09-10 · Durum: **KABUL EDİLDİ** (proje sahibi, 2026-09-10) — seçenek C
 
 ## Bağlam
 

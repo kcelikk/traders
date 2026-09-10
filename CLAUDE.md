@@ -67,15 +67,17 @@ Bunlar tartışılmış ve karara bağlanmıştır. İtirazın varsa yaz, onay a
 |---|---|
 | Piyasa | Binance USDⓈ-M Futures. Spot yok, spot abstraction'ı yazılmaz. |
 | Pozisyon modu | One-way mode. |
-| Sembol evreni | En fazla 20. Başlangıçta 1–3. |
+| Sembol evreni | En fazla 20. Başlangıç TOP 10 (ADR 0004; metrik ve yenileme kuralı açık). |
 | Eşzamanlı pozisyon | En fazla 5. Sert limit, Risk Engine uygular. |
-| Kaldıraç | 5x veya 10x, config'den, sembol başına. |
+| Kaldıraç | 5x veya 10x, config'den, sembol başına. PnL notional üzerinden, ROE teminat üzerinden (ADR 0004). |
 | Günlük işlem sayısı | Sert limit yok. Maliyet sürüklenmesi ölçülür ve alarm üretir. |
 | Emir yolu | WebSocket API + Ed25519. REST yalnızca fallback / snapshot / mutabakat. |
-| Kimlik doğrulama | `session.logon` + `userDataStream.subscribe`. **listenKey keepalive döngüsü yazma.** ⚠ Futures dokümanında `userDataStream.subscribe` yok; bkz. ADR 0003, karar bekliyor. |
+| Kimlik doğrulama | Emir yolu: `session.logon` (Ed25519). User data: `userDataStream.start` + listenKey, keepalive private bağlantı yöneticisinin parçası (30 dk), `listenKeyExpired` → yeniden bağlan + mutabakat (ADR 0003). |
 | Tax Report API | Kapsam dışı. Kullanılmaz. |
 | Hot path | Tek process, tek thread. Event bus hot path'te yok. |
 | Determinizm | Rule Zero zorunlu. |
+| İşlem büyüklüğü | Her işlem 10 $ (teminat/notional ayrımı açık, ADR 0004). Filtre altı → REJECT. |
+| Açılışta koruma | Giriş dolunca SL + TP algo emirleri (`closePosition=true`), deterministik `clientAlgoId` (ADR 0004). |
 | Varsayılan mod | Paper. Canlı mod bilinçli ve açık bir işlemle etkinleştirilmedikçe çalışmaz. |
 
 ---
@@ -197,7 +199,7 @@ make unit-economics                  # docs/unit-economics.generated.md
 | Faz | Konu | Durum |
 |---|---|---|
 | 0 | Ölçüm, build-vs-buy, unit economics | **AKTİF** (2026-09-10) |
-| 1 | Temel + ham veri kaydı | — |
+| 1 | Temel + ham veri kaydı | Faz 0 kapısı bekliyor (24 s ölçüm) |
 | 2 | Deterministik çekirdek + replay | — |
 | 3 | Offline araştırma (**DUR kapısı**) | — |
 | 4 | Pozisyon yönetimi ve çıkış | — |
