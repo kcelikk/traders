@@ -79,7 +79,8 @@ def market_events(n=90):
 
 def snapshot_event(host, trader):
     """Defterin ilk kurulumu: kayıttaki ctrl/snapshot olayının aynısı."""
-    body = {"lastUpdateId": 0, "bids": depth_levels(100)[0], "asks": depth_levels(100)[1]}
+    # lastUpdateId, ilk diff'in [U, u] aralığında olmalı (Binance kuralı) yoksa defter hiç senkronize olmaz
+    body = {"lastUpdateId": 1, "bids": depth_levels(100)[0], "asks": depth_levels(100)[1]}
     raw = json.dumps({"symbol": "XUSDT", "status": 200, "body": body}).encode()
     ev = host.emit("ctrl", "snapshot", raw)
     trader.on_event(ev, host.now)
@@ -120,6 +121,13 @@ def test_no_cells_means_no_orders_but_states_recorded():
     assert "state_changed" in kinds
     assert not [e for e in host.stream if e.cat == "exec"]
     assert trader.stats["orders"] == 0
+
+
+def test_book_stays_synced_through_run():
+    """Defter kopar da tek anlık görüntüyle donarsa dolumlar bayat fiyattan olur; bu regresyonu yakala."""
+    host, trader = live_run(())
+    ob = trader.books["xusdt"]
+    assert ob.synced and ob.resyncs == 0 and ob.applied > 50, (ob.synced, ob.resyncs, ob.applied)
 
 
 def test_orders_fills_and_protection_are_recorded_as_events():
@@ -213,3 +221,46 @@ def test_closed_position_net_uses_exit_price_not_mark(tmp_path):
     # Defter yürüyüşlü modelde TP tetiği kârlı dolum garanti etmez (tetik ile dolum arası kayma) — ADR 0013
     tp_nets = [float(p["net_pct"]) for p in closed if p["exit_reason"] == "tp"]
     assert tp_nets, "TP çıkışı yok"
+
+
+def test_book_is_not_pushed_when_sim_has_nothing_pending():
+    """Defter yürüyüşü yalnızca doldurulacak emir varken gerekir; her depth olayında sıralamak hot path'i yer."""
+    host = Host()
+    trader = PaperTrader(Engine(core_cfg(())), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit)
+    snapshot_event(host, trader)
+    calls = []
+    orig = trader.sim.on_depth
+    trader.sim.on_depth = lambda *a, **k: calls.append(a[0]) or orig(*a, **k)
+    for cat, s, d in market_events(20):
+        host.now += 10**8
+        trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
+    assert calls == [], "bekleyen emir yokken defter simülatöre gönderildi"
+    assert trader.books["xusdt"].synced, "defter senkron değil (diff zinciri kopuk)"
+    # bekleyen emir oluşunca defter hemen gönderilir (emir gönderimi anında)
+    trader.sim.submit(PlaceOrder("XUSDT", "BUY", "MARKET", Decimal("1"), None, False, "x1", None), host.now)
+    trader._push_book("xusdt", host.now)
+    assert calls, "bekleyen emir varken defter gönderilmedi"
+    # sonraki depth olayı da gönderilir (zincir devam ediyor)
+    last_u = trader.books["xusdt"].last_u
+    d = {"e": "depthUpdate", "s": "XUSDT", "U": last_u + 1, "u": last_u + 2, "pu": last_u,
+         "b": [["99.90", "7"]], "a": [["100.10", "7"]], "E": 1, "T": 1}
+    host.now += 10**8
+    n_before = len(calls)
+    trader.on_event(host.emit("public", "xusdt@depth@100ms", json.dumps({"stream": "xusdt@depth@100ms", "data": d}).encode()), host.now)
+    assert len(calls) > n_before
+
+
+def test_top_levels_are_correct_without_full_sort():
+    host = Host()
+    trader = PaperTrader(Engine(core_cfg(())), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit)
+    trader.book_levels = 3
+    ob = trader.books.setdefault("xusdt", __import__("fbot.orderbook", fromlist=["LocalOrderBook"]).LocalOrderBook())
+    ob.apply_snapshot({"lastUpdateId": 1,
+                       "bids": [[str(100 - i * 0.1), "1"] for i in range(50)],
+                       "asks": [[str(101 + i * 0.1), "1"] for i in range(50)]})
+    got = {}
+    trader.sim.on_depth = lambda sym, b, a, t: got.update(bids=b, asks=a)
+    trader.sim.pending_orders.append(object())        # bir şey bekliyor
+    trader._push_book("xusdt", 0)
+    assert [str(p) for p, _ in got["bids"]] == ["100.0", "99.9", "99.8"]
+    assert [str(p) for p, _ in got["asks"]] == ["101.0", "101.1", "101.2"]

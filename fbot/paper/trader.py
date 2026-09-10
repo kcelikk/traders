@@ -15,6 +15,8 @@ from fbot.core.commands import CancelAlgo, CancelOrder, PlaceAlgo, PlaceOrder, S
 from fbot.core.engine import CoreState
 from fbot.core.position import PosState as PosStateEnum
 from fbot.events import RawEvent
+import heapq
+
 from fbot.orderbook import LocalOrderBook
 
 ORDER_CMDS = (PlaceOrder, PlaceAlgo, CancelAlgo, CancelOrder)
@@ -70,6 +72,9 @@ class PaperTrader:
                 payload = _cmd_payload(c)
                 cev = self.emit("ctrl", "command", json.dumps(payload, separators=(",", ":")).encode(), now_ns, now_ns)
                 self.sim.submit(c, now_ns)
+                sym = getattr(c, "symbol", "").lower()
+                if sym in self.books:
+                    self._push_book(sym, now_ns)
                 if self.store is not None:
                     self.store.record_order({**payload, "seq": cev.seq, "t_ns": now_ns})
                 if isinstance(c, PlaceOrder):
@@ -119,13 +124,18 @@ class PaperTrader:
         if ob.feed(d) == "applied":
             self._push_book(sym, now_ns)
 
+    def _needs_book(self) -> bool:
+        """Defter yalnızca doldurulacak bir şey varken gerekir (hot path: her depth olayında sıralama yapma)."""
+        return bool(self.sim.pending_orders or self.sim.triggered)
+
     def _push_book(self, sym: str, now_ns: int) -> None:
         ob = self.books[sym]
-        if not ob.synced or not ob.bids or not ob.asks:
+        if not ob.synced or not ob.bids or not ob.asks or not self._needs_book():
             return
         n = self.book_levels
-        bids = sorted(ob.bids.items(), key=lambda x: -x[0])[:n]
-        asks = sorted(ob.asks.items(), key=lambda x: x[0])[:n]
+        # tam sıralama yerine ilk n seviye: O(m log n)
+        bids = heapq.nlargest(n, ob.bids.items())
+        asks = heapq.nsmallest(n, ob.asks.items())
         self.sim.on_depth(sym.upper(), bids, asks, now_ns)
 
     def _sync_positions(self) -> None:
