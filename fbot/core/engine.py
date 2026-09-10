@@ -5,9 +5,11 @@ import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from fbot.core.commands import BarClosed, StalenessChanged
+from fbot.core.commands import BarClosed, PlaceOrder, StalenessChanged
+from fbot.core.decision import DecisionConfig, decide
 from fbot.core.market import SymbolMarket
 from fbot.core.position import Filters, Position, PositionConfig, PositionManager, PosState
+from fbot.core.risk import EntryIntent as RiskIntent, RiskConfig, RiskInputs, assess
 from fbot.core.state_engine import StateEngineConfig, SymbolStateEngine
 from fbot.events import RawEvent
 
@@ -20,6 +22,9 @@ class CoreConfig:
     filters: dict[str, Filters] = field(default_factory=dict)
     tick_ms: int = 1000
     state_engine: StateEngineConfig | None = None
+    decision: DecisionConfig | None = None
+    risk: RiskConfig | None = None
+    account: dict = field(default_factory=dict)   # paper/canlı hesap görünümü (bakiye, kaldıraç); I/O kenarından beslenir
 
 
 @dataclass
@@ -31,6 +36,15 @@ class CoreState:
     positions: dict[str, Position] = field(default_factory=dict)
     market_state_label: dict[str, str] = field(default_factory=dict)
     state_engines: dict[str, SymbolStateEngine] = field(default_factory=dict)
+    entry_meta: dict = field(default_factory=dict)
+    last_exit_ms: dict = field(default_factory=dict)
+    last_exit_was_loss: dict = field(default_factory=dict)
+    intents_made: int = 0
+    intents_rejected: int = 0
+    last_verdicts: list = field(default_factory=list)
+    pending_entries: set = field(default_factory=set)
+    kill_switch: bool = False
+    reconciled: bool = True
     events: int = 0
     parse_errors: int = 0
     last_seq: int = 0
@@ -90,12 +104,14 @@ class Engine:
         kind = ev.stream
         pos = state.positions.get(d.get("pos_id"))
         if kind == "entry_fill":
+            d = self._entry_from_meta(state, d)
             sym = d["symbol"]
             f = self.cfg.filters.get(sym)
             if f is None:
                 return []   # filtre bilinmeyen sembolde pozisyon yönetilemez (fail-closed)
             pos = Position.new(d["pos_id"], sym, d["side"], f)
             state.positions[pos.pos_id] = pos
+            state.pending_entries.discard(sym)
             return self.pm.on_entry_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), Decimal(d["sl"]), Decimal(d["tp"]), now_ns,
                                          is_maker=bool(d.get("is_maker", False)), entry_state=d.get("entry_state"))
         if pos is None:
@@ -107,6 +123,25 @@ class Engine:
         if kind == "exit_fill":
             return self.pm.on_exit_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), now_ns, reason=d.get("reason"))
         return []
+
+    @staticmethod
+    def _entry_from_meta(state: CoreState, d: dict) -> dict:
+        """Dolum olayında sl/tp yoksa, girişi üreten intent'in yüzdelerinden türet (fail-closed: meta yoksa olduğu gibi bırak)."""
+        meta = state.entry_meta.pop(d.get("client_id"), None)
+        if meta is None:
+            return d
+        d = dict(d)
+        d.setdefault("pos_id", str(d.get("client_id")))
+        d.setdefault("symbol", meta["symbol"])
+        d.setdefault("side", meta["side"])
+        d.setdefault("entry_state", meta["state"])
+        px = Decimal(str(d["price"]))
+        sl_pct, tp_pct = Decimal(meta["sl_pct"]) / 100, Decimal(meta["tp_pct"]) / 100
+        if "sl" not in d:
+            d["sl"] = str(px * (1 - sl_pct) if meta["side"] == "long" else px * (1 + sl_pct))
+        if "tp" not in d:
+            d["tp"] = str(px * (1 + tp_pct) if meta["side"] == "long" else px * (1 - tp_pct))
+        return d
 
     def _apply_freeze(self, state: CoreState) -> None:
         """Herhangi bir kategori bayatsa açık pozisyonlar FROZEN; hepsi tazeyse geri döner."""
@@ -174,9 +209,56 @@ class Engine:
         row = {"symbol": bar.symbol, "start_ms": bar.start_ms, "end_ms": bar.end_ms, "open": float(bar.open), "high": float(bar.high),
                "low": float(bar.low), "close": float(bar.close), "volume": float(bar.volume), "buy_volume": float(bar.buy_volume),
                "trades": bar.trades, "spread_bps": spread}
-        label, _feats, cmds = se.on_bar_cmds(row)
+        label, feats, cmds = se.on_bar_cmds(row)
         state.market_state_label[bar.symbol] = label
+        cmds += self._decide(state, bar, m, se, label, feats)
         return cmds
+
+    # ---------------- giriş zinciri (Faz 6): karar → risk → emir
+    def _decide(self, state: CoreState, bar: BarClosed, m: SymbolMarket, se: SymbolStateEngine, label: str, feats: dict) -> list:
+        if self.cfg.decision is None or self.cfg.risk is None:
+            return []
+        sym = bar.symbol
+        if m.best_bid is None or m.best_ask is None:
+            return []
+        spread_bps = Decimal((m.best_ask - m.best_bid) / m.best_ask * 10000) if m.best_ask else None
+        has_pos = sym in {p.symbol for p in state.positions.values() if p.state not in (PosState.CLOSED,)} or sym in state.pending_entries
+        view = {"symbol": sym, "state": label, "age_bars": se.bars_in_state, "features": feats,
+                "best_bid": m.best_bid, "best_ask": m.best_ask, "spread_bps": spread_bps,
+                "stale": any(state.stale.values()), "now_ms": bar.end_ms, "next_funding_ms": m.next_funding_ms,
+                "bar_end_ms": bar.end_ms, "has_position": has_pos}
+        intent = decide(view, self.cfg.decision)
+        if intent is None:
+            return []
+        verdict = assess(RiskIntent(symbol=sym, side=intent.side, notional=intent.notional, price=intent.price,
+                                    reduce_only=False, entry_state=label), self._risk_inputs(state, bar, m, spread_bps), self.cfg.risk)
+        state.last_verdicts.insert(0, {"t_ms": bar.end_ms, "symbol": sym, "kind": verdict.kind, "reasons": verdict.reasons,
+                                       "cell": intent.cell, "explain": intent.explain})
+        del state.last_verdicts[20:]
+        if verdict.kind == "REJECT" or verdict.qty is None or verdict.qty <= 0:
+            state.intents_rejected += 1
+            return []
+        state.intents_made += 1
+        state.pending_entries.add(sym)
+        state.entry_meta[intent.client_order_id] = {"symbol": sym, "side": intent.side, "sl_pct": str(intent.sl_pct),
+                                                    "tp_pct": str(intent.tp_pct), "state": label, "cell": intent.cell, "explain": intent.explain}
+        return [PlaceOrder(sym, "BUY" if intent.side == "long" else "SELL", "MARKET", verdict.qty, None, False, intent.client_order_id, None)]
+
+    def _risk_inputs(self, state: CoreState, bar: BarClosed, m: SymbolMarket, spread_bps) -> RiskInputs:
+        acc = self.cfg.account or {}
+        open_pos = {pid: p.symbol for pid, p in state.positions.items() if p.state not in (PosState.CLOSED,)}
+        gross = sum((p.qty * (p.entry_price or Decimal(0))) for p in state.positions.values() if p.state not in (PosState.CLOSED,))
+        warm = {s: len(se.bars) for s, se in state.state_engines.items()}
+        return RiskInputs(kill_switch=state.kill_switch, reconciled=state.reconciled, warmup_bars=warm,
+                          stale=dict(state.stale), skew_ms=acc.get("skew_ms", 0), open_positions=open_pos,
+                          pending_entries=set(state.pending_entries), gross_usdt=gross, beta_exposure_usdt=Decimal(0),
+                          betas={}, account_leverage=acc.get("leverage", {}),
+                          available_balance=Decimal(str(acc["available_balance"])) if acc.get("available_balance") is not None else None,
+                          filters=self.cfg.filters, spread_bps={bar.symbol: spread_bps} if spread_bps is not None else {},
+                          depth_notional={}, slippage_bps={bar.symbol: Decimal(0)}, last_exit_ms=state.last_exit_ms,
+                          last_exit_was_loss=state.last_exit_was_loss, last_stp_ms={},
+                          orders_left_10s=acc.get("orders_left_10s", 100), orders_left_1m=acc.get("orders_left_1m", 500),
+                          last_429_ms=acc.get("last_429_ms"), banned=bool(acc.get("banned")), now_ms=bar.end_ms)
 
     def _staleness(self, state: CoreState, now_ns: int) -> list:
         out = []
