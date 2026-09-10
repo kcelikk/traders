@@ -4,7 +4,7 @@
 |---|---|---|---|
 | 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **KAPANDI** 2026-09-10 (ölçüm ≥1 saat, ADR 0001/0003/0004 onaylı; 24 s ölçüm arka planda sürüyor) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
 | 1 | Temel + ham veri kaydı | **KAPANDI** 2026-09-10 (kapı raporu `docs/recording-gate-report.md`; kayıt sürüyor) | ≥1 saat kesintisiz kayıt (ADR 0006) |
-| 2 | Deterministik çekirdek + replay | **AKTİF** (2026-09-10) | bit-eşit replay testi (`make test-determinism`) |
+| 2 | Deterministik çekirdek + replay | **teslim edildi** 2026-09-10, onay bekliyor | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (**DUR kapısı**) | bekliyor | maliyet üstü beklenti var mı |
 | 4 | Pozisyon yönetimi ve çıkış | bekliyor | replay'de sabit TP/SL'ye göre iyileşme |
 | 5 | Risk Engine | bekliyor | hata enjeksiyon testleri |
@@ -89,4 +89,58 @@ config/recorder.toml
 docker/Dockerfile
 docker-compose.yml
 tests/test_events.py test_sequencer.py test_universe.py test_integrity.py test_config.py test_writer.py test_gateway_reconnect.py
+```
+
+## Faz 2 ilerleme (2026-09-10)
+
+| Kriter | Sonuç |
+|---|---|
+| 1 Saflık | `tests/test_purity.py` AST taraması geçiyor; çekirdek modüllerinde yasak import yok |
+| 2 Bit-eşitlik | fixture iki ayrı process: hash eşit. Gerçek kayıt ilk saat (3.471.623 olay) iki kez: hash `f3db4dba4ed5c6ef…` eşit, 560 `BarClosed` (10 sembol × 56 dk) |
+| 3 Negatif test | aggTrade miktarında tek basamak değişimi → hash farklı |
+| 4 Bar doğruluğu | sentetik OHLCV/işlem sayısı testi; kova sınırı `T` ile |
+| 5 Bayatlık | kategori bazlı eşik ve geri dönüş testi; gerçek kaydın ilk saatinde bayatlık olayı 0 |
+| 6 Maliyet modeli | komisyon/funding/slippage `Decimal`, config'den; 4 test |
+| 7 Execution arayüzü | Paper/Replay kaydediyor; Live stub `RuntimeError` (test) |
+| 8 Replay hızı | **~65.000 olay/s** (tek çekirdek, JSON çözümü dahil); ilk saat 54 s |
+| 9 Dokümanlar | README, CLAUDE.md, ADR 0007 güncel |
+
+Toplam 75 test. `make test-determinism` yeşil. Faz 2 kapısı proje sahibi onayı bekliyor.
+
+## Faz 2 — hedef
+
+Rule Zero'ya uygun saf çekirdek (`step(state, event, now_ns) -> (state, commands)`), `Clock` soyutlaması, kayıt formatını okuyan replay harness, `Decimal` tabanlı maliyet modeli ve execution adapter arayüzü (Live korumalı stub). Strateji yok; çekirdek piyasa görünümü, 1 dk bar ve bayatlık türetir.
+
+## Faz 2 — kabul kriterleri
+
+1. **Saflık:** `fbot/core/*`, `fbot/costs.py`, `fbot/clock.py` yasak modül import etmez; `tests/test_purity.py` AST ile tarar ve geçer.
+2. **Bit-eşitlik:** mini fixture (`tests/fixtures/rec-mini/`) iki ayrı process'te oynatıldığında komut hash'i aynı; `make test-determinism` yeşil. Gerçek kaydın ilk saati de iki kez oynatılır, hash eşit (`make replay`).
+3. **Negatif test:** fixture'da tek olay değiştirilince hash değişir.
+4. **Bar doğruluğu:** sentetik aggTrade dizisinden OHLCV ve işlem sayısı beklenen değerlerle eşleşir; kova sınırı `T` ile.
+5. **Bayatlık:** kategori bazlı eşik aşımı ve geri dönüş `StalenessChanged` üretir; replay'de `recv_ns` ile.
+6. **Maliyet modeli:** komisyon (maker/taker/BNB), funding (yön işareti), slippage (defter yürüyüşü) testli; oranlar config'den; `Decimal`.
+7. **Execution arayüzü:** Paper/Replay adapter komutları kaydeder; `LiveExecutionAdapter` her çağrıda hata fırlatır (test).
+8. Replay hızı (olay/s) ölçülür ve raporlanır.
+9. README ve CLAUDE.md komutları güncel.
+
+## Faz 2 — dosya ağacı
+
+```
+fbot/
+  clock.py                # Clock protokolü, ReplayClock (saf)
+  costs.py                # maliyet modeli (saf, Decimal)
+  core/
+    __init__.py
+    commands.py           # BarClosed, StalenessChanged, canonical()
+    market.py             # SymbolMarket: best bid/ask, son işlem, mark/funding, bar üretici
+    engine.py             # CoreState, CoreConfig, Engine.step
+  replay/
+    __init__.py
+    harness.py            # kayıt okuma, ReplayClock, hash zinciri, hız ölçümü
+  execution/
+    __init__.py
+    adapter.py            # ExecutionAdapter, Paper/Replay/Live(stub)
+scripts/replay.py         # CLI: özet JSON
+tests/fixtures/rec-mini/  # ilk 5 dk, market + ctrl olayları (public 1/100 örnekli)
+tests/test_purity.py test_clock.py test_commands.py test_market_bars.py test_engine.py test_costs.py test_execution.py test_replay_determinism.py
 ```

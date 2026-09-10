@@ -11,7 +11,7 @@ Kapsam: **3.34 saat** (1789027420101177877 → 1789039441836294776 ns). Başlang
 | SHA-256 / sayım uyuşmazlığı | 0 | OK |
 | kesik gzip | 1 | UYARI (açık dosya olabilir): events-20260910T1100-11723975.jsonl.gz |
 | kuyruk taşması (dropped) | 0 | OK |
-| süre ≥ 1 saat (proje sahibi kararı 2026-09-10; eski kural 72 saat) | 3.34 | HENÜZ DEĞİL |
+| süre ≥ 1 saat (ADR 0006) | 3.34 | OK |
 
 ## Olaylar
 

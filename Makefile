@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup test measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup test test-determinism replay measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -15,6 +15,13 @@ setup:
 
 test:
 	$(PYTEST) -q tests
+
+test-determinism:        # Rule Zero: fixture iki ayrı process'te, hash eşit; mutasyonda farklı
+	$(PYTEST) -q tests/test_replay_determinism.py tests/test_purity.py
+
+# ---- Faz 2
+replay:                  # gerçek kayıt; MAXF=dosya sayısı
+	$(PY) -m scripts.replay data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),)
 
 # ---- Faz 0
 measure-latency:

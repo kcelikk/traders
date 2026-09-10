@@ -29,7 +29,7 @@ def read_gz_lines(path: Path):
     return lines, truncated
 
 
-def main(run_dir: Path):
+def main(run_dir: Path, min_hours: float = 1.0):
     manifest = [json.loads(l) for l in (run_dir / "manifest.jsonl").read_text().splitlines() if l.strip()] if (run_dir / "manifest.jsonl").exists() else []
     runs = [json.loads(l) for l in (run_dir / "runs.jsonl").read_text().splitlines() if l.strip()] if (run_dir / "runs.jsonl").exists() else []
     in_manifest = {m["file"] for m in manifest}
@@ -107,7 +107,7 @@ def main(run_dir: Path):
     out.append(f"| SHA-256 / sayım uyuşmazlığı | {len(sha_bad)} | {'OK' if not sha_bad else 'HATA: ' + ', '.join(sha_bad)} |")
     out.append(f"| kesik gzip | {len(truncated)} | {'OK' if not truncated else 'UYARI (açık dosya olabilir): ' + ', '.join(truncated)} |")
     out.append(f"| kuyruk taşması (dropped) | {dropped_last} | {'OK' if dropped_last == 0 else 'HATA'} |")
-    out.append(f"| süre ≥ 72 saat | {hours:.2f} | {'OK' if hours >= 72 else 'HENÜZ DEĞİL'} |")
+    out.append(f"| süre ≥ {min_hours:g} saat (ADR 0006) | {hours:.2f} | {'OK' if hours >= min_hours else 'HENÜZ DEĞİL'} |")
     out.append("")
     out.append("## Olaylar")
     out.append("")
@@ -147,4 +147,4 @@ def main(run_dir: Path):
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]))
+    main(Path(sys.argv[1]), float(sys.argv[2]) if len(sys.argv) > 2 else 1.0)

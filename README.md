@@ -6,7 +6,8 @@ Binance USDⓈ-M Futures üzerinde deterministik, event-driven işlem sistemi. D
 
 ```bash
 make setup          # venv + websockets + pytest
-make test           # 51 test
+make test           # 75 test
+make test-determinism   # Rule Zero: iki process, aynı hash
 ```
 
 Docker (Ubuntu deposu): `docker.io`, `docker-compose-v2`.
@@ -30,6 +31,16 @@ Kayıt: `data/recordings/<run_id>/events-<UTC saat>-<ilk seq>.jsonl.gz`, `manife
 Satır formatı: `{"q":seq,"r":recv_ns,"m":mono_ns,"c":cat,"s":stream,"d":<ham çerçeve>}` (ADR 0005).
 
 Config: `config/recorder.toml`. Bayatlık eşikleri başlangıç değeridir; 72 saatlik kayıttan sonra ölçümle güncellenir.
+
+## Faz 2 — deterministik çekirdek ve replay
+
+`fbot/core/engine.py`: `step(state, event, now_ns) -> (state, commands)`; saf, `Decimal`. Komutlar: `BarClosed` (1 dk, işlem zamanı `T` ile), `StalenessChanged`. Replay hash'i `sha256(seq|canonical(cmd))` zinciri.
+
+```bash
+make replay REC=rec-72h MAXF=1      # gerçek kayıt; hash, komut sayısı, olay/s
+```
+
+Maliyet modeli `fbot/costs.py` (komisyon, funding, slippage; oranlar `CostConfig`). Execution: `fbot/execution/adapter.py`, Live adapter korumalı stub.
 
 ## Faz 0 — ölçüm
 
