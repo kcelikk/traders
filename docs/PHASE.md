@@ -6,7 +6,7 @@
 | 1 | Temel + ham veri kaydı | **KAPANDI** 2026-09-10 (kapı raporu `docs/recording-gate-report.md`; kayıt sürüyor) | ≥1 saat kesintisiz kayıt (ADR 0006) |
 | 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (bilgilendirici) | **KAPANDI** 2026-09-10: 0/48 hücrede maliyet üstü beklenti; kapı kaldırıldı (ADR 0010); araştırma paralelde sürer | — |
-| 4 | Pozisyon yönetimi ve çıkış | **teslim edildi** 2026-09-10, onay bekliyor | replay'de sabit TP/SL'ye göre iyileşme |
+| 4 | Pozisyon yönetimi ve çıkış | **KAPANDI** 2026-09-10 (ADR 0012) | replay'de sabit TP/SL'ye göre iyileşme |
 | 5 | Risk Engine | **AKTİF** (2026-09-10): assess K1–K18, runaway, kill switch, mutabakat yazıldı; engine entegrasyonu bekliyor | hata enjeksiyon testleri |
 | 6 | Giriş mantığı | bekliyor (tasarım notu: `docs/design/faz6-giris-mantigi.md`) | replay maliyet dahil pozitif |
 | 7 | Paper trading (min 4 hafta) | bekliyor (tasarım notu: `docs/design/faz7-paper-trading.md`) | backtest ile tutarlı |

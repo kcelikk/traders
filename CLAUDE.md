@@ -221,7 +221,7 @@ make replay-positions REC=<run_id> SL=0.5 TP=1.0 W=120
 | 1 | Temel + ham veri kaydı | kapandı 2026-09-10 (kapı ≥1 saat, ADR 0006) |
 | 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
 | 3 | Offline araştırma (bilgilendirici; kapı **kaldırıldı**, ADR 0010) | tamamlandı 2026-09-10: 0/48 hücrede maliyet üstü beklenti; araştırma paralelde sürer |
-| 4 | Pozisyon yönetimi ve çıkış | teslim edildi 2026-09-10 |
+| 4 | Pozisyon yönetimi ve çıkış | kapandı 2026-09-10 |
 | 5 | Risk Engine | **AKTİF** |
 | 6 | Giriş mantığı | — |
 | 7 | Paper trading (2 hafta ara rapor, 4 hafta hedef) | — |
