@@ -19,6 +19,8 @@ class LocalOrderBook:
         self.synced = False
         self.buffer: list[dict] = []
         self.resyncs = 0
+        self.resync_reasons: dict[str, int] = {}
+        self.syncs = 0  # snapshot sonrası ilk olay koşulunun sağlandığı sayı
         self.applied = 0
         self.dropped = 0
 
@@ -52,18 +54,20 @@ class LocalOrderBook:
                 self.dropped += 1
                 return "dropped"
             if not (U <= self.last_update_id <= u):
-                return self._resync()
+                return self._resync("adjacent" if U == self.last_update_id + 1 else "gap")
+            self.syncs += 1
         elif pu != self.last_u:
-            return self._resync()
+            return self._resync("pu")
         self._apply(d)
         self.last_u = u
         self.applied += 1
         return "applied"
 
-    def _resync(self) -> str:
+    def _resync(self, reason: str) -> str:
         self.synced = False
         self.last_u = None
         self.resyncs += 1
+        self.resync_reasons[reason] = self.resync_reasons.get(reason, 0) + 1
         return "resync"
 
     def _apply(self, d: dict):
@@ -87,6 +91,20 @@ class LocalOrderBook:
             return None
         p = min(self.asks)
         return p, self.asks[p]
+
+    def compare_snapshot(self, snapshot: dict) -> dict:
+        """Snapshot'taki her seviye local book ile aynı mı? Ayrıca snapshot fiyat aralığında local'de olup snapshot'ta olmayan seviye sayısı."""
+        levels = equal = extra = 0
+        for book, key in ((self.bids, "bids"), (self.asks, "asks")):
+            snap = {Decimal(p): Decimal(q) for p, q in snapshot[key]}
+            for p, q in snap.items():
+                levels += 1
+                if book.get(p) == q:
+                    equal += 1
+            if snap:
+                lo, hi = min(snap), max(snap)
+                extra += sum(1 for p in book if lo <= p <= hi and p not in snap)
+        return {"levels": levels, "equal": equal, "local_extra": extra}
 
     def top_matches(self, bid_price: str, ask_price: str) -> bool:
         bb, ba = self.best_bid(), self.best_ask()

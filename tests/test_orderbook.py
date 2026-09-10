@@ -59,3 +59,24 @@ def test_absolute_quantity_semantics_and_best_ordering():
     assert ob.best_ask() == (Decimal("12"), Decimal("9"))
     assert ob.top_matches("11", "12") is True
     assert ob.top_matches("10", "12") is False
+
+
+def test_resync_reasons_are_classified():
+    ob = LocalOrderBook()
+    ob.apply_snapshot(snap(100, [], []))
+    assert ob.feed(diff(101, 103, 100)) == "resync"          # U = lastUpdateId+1 → 'adjacent'
+    ob.apply_snapshot(snap(200, [], []))
+    assert ob.feed(diff(250, 251, 249)) == "resync"          # gerçek boşluk → 'gap'
+    ob.apply_snapshot(snap(300, [], []))
+    assert ob.feed(diff(300, 301, 299)) == "applied"
+    assert ob.feed(diff(305, 306, 304)) == "resync"          # pu != 301 → 'pu'
+    assert ob.resync_reasons == {"adjacent": 1, "gap": 1, "pu": 1}
+    assert ob.syncs == 1
+
+
+def test_compare_snapshot_counts_equal_levels():
+    ob = LocalOrderBook()
+    ob.apply_snapshot(snap(1, [["10", "1"], ["9", "2"]], [["11", "1"], ["12", "2"]]))
+    ob.feed(diff(1, 2, 0, b=[["9", "5"]]))  # local: 9 → 5
+    r = ob.compare_snapshot(snap(2, [["10", "1"], ["9", "2"]], [["11", "1"], ["12", "2"]]))
+    assert r == {"levels": 4, "equal": 3, "local_extra": 0}

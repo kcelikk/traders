@@ -48,7 +48,9 @@
 | Recorder container `fbot-recorder`, run `rec-72h` | **başladı 2026-09-10 08:00 UTC**, git 8271224, config 75a167d5a57d; hedef bitiş ≥ 2026-09-13 08:00 UTC |
 | 45 s yerel duman testi | 89.597 olay, seq boşluğu 0, SHA OK, loop lag p99 3.85 ms, ~370 MB/saat gzip |
 | `scripts/verify_recording.py` | yazıldı; 2.75 saatlik kısmi kontrol: 10.9 M olay, seq boşluğu 0, 50 stream'de zincir kopuşu 0, loop lag p99 8.4 ms / maks 46.6 ms, kuyruk maks 569, ~220 MB/saat gzip |
-| `fbot/orderbook.py` + `scripts/verify_orderbook.py` (kriter 7) | yazıldı, 5 test; kayıt üzerinde replay sonucu aşağıda |
+| `fbot/orderbook.py` + `scripts/verify_orderbook.py` (kriter 7) | **doğrulandı** (ilk saat, 10 sembol): dokümandaki 9 kural ile local book kuruldu; sonraki REST snapshot'larla seviye eşitliği %96.9–99.7 (kalan fark: local book snapshot'tan ≤100 ms ileride); `pu` kopuşu 0; senkron kurulumu her snapshot'ta başarılı. Rapor `docs/orderbook-replay-hour1.md` |
+
+**Replay bulgusu (Faz 2/4 girdisi):** başlangıçta REST snapshot ilk diff olayından eski kalınca (`U > lastUpdateId`, "gap") senkron sonraki periyodik snapshot'a kadar (≤10 dk) kurulamıyor; recorder için sorun değil ama trader gateway'i resync'te snapshot'ı **hemen** yeniden çekmeli (ağırlık 20, 2400/dk limiti içinde).
 
 ## Faz 1 — hedef
 

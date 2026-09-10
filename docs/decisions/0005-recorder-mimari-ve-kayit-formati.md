@@ -27,3 +27,8 @@ Rule Zero: replay girdisi, çekirdeğin gördüğü sıralı akışın kendisi o
 - Loop lag, kuyruk derinliği ve mesaj sayaçları her 10 s'de `ctrl/stats` olayı olarak akışa yazılır; gate raporu bunlardan üretilir.
 - Faz 2 replay, aynı satır formatını okur; `recv_ns` replay saatidir.
 - Bilinmeyen: 10 sembol × 5 stream'in 72 saatlik disk hacmi. Ölçülecek.
+
+## Ek (2026-09-10, replay doğrulaması sonrası)
+
+- Kayıt üzerinde local order book replay'i ilk saatte 10 sembol için doğrulandı (`docs/orderbook-replay-hour1.md`).
+- Trader gateway'i (Faz 4+) için: `pu` kopuşu ya da `U > lastUpdateId` durumunda snapshot hemen yeniden çekilir; periyodik snapshot beklenmez. Recorder'da periyodik snapshot yeterli, çünkü replay'de zincir sürekliliği zaten ölçülüyor.
