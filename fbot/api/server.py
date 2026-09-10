@@ -16,6 +16,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from fbot.api.live_view import LiveView, parse_phase_table
+from fbot.api.paper_view import paper_snapshot
 from fbot.api.tail import GrowingGzipReader
 from fbot.events import decode
 from fbot.gateway.killswitch import KillSwitch
@@ -167,6 +168,16 @@ class Api:
         except ValueError:
             return None
 
+    def _paper(self) -> dict:
+        """Paper koşusu (Faz 7) — ayrı süreç/container; konsol yalnızca SQLite'ı salt okur."""
+        try:
+            snap = paper_snapshot(ROOT / Path(self.run_dir).parent.name if False else Path(self.run_dir).parent)
+        except Exception as e:  # noqa: BLE001 — konsol paper olmadan da çalışır
+            return {"paper": {"error": repr(e)}, "positions": [], "verdicts": [], "fsm": {}, "exit_reasons": {}, "paper_running": False}
+        return {"paper": {"run_id": snap["run_id"], "runs": snap["runs"], "metrics": snap["metrics"], "open_count": snap["open_count"]},
+                "positions": snap["positions"], "verdicts": snap["verdicts"], "fsm": snap["fsm"],
+                "exit_reasons": snap["exit_reasons"], "paper_running": snap["run_id"] is not None}
+
     def state(self) -> dict:
         now = time.time()
         if now - self._cache[0] < 1.0 and self._cache[1] is not None:
@@ -191,8 +202,7 @@ class Api:
             "replay_cmp": self._read_json(ROOT / "data" / "research" / "replay-positions.json"),
             "latency": parse_latency_md(lat_md),
             "config": assemble_config(ROOT / "config"),
-            "positions": [], "verdicts": [], "exit_reasons": {}, "fsm": {},
-            "paper_running": False,
+            **self._paper(),
         }
         self._cache = (now, out)
         return out
