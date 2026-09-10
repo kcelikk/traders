@@ -155,7 +155,8 @@ class Engine:
 
     def _staleness(self, state: CoreState, now_ns: int) -> list:
         out = []
-        if now_ns - state.last_staleness_check_ns < 100_000_000 and state.last_staleness_check_ns:
+        # bayat kategori varken geri dönüş gecikmemeli: her olayda kontrol; aksi halde 100 ms aralıkla
+        if not any(state.stale.values()) and state.last_staleness_check_ns and now_ns - state.last_staleness_check_ns < 100_000_000:
             return out
         state.last_staleness_check_ns = now_ns
         for cat, thr_ms in self.cfg.staleness_ms.items():
