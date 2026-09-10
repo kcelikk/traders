@@ -1,0 +1,27 @@
+# fbot recorder — Faz 1. Tüm eşikler burada; kodda sabit yok.
+# Bayatlık eşikleri BAŞLANGIÇ değeridir; 72 saatlik kayıt sonrası ölçümle güncellenecek (docs/PHASE.md).
+
+[run]
+out_dir = "data/recordings"
+rotate_minutes = 60
+snapshot_interval_s = 600      # depth snapshot (limit 1000, ağırlık 20) her sembol için
+depth_snapshot_limit = 1000
+stats_interval_s = 10
+
+[universe]
+mode = "top"                   # "top" | "list"
+top_n = 10
+exclude_bases = ["USDC", "FDUSD", "TUSD", "BUSD", "USD1", "USDE", "USDP", "DAI"]
+# symbols = ["BTCUSDT"]        # mode = "list" için
+
+[streams]
+public = ["{s}@bookTicker", "{s}@depth@100ms"]
+market = ["{s}@aggTrade", "{s}@markPrice@1s", "{s}@forceOrder"]
+
+[staleness_s]                  # kategori bazlı; aşımda zorunlu yeniden bağlanma + ctrl/stale olayı
+public = 30
+market = 30
+
+[reconnect]
+backoff_initial_s = 1.0
+backoff_max_s = 30.0

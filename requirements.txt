@@ -1,3 +1,2 @@
-# Faz 0 bağımlılıkları. Gerekçe: docs/decisions/0002-bagimliliklar.md
+# Çalışma zamanı. Gerekçe: docs/decisions/0002-bagimliliklar.md
 websockets==17.1
-pytest==9.1.1

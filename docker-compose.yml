@@ -1,0 +1,20 @@
+services:
+  recorder:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: fbot-recorder:latest
+    container_name: fbot-recorder
+    restart: unless-stopped
+    environment:
+      - FBOT_RUN_ID=${FBOT_RUN_ID:-rec-72h}
+    volumes:
+      - ./data/recordings:/app/data/recordings
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
