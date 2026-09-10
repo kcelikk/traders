@@ -7,7 +7,7 @@
 | 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (**DUR kapısı**) | **AKTİF** (2026-09-10; kod yazıldı, veri birikiyor) | ADR 0008 §10 karar kuralı |
 | 4 | Pozisyon yönetimi ve çıkış | bekliyor (tasarım notu: `docs/design/faz4-cikis-kurallari.md`) | replay'de sabit TP/SL'ye göre iyileşme |
-| 5 | Risk Engine | bekliyor | hata enjeksiyon testleri |
+| 5 | Risk Engine | bekliyor (tasarım notu: `docs/design/faz5-risk-engine.md`) | hata enjeksiyon testleri |
 | 6 | Giriş mantığı | bekliyor | replay maliyet dahil pozitif |
 | 7 | Paper trading (min 4 hafta) | bekliyor | backtest ile tutarlı |
 | 8 | Gözlemlenebilirlik | bekliyor | tüm metrikler yayında |
