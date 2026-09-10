@@ -28,9 +28,10 @@ class GrowingGzipReader:
             return
         if self.dec.eof:
             self.finished = True
-        while True:
-            i = self.buf.find(b"\n")
-            if i < 0:
-                break
-            line, self.buf = self.buf[:i + 1], self.buf[i + 1:]
-            yield line
+        # O(n): tampon bir kez bölünür; son parça (satır sonu yoksa) bekletilir
+        parts = self.buf.splitlines(keepends=True)
+        if parts and not parts[-1].endswith(b"\n"):
+            self.buf = parts.pop()
+        else:
+            self.buf = b""
+        yield from parts
