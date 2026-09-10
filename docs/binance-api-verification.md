@@ -112,3 +112,13 @@ DOĞRULANDI — `GET /fapi/v1/exchangeInfo` (ağırlık 1): `PRICE_FILTER` (tick
 - WS API `order.modify`, `order.cancel`, `algoOrder.place` parametre tabloları.
 - `countdownCancelAll` × algo emir etkileşimi (testnet).
 - `MAX_NUM_ALGO_ORDERS` filtresinin canlı `exchangeInfo` çıktısında olup olmadığı.
+
+## 11. Faz 1 için ek doğrulamalar (2026-09-10)
+
+| Konu | Durum | Alıntı |
+|---|---|---|
+| Local order book yönetimi | DOĞRULANDI | Stream `…/public/stream?streams=btcusdt@depth`; snapshot `GET /fapi/v1/depth?symbol=BTCUSDT&limit=1000`; "Drop any event where u is < lastUpdateId"; ilk event "U <= lastUpdateId AND u >= lastUpdateId"; "each new event's pu should be equal to the previous event's u, otherwise initialize the process from step 3"; "If the quantity is 0, remove the price level"; olmayan seviyeyi silen event "is normal" |
+| Diff depth hızları | DOĞRULANDI | `{symbol}@depth@{updateSpeed}`, updateSpeed ∈ {100ms, 500ms}; alanlar `E, T, s, U, u, pu, b, a` (+ `ps`, `st`) |
+| Liquidation stream | DOĞRULANDI | `{symbol}@forceOrder`, 1000 ms; `o.s, o.S, o.o, o.f, o.q, o.p, o.ap, o.X, o.l, o.z, o.T` |
+| Kline stream | DOĞRULANDI (Faz 1'de kaydedilmiyor, aggTrade'den türetilebilir) | `{symbol}@kline_{interval}`, 250 ms; `k.t, k.T, k.x, k.o/h/l/c/v` |
+| Depth snapshot ağırlığı | DOĞRULANDI | `GET /fapi/v1/depth` limit 1000 → ağırlık 20 |

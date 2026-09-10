@@ -3,7 +3,7 @@
 | Faz | Konu | Durum | Kapı |
 |---|---|---|---|
 | 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **AKTİF** (başlangıç 2026-09-10) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
-| 1 | Temel + ham veri kaydı | bekliyor | 72 saat kesintisiz kayıt |
+| 1 | Temel + ham veri kaydı | **AKTİF** (2026-09-10, proje sahibi talimatıyla; Faz 0 kapanışı 24 s ölçüm raporuna bağlı) | 72 saat kesintisiz kayıt |
 | 2 | Deterministik çekirdek + replay | bekliyor | bit-eşit replay testi CI'da |
 | 3 | Offline araştırma (**DUR kapısı**) | bekliyor | maliyet üstü beklenti var mı |
 | 4 | Pozisyon yönetimi ve çıkış | bekliyor | replay'de sabit TP/SL'ye göre iyileşme |
@@ -38,3 +38,42 @@
 - Docker kurulumu (Faz 1 başında ayrı onay)
 - API anahtarı gerektiren her şey (kimlikli WS API gecikmesi Faz 9'a ertelendi)
 - Trader kodu, gateway, çekirdek
+
+## Faz 1 — hedef
+
+TOP 10 sembolün ham market verisini kategori bazlı WS bağlantılarından tek sıralama noktasıyla geçirip append-only, sıkıştırılmış ve bütünlüğü doğrulanabilir biçimde diske kaydetmek; Docker altında 72 saat kesintisiz çalıştırmak. Bu kayıt Faz 2 replay'in ve Faz 3 araştırmasının tek girdisidir.
+
+## Faz 1 — kabul kriterleri
+
+1. `docker compose up -d recorder` ile başlar; `/public` ve `/market` için ayrı bağlantı; 10 sembol × 5 stream.
+2. Her olay monoton `seq` taşır; `scripts/verify_recording.py` raporunda **seq boşluğu = 0, seq tekrarı = 0**.
+3. Her dosyanın SHA-256'sı manifest ile eşleşir; kesilmiş/bozuk gzip yok.
+4. Stream düzeyi bütünlük raporlanır: aggTrade `a` ardışıklığı, bookTicker `u` monotonluğu, depth `pu == önceki u` zinciri; kopuş sayıları ve nedenleri (reconnect ile eşleşme) listelenir.
+5. Reconnect sayısı, kategori bazlı bayatlık olayları, snapshot sayısı, loop lag (p50/p99/max) ve kuyruk derinliği raporlanır.
+6. Kayıt **en az 72 saat** kesintisiz (process yeniden başlasa bile run manifest'i devam eder; her restart raporda görünür).
+7. Depth snapshot + diff zinciri ile local order book replay'de en az bir sembol için doğrulanır (ilk event koşulu `U <= lastUpdateId <= u`).
+8. Testler: saf modüller birim testli; sahte WS sunucusuyla kopma/yeniden bağlanma entegrasyon testi geçiyor; `make test` yeşil.
+9. README güncel; komut çıktıları teslimde gösterilir.
+
+## Faz 1 — dosya ağacı
+
+```
+fbot/
+  __init__.py
+  config.py            # TOML yükleme, doğrulama, hash (saf + dosya okuma)
+  events.py            # RawEvent, encode/decode — ham bayt korunur (saf)
+  sequencer.py         # tek sıralama noktası (saf)
+  universe.py          # TOP N kuralı, sembol filtreleri (saf)
+  integrity.py         # seq / stream bütünlük denetimleri (saf)
+  gateway/
+    ws_category.py     # kategori bağlantı yöneticisi: bağlan, yeniden bağlan, bayatlık (I/O)
+    rest.py            # exchangeInfo, ticker/24hr, depth snapshot (I/O, stdlib)
+  recorder/
+    writer.py          # saatlik gzip rotasyon, manifest (I/O)
+    main.py            # process giriş noktası
+scripts/verify_recording.py
+config/recorder.toml
+docker/Dockerfile
+docker-compose.yml
+tests/test_events.py test_sequencer.py test_universe.py test_integrity.py test_config.py test_writer.py test_gateway_reconnect.py
+```

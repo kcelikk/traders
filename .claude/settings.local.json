@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(apt-get install *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(docker run *)"
+    ]
+  }
+}
