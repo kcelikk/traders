@@ -152,10 +152,7 @@ class Runner:
             self.seq = max(self.seq, ev.seq)
             self._step(ev)
             if ev.cat != "ctrl":
-                try:
-                    d = json.loads(ev.raw).get("data", {})
-                except ValueError:
-                    d = {}
+                d = self.state.last_data or {}
                 if d.get("e") == "bookTicker":
                     self.sim.on_book(d["s"], Decimal(d["b"]), Decimal(d["a"]), ev.recv_ns)
                 elif d.get("e") == "markPriceUpdate":

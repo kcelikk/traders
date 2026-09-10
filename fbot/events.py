@@ -34,7 +34,7 @@ def decode(line: bytes) -> RawEvent:
     if i < 0 or not line.startswith(b'{"q":'):
         raise ValueError("malformed event line")
     try:
-        head = json.loads(line[:i] + b"}")
+        head = json.loads((line[:i] + b"}").decode())
     except json.JSONDecodeError as e:
         raise ValueError("malformed event header") from e
     end = line.rstrip(b"\n")

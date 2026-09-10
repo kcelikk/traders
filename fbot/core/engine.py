@@ -31,6 +31,8 @@ class CoreState:
     events: int = 0
     parse_errors: int = 0
     last_seq: int = 0
+    last_data: dict | None = None      # son market olayının çözülmüş `data` sözlüğü (tüketiciler yeniden parse etmesin)
+    last_staleness_check_ns: int = 0
 
 
 class Engine:
@@ -46,7 +48,7 @@ class Engine:
             state.ctrl_counts[ev.stream] = state.ctrl_counts.get(ev.stream, 0) + 1
             if ev.stream == "connect":
                 try:
-                    cat = json.loads(ev.raw).get("cat")
+                    cat = json.loads(ev.raw.decode()).get("cat")
                 except ValueError:
                     cat = None
                 if cat in self.cfg.staleness_ms:
@@ -61,11 +63,12 @@ class Engine:
         else:
             state.last_recv_ns[ev.cat] = ev.recv_ns
             try:
-                d = json.loads(ev.raw)
+                d = json.loads(ev.raw.decode())
                 d = d.get("data", d)
             except ValueError:
                 state.parse_errors += 1
                 d = None
+            state.last_data = d
             if d is not None:
                 cmds += self._route(state, d)
         cmds += self._staleness(state, now_ns)
@@ -77,7 +80,7 @@ class Engine:
         if self.pm is None:
             return []
         try:
-            d = json.loads(ev.raw)
+            d = json.loads(ev.raw.decode())
         except ValueError:
             state.parse_errors += 1
             return []
@@ -152,6 +155,9 @@ class Engine:
 
     def _staleness(self, state: CoreState, now_ns: int) -> list:
         out = []
+        if now_ns - state.last_staleness_check_ns < 100_000_000 and state.last_staleness_check_ns:
+            return out
+        state.last_staleness_check_ns = now_ns
         for cat, thr_ms in self.cfg.staleness_ms.items():
             last = state.last_recv_ns.get(cat)
             if last is None:
