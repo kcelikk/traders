@@ -83,7 +83,7 @@ class Runner:
         lst = self.bars.setdefault(b.symbol, [])
         lst.append({"symbol": b.symbol, "start_ms": b.start_ms, "end_ms": b.end_ms, "open": float(b.open), "high": float(b.high), "low": float(b.low),
                     "close": float(b.close), "volume": float(b.volume), "buy_volume": float(b.buy_volume), "trades": b.trades, "spread_bps": None})
-        keep = self.fcfg.W + self.fcfg.N_long + 2
+        keep = 2 * self.fcfg.W + self.fcfg.N_long + 2   # 2W (bkz. core/state_engine._keep)
         if len(lst) > keep:
             del lst[:-keep]
         f = compute_features(lst, self.fcfg)[-1]

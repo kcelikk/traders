@@ -63,12 +63,23 @@ class CancelAlgo:
 
 
 @dataclass(frozen=True, slots=True)
+class StateChanged:
+    symbol: str
+    from_state: str
+    to_state: str
+    bar_end_ms: int
+    confidence: float | None
+    evidence: str
+    counter: str
+
+
+@dataclass(frozen=True, slots=True)
 class Alarm:
     kind: str
     detail: str
 
 
-Command = BarClosed | StalenessChanged | PlaceOrder | CancelOrder | PlaceAlgo | CancelAlgo | Alarm
+Command = BarClosed | StalenessChanged | StateChanged | PlaceOrder | CancelOrder | PlaceAlgo | CancelAlgo | Alarm
 
 
 def canonical(cmd) -> bytes:

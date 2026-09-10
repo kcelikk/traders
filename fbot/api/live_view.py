@@ -88,7 +88,7 @@ class LiveView:
         lst.append({"start_ms": b.start_ms, "end_ms": b.end_ms, "symbol": b.symbol, "o": float(b.open), "h": float(b.high), "l": float(b.low), "c": float(b.close),
                     "open": float(b.open), "high": float(b.high), "low": float(b.low), "close": float(b.close),
                     "volume": float(b.volume), "buy_volume": float(b.buy_volume), "trades": b.trades, "spread_bps": spread})
-        keep = self.fcfg.W + self.fcfg.N_long + 80
+        keep = 2 * self.fcfg.W + self.fcfg.N_long + 80   # 2W: persentilin persentili (bkz. core/state_engine._keep)
         if len(lst) > keep:
             del lst[:-keep]
         f = compute_features(lst, self.fcfg)[-1]

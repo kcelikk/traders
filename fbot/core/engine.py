@@ -5,9 +5,10 @@ import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from fbot.core.commands import StalenessChanged
+from fbot.core.commands import BarClosed, StalenessChanged
 from fbot.core.market import SymbolMarket
 from fbot.core.position import Filters, Position, PositionConfig, PositionManager, PosState
+from fbot.core.state_engine import StateEngineConfig, SymbolStateEngine
 from fbot.events import RawEvent
 
 
@@ -18,6 +19,7 @@ class CoreConfig:
     position: PositionConfig | None = None
     filters: dict[str, Filters] = field(default_factory=dict)
     tick_ms: int = 1000
+    state_engine: StateEngineConfig | None = None
 
 
 @dataclass
@@ -28,6 +30,7 @@ class CoreState:
     ctrl_counts: dict[str, int] = field(default_factory=dict)
     positions: dict[str, Position] = field(default_factory=dict)
     market_state_label: dict[str, str] = field(default_factory=dict)
+    state_engines: dict[str, SymbolStateEngine] = field(default_factory=dict)
     events: int = 0
     parse_errors: int = 0
     last_seq: int = 0
@@ -139,7 +142,14 @@ class Engine:
         if m is None:
             m = state.markets[sym] = SymbolMarket(sym, self.cfg.bar_ms)
         if e == "aggTrade":
-            return m.on_agg_trade(d)
+            out = m.on_agg_trade(d)
+            if self.cfg.state_engine is not None:
+                extra = []
+                for c in out:
+                    if isinstance(c, BarClosed):
+                        extra += self._on_bar_state(state, c, m)
+                out = out + extra
+            return out
         if e == "bookTicker":
             return m.on_book_ticker(d)
         if e == "markPriceUpdate":
@@ -152,6 +162,21 @@ class Engine:
                         pos.funding_accrued_pct += (prev_r if pos.side == "long" else -prev_r) * Decimal(100)
             return out
         return []  # depthUpdate, forceOrder: Faz 2'de görünüme dahil değil
+
+    def _on_bar_state(self, state: CoreState, bar: BarClosed, m: SymbolMarket) -> list:
+        """Bar kapanışında durum etiketi (Faz 6). Spread bar kapanışındaki bookTicker'dan."""
+        se = state.state_engines.get(bar.symbol)
+        if se is None:
+            se = state.state_engines[bar.symbol] = SymbolStateEngine(bar.symbol, self.cfg.state_engine)
+        spread = None
+        if m.best_bid is not None and m.best_ask is not None and m.best_ask > 0:
+            spread = float((m.best_ask - m.best_bid) / m.best_ask * 10000)
+        row = {"symbol": bar.symbol, "start_ms": bar.start_ms, "end_ms": bar.end_ms, "open": float(bar.open), "high": float(bar.high),
+               "low": float(bar.low), "close": float(bar.close), "volume": float(bar.volume), "buy_volume": float(bar.buy_volume),
+               "trades": bar.trades, "spread_bps": spread}
+        label, _feats, cmds = se.on_bar_cmds(row)
+        state.market_state_label[bar.symbol] = label
+        return cmds
 
     def _staleness(self, state: CoreState, now_ns: int) -> list:
         out = []
