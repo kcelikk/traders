@@ -4,8 +4,8 @@
 |---|---|---|---|
 | 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **KAPANDI** 2026-09-10 (ölçüm ≥1 saat, ADR 0001/0003/0004 onaylı; 24 s ölçüm arka planda sürüyor) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
 | 1 | Temel + ham veri kaydı | **KAPANDI** 2026-09-10 (kapı raporu `docs/recording-gate-report.md`; kayıt sürüyor) | ≥1 saat kesintisiz kayıt (ADR 0006) |
-| 2 | Deterministik çekirdek + replay | **teslim edildi** 2026-09-10, onay bekliyor | bit-eşit replay testi (`make test-determinism`) |
-| 3 | Offline araştırma (**DUR kapısı**) | bekliyor | maliyet üstü beklenti var mı |
+| 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
+| 3 | Offline araştırma (**DUR kapısı**) | **AKTİF — hazırlık** (2026-09-10); kod, veri ≥24 s olunca | ADR 0008 §10 karar kuralı |
 | 4 | Pozisyon yönetimi ve çıkış | bekliyor | replay'de sabit TP/SL'ye göre iyileşme |
 | 5 | Risk Engine | bekliyor | hata enjeksiyon testleri |
 | 6 | Giriş mantığı | bekliyor | replay maliyet dahil pozitif |
@@ -105,7 +105,7 @@ tests/test_events.py test_sequencer.py test_universe.py test_integrity.py test_c
 | 8 Replay hızı | **~65.000 olay/s** (tek çekirdek, JSON çözümü dahil); ilk saat 54 s |
 | 9 Dokümanlar | README, CLAUDE.md, ADR 0007 güncel |
 
-Toplam 75 test. `make test-determinism` yeşil. Faz 2 kapısı proje sahibi onayı bekliyor.
+Toplam 75 test. `make test-determinism` yeşil. **Faz 2 kapandı** (proje sahibi onayı, 2026-09-10).
 
 ## Faz 2 — hedef
 
@@ -143,4 +143,33 @@ fbot/
 scripts/replay.py         # CLI: özet JSON
 tests/fixtures/rec-mini/  # ilk 5 dk, market + ctrl olayları (public 1/100 örnekli)
 tests/test_purity.py test_clock.py test_commands.py test_market_bars.py test_engine.py test_costs.py test_execution.py test_replay_determinism.py
+```
+
+## Faz 3 — hedef
+
+Kayıtlı veri üzerinde en fazla 5 piyasa durumu tanımlamak ve her durumdan sonraki ileriye dönük **net** (maliyet dahil) getiri dağılımını ölçmek. Tek soru: herhangi bir (durum, ufuk, yön) hücresi doğrulama bölümünde maliyeti aşan beklenti üretiyor mu? Hayırsa proje durur (DUR kapısı). Metodoloji: ADR 0008. Hipotezler: `docs/research/hipotezler.md`.
+
+## Faz 3 — kabul kriterleri
+
+1. **Look-ahead yok:** feature'lar `T ≤ bar.end_ms` verisinden; kesme testi bit-eşit (`tests/test_features_lookahead.py`).
+2. **Determinizm:** aynı kayıt + aynı config + aynı seed → aynı rapor (hash).
+3. **Maliyet her hücrede:** komisyon, ölçülen spread, defter slippage'ı, ufku kesen funding. Maliyetsiz sütun yok.
+4. **Örtüşmeyen örnekleme** ve **keşif/doğrulama (%70/%30, zaman bazlı)** raporda ayrı.
+5. **Karar hücresi kuralı** (ADR 0008 §8): doğrulamada bootstrap %95 CI alt sınırı > 0, n ≥ 100, keşifte de anlamlı.
+6. **Rapor:** `docs/research/rapor-<run>.md`, hücre tablosu + durum süre dağılımı + geçiş matrisi + sembol kırılımı; ön rapor ≥24 s, nihai ≥3 gün.
+7. **Karar:** Faz 4'e geçiş ya da DUR, proje sahibine açık gerekçeyle.
+
+## Faz 3 — dosya ağacı (kod henüz yazılmadı)
+
+```
+fbot/research/
+  __init__.py
+  features.py        # bar dizisinden rolling feature'lar ve persentiller (saf)
+  states.py          # S0–S4 etiketleme (saf; Faz 6'da çekirdeğe taşınır)
+  forward.py         # ileriye dönük brüt/net getiri, örtüşmeyen örnekleme (saf)
+  stats.py           # seed'li bootstrap CI, özet istatistik (saf)
+scripts/export_bars.py     # replay → bar + spread + funding serisi (JSONL)
+scripts/research_report.py # rapor üretimi
+config/research.toml       # W, p_lo, p_hi, ufuklar, maliyet senaryoları, seed, keşif oranı
+tests/test_features_lookahead.py test_states.py test_forward_returns.py test_stats.py
 ```

@@ -211,8 +211,8 @@ make replay REC=<run_id> MAXF=<dosya>
 |---|---|---|
 | 0 | Ölçüm, build-vs-buy, unit economics | kapandı 2026-09-10 |
 | 1 | Temel + ham veri kaydı | kapandı 2026-09-10 (kapı ≥1 saat, ADR 0006) |
-| 2 | Deterministik çekirdek + replay | teslim edildi 2026-09-10, onay bekliyor |
-| 3 | Offline araştırma (**DUR kapısı**) | — |
+| 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
+| 3 | Offline araştırma (**DUR kapısı**) | **AKTİF** — hazırlık (ADR 0008) |
 | 4 | Pozisyon yönetimi ve çıkış | — |
 | 5 | Risk Engine | — |
 | 6 | Giriş mantığı | — |
