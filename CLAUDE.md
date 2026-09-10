@@ -216,8 +216,8 @@ make research-report REC=<run_id>
 | 0 | Ölçüm, build-vs-buy, unit economics | kapandı 2026-09-10 |
 | 1 | Temel + ham veri kaydı | kapandı 2026-09-10 (kapı ≥1 saat, ADR 0006) |
 | 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
-| 3 | Offline araştırma (**DUR kapısı**) | **DUR sonucu** 2026-09-10 (0/48 hücre); karar proje sahibinde, `docs/research/faz3-karar.md` |
-| 4 | Pozisyon yönetimi ve çıkış | — |
+| 3 | Offline araştırma (bilgilendirici; kapı **kaldırıldı**, ADR 0010) | tamamlandı 2026-09-10: 0/48 hücrede maliyet üstü beklenti; araştırma paralelde sürer |
+| 4 | Pozisyon yönetimi ve çıkış | **AKTİF** (2026-09-10) |
 | 5 | Risk Engine | — |
 | 6 | Giriş mantığı | — |
 | 7 | Paper trading (min 4 hafta) | — |
@@ -225,7 +225,7 @@ make research-report REC=<run_id>
 | 9 | Testnet canlı execution | — |
 | 10 | Küçük sermaye ile canlı | — |
 
-**Faz 3 bir dur kapısıdır.** Kayıtlı veri üzerinde tanımlanan piyasa durumlarının hiçbiri maliyetleri aşan beklenti üretmiyorsa kod yazmayı bırak ve bildir.
+**Faz 3 kapı değildir (ADR 0010).** Araştırma sonucu ne olursa olsun Faz 4'e geçilir; ölçülmüş avantaj bulunana kadar her teslimde "kârlılık gösterilmedi" ibaresi yer alır.
 
 Her faz teslim sırası: hedef → **kabul kriterleri** → ADR → dosya ağacı → **testler** → kod → docker → config → README → çalıştırma komutları ve çıktıları → yapılmayanlar listesi.
 
