@@ -67,17 +67,17 @@ Bunlar tartışılmış ve karara bağlanmıştır. İtirazın varsa yaz, onay a
 |---|---|
 | Piyasa | Binance USDⓈ-M Futures. Spot yok, spot abstraction'ı yazılmaz. |
 | Pozisyon modu | One-way mode. |
-| Sembol evreni | En fazla 20. Başlangıç TOP 10 (ADR 0004; metrik ve yenileme kuralı açık). |
+| Sembol evreni | En fazla 20. Başlangıç TOP 10: 24 s USDT hacmi, stablecoin çiftleri hariç, günlük 00:00 UTC yenileme (ADR 0004). |
 | Eşzamanlı pozisyon | En fazla 5. Sert limit, Risk Engine uygular. |
-| Kaldıraç | 5x veya 10x, config'den, sembol başına. PnL notional üzerinden, ROE teminat üzerinden (ADR 0004). |
+| Kaldıraç | BTCUSDT/ETHUSDT 10x, diğerleri 5x; config'den sembol başına. PnL notional üzerinden, ROE teminat üzerinden (ADR 0004). |
 | Günlük işlem sayısı | Sert limit yok. Maliyet sürüklenmesi ölçülür ve alarm üretir. |
 | Emir yolu | WebSocket API + Ed25519. REST yalnızca fallback / snapshot / mutabakat. |
 | Kimlik doğrulama | Emir yolu: `session.logon` (Ed25519). User data: `userDataStream.start` + listenKey, keepalive private bağlantı yöneticisinin parçası (30 dk), `listenKeyExpired` → yeniden bağlan + mutabakat (ADR 0003). |
 | Tax Report API | Kapsam dışı. Kullanılmaz. |
 | Hot path | Tek process, tek thread. Event bus hot path'te yok. |
 | Determinizm | Rule Zero zorunlu. |
-| İşlem büyüklüğü | Her işlem 10 $ (teminat/notional ayrımı açık, ADR 0004). Filtre altı → REJECT. |
-| Açılışta koruma | Giriş dolunca SL + TP algo emirleri (`closePosition=true`), deterministik `clientAlgoId` (ADR 0004). |
+| İşlem büyüklüğü | Her işlem **80 USDT notional**; miktar step'e aşağı yuvarlanır, filtre altı → REJECT (ADR 0004). |
+| Açılışta koruma | Giriş dolunca SL + TP algo emirleri (`closePosition=true`), deterministik `clientAlgoId`. Mesafeler Faz 3'e kadar `null`, değer yoksa pozisyon açılmaz (ADR 0004). |
 | Varsayılan mod | Paper. Canlı mod bilinçli ve açık bir işlemle etkinleştirilmedikçe çalışmaz. |
 
 ---

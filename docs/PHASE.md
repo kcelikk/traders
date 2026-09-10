@@ -23,7 +23,7 @@
 | Gecikme ölçümü | **sürüyor** — `baseline-24h-20260910`, başlangıç 07:33 UTC, 4 process; 1 saatlik ara rapor + 24 saat nihai |
 | `docs/decisions/0001-build-vs-buy.md` | **onaylandı** (C: sıfırdan, ince yüzey) |
 | `docs/unit-economics.md` | yazıldı; 3 girdi proje sahibinden bekleniyor |
-| Proje sahibi kararları | ADR 0003 A onaylandı; ADR 0001 onaylandı; ADR 0004 kaydedildi (4 açık soru); komisyon kademesi bilinmiyor |
+| Proje sahibi kararları | ADR 0003 A onaylandı; ADR 0001 onaylandı; ADR 0004 kabul edildi (80 USDT notional, TOP 10 günlük, BTC/ETH 10x diğerleri 5x, SL/TP Faz 3); komisyon kademesi bilinmiyor |
 
 ## Faz 0 kabul kriterleri
 

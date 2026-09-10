@@ -1,6 +1,6 @@
 # ADR 0004 — Sembol evreni, işlem büyüklüğü, kaldıraç, açılışta zorunlu SL/TP
 
-Tarih: 2026-09-10 · Durum: **proje sahibi kararı kaydedildi; 4 açık soru var (aşağıda)**
+Tarih: 2026-09-10 · Durum: **KABUL EDİLDİ** (proje sahibi, 2026-09-10; açık sorular kapandı, bkz. son bölüm)
 
 ## Proje sahibi kararları (2026-09-10)
 
@@ -33,9 +33,10 @@ Maliyet etkisi (unit economics, taker/taker %0.10 gidiş-dönüş): 10 $ teminat
 - Uygulama tarafı akıllı çıkış (Katman 2) korunur; TP statik güvenlik ağıdır, tek çıkış değil. SL ve TP mesafeleri Faz 3 verisi olmadan sabitlenmez; config'de "bilinmiyor".
 - Sembol evreni "TOP 10" bir **liste değil kural** olarak tanımlanır (metrik + yenileme periyodu + stablecoin çiftlerinin dışlanması); listeye giren/çıkan sembol için ısınma ve açık pozisyon kuralları Faz 5'te.
 
-## Açık sorular (proje sahibi)
+## Kapanan sorular (proje sahibi, 2026-09-10)
 
-1. "10 $" teminat mı, notional mı?
-2. TOP 10 metriği: 24 saatlik USDT hacmi mi? Stablecoin çiftleri (USDC vb.) dışlansın mı? Yenileme: günlük mü, haftalık mı?
-3. 5x / 10x atama kuralı: sembol başına elle mi, kurala göre mi (örn. BTC/ETH 10x, diğerleri 5x)?
-4. TP mesafesi Faz 3'e kadar tanımsız kalacak; Faz 1–2'de yalnızca altyapı yazılacak. Kabul mü?
+1. **İşlem büyüklüğü: 80 USDT notional** (10 $ / 20 $ önerileri BTC ve ETH filtrelerine takıldığı için). Miktar `stepSize`'a aşağı yuvarlanır; sonuç filtre altıysa REJECT. Teminat: 5x'te 16 USDT, 10x'te 8 USDT. Taker/taker gidiş-dönüş komisyon ≈ 0.08 USDT/işlem (VIP0, doğrulanmadı) = teminatın %0.5 (5x) / %1 (10x).
+   Ölçüm (2026-09-10): 80 USDT hedefle TOP 10'un tamamı açılır; BTC 0.001 BTC = 78.0 USDT (−2.5 %), diğerleri −4 % … 0 % sapma.
+2. **TOP 10 kuralı:** USDT-margined PERPETUAL, `status=TRADING`, 24 saatlik `quoteVolume` sırası, stablecoin base'ler (USDC, FDUSD, TUSD, BUSD, USD1, USDE, USDP) hariç. **Günlük yenileme, 00:00 UTC.** Listeye giren sembol ısınma bekler; listeden çıkan sembolde yeni pozisyon açılmaz, açık pozisyon çıkış kurallarıyla yönetilir.
+3. **Kaldıraç:** BTCUSDT ve ETHUSDT 10x, diğer tüm semboller 5x. Config'de sembol başına, kural varsayılan.
+4. **SL/TP mesafesi:** Faz 3 verisinden türetilene kadar config'de `null` ("bilinmiyor"); Faz 1–2 yalnızca altyapı. Değer olmadan pozisyon açılmaz (fail-closed).
