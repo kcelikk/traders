@@ -122,3 +122,13 @@ DOĞRULANDI — `GET /fapi/v1/exchangeInfo` (ağırlık 1): `PRICE_FILTER` (tick
 | Liquidation stream | DOĞRULANDI | `{symbol}@forceOrder`, 1000 ms; `o.s, o.S, o.o, o.f, o.q, o.p, o.ap, o.X, o.l, o.z, o.T` |
 | Kline stream | DOĞRULANDI (Faz 1'de kaydedilmiyor, aggTrade'den türetilebilir) | `{symbol}@kline_{interval}`, 250 ms; `k.t, k.T, k.x, k.o/h/l/c/v` |
 | Depth snapshot ağırlığı | DOĞRULANDI | `GET /fapi/v1/depth` limit 1000 → ağırlık 20 |
+
+## 12. User data stream payload'ları (2026-09-10, `legacy-docs` yolu; ana doküman SPA olarak çekilemedi — Faz 9'da testnet ile teyit)
+
+| Olay | Alanlar (alıntı) |
+|---|---|
+| `ORDER_TRADE_UPDATE` | `o.c` clientOrderId (özel: `autoclose-` likidasyon, `adl_autoclose` ADL), `o.S` side, `o.o` tip, `o.x` execution type, `o.X` order status, `o.i` orderId, `o.l` son dolum miktarı, `o.z` birikimli dolum, `o.L` son dolum fiyatı, `o.n`/`o.N` komisyon/varlık, `o.T` işlem zamanı, `o.t` tradeId, `o.m` maker mı, `o.R` reduceOnly, `o.wt` workingType, `o.ps` positionSide, `o.cp` closePosition, `o.pP` priceProtect, `o.rp` gerçekleşen kâr, `o.V` STP modu, `o.pm` priceMatch, `o.gtd`, `o.er` expiry reason, `o.M` modifyId |
+| `ALGO_UPDATE` | `o.caid` clientAlgoId, `o.aid` algoId, `o.at` algoType, `o.o` tip, `o.s`, `o.S`, `o.ps`, `o.q`, `o.X` algo durumu ∈ {NEW, CANCELED, TRIGGERING, TRIGGERED, FINISHED, REJECTED, EXPIRED}, `o.ai` (tetiklenen emir id, alıntıda boş), `o.tp` tetik fiyatı, `o.cp` closePosition, `o.wt`, `o.pP`, `o.R`, `o.rm` ret nedeni, `o.ia` trailing aktivasyonu |
+| `ACCOUNT_UPDATE`, `listenKeyExpired` | bu turda çekilemedi; Faz 5 mutabakat için Faz 9 başında doğrulanacak |
+
+Eşleme: `fbot/gateway/userdata_map.py` (saf) → çekirdek `exec` olayları.
