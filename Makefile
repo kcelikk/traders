@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down testnet-up testnet-down testnet-logs testnet-summary test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -59,6 +59,23 @@ paper-up:                # container (izole: kendi volume, restart, kaynak limit
 
 paper-down:
 	docker compose stop paper
+
+# ---- Faz 9 (testnet, izole)
+TESTNET ?= testnet-$(shell date -u +%Y%m%dT%H%MZ)
+
+testnet-up:              # GERÇEK testnet emirleri; .env içinde FBOT_TESTNET_ARMED ve anahtar çifti gerekir
+	mkdir -p data/recordings data/state/testnet && chown -R 10001 data/recordings data/state/testnet
+	GIT_SHA=$(GIT_SHA) FBOT_TESTNET_RUN_ID=$(TESTNET) docker compose up -d testnet
+	@sleep 3; docker compose logs --tail=3 testnet
+
+testnet-down:
+	docker compose stop testnet
+
+testnet-logs:
+	docker compose logs -f --tail=50 testnet
+
+testnet-summary:
+	$(PY) -m scripts.paper_summary data/recordings/$(TESTNET)/paper.db
 
 # ---- Faz 4
 replay-positions:        # statik SL/TP vs kurallı yönetim (bilgilendirici); MAXF, SL, TP, W
