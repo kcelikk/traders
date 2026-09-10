@@ -38,15 +38,20 @@ def wall_ms() -> int:
 
 
 class Writer:
+    FLUSH_EVERY_S = 5.0
+
     def __init__(self, path: Path):
         self.f = path.open("a", buffering=1 << 16)
         self.n = 0
+        self.last_flush = time.monotonic()
 
     def write(self, rec: dict):
         self.f.write(json.dumps(rec, separators=(",", ":")) + "\n")
         self.n += 1
-        if self.n % 200 == 0:
+        now = time.monotonic()
+        if self.n % 200 == 0 or now - self.last_flush > self.FLUSH_EVERY_S:
             self.f.flush()
+            self.last_flush = now
 
     def close(self):
         self.f.flush()
