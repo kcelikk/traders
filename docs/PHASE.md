@@ -10,7 +10,7 @@
 | 5 | Risk Engine | **AKTİF** (2026-09-10): assess K1–K18, runaway, kill switch, mutabakat yazıldı; engine entegrasyonu bekliyor | hata enjeksiyon testleri |
 | 6 | Giriş mantığı | bekliyor (tasarım notu: `docs/design/faz6-giris-mantigi.md`) | replay maliyet dahil pozitif |
 | 7 | Paper trading (min 4 hafta) | bekliyor (tasarım notu: `docs/design/faz7-paper-trading.md`) | backtest ile tutarlı |
-| 8 | Gözlemlenebilirlik | bekliyor (tasarım notu: `docs/design/faz8-gozlemlenebilirlik.md`) | tüm metrikler yayında |
+| 8 | Gözlemlenebilirlik | **kısmen başladı** 2026-09-10: fbot Console (ui/ + fbot/api, kayıt tail, /api/state, kill switch); Prometheus/Grafana/alarmlar bekliyor | tüm metrikler yayında |
 | 9 | Testnet canlı execution | bekliyor (tasarım notu: `docs/design/faz9-testnet-execution.md`) | 2 hafta hatasız |
 | 10 | Küçük sermaye canlı | bekliyor (tasarım notu: `docs/design/faz10-kucuk-sermaye-canli.md`) | proje sahibi onayı |
 
