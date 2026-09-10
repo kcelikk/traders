@@ -9,10 +9,10 @@
 | 4 | Pozisyon yönetimi ve çıkış | bekliyor (tasarım notu: `docs/design/faz4-cikis-kurallari.md`) | replay'de sabit TP/SL'ye göre iyileşme |
 | 5 | Risk Engine | bekliyor (tasarım notu: `docs/design/faz5-risk-engine.md`) | hata enjeksiyon testleri |
 | 6 | Giriş mantığı | bekliyor (tasarım notu: `docs/design/faz6-giris-mantigi.md`) | replay maliyet dahil pozitif |
-| 7 | Paper trading (min 4 hafta) | bekliyor | backtest ile tutarlı |
-| 8 | Gözlemlenebilirlik | bekliyor | tüm metrikler yayında |
-| 9 | Testnet canlı execution | bekliyor | 2 hafta hatasız |
-| 10 | Küçük sermaye canlı | bekliyor | proje sahibi onayı |
+| 7 | Paper trading (min 4 hafta) | bekliyor (tasarım notu: `docs/design/faz7-paper-trading.md`) | backtest ile tutarlı |
+| 8 | Gözlemlenebilirlik | bekliyor (tasarım notu: `docs/design/faz8-gozlemlenebilirlik.md`) | tüm metrikler yayında |
+| 9 | Testnet canlı execution | bekliyor (tasarım notu: `docs/design/faz9-testnet-execution.md`) | 2 hafta hatasız |
+| 10 | Küçük sermaye canlı | bekliyor (tasarım notu: `docs/design/faz10-kucuk-sermaye-canli.md`) | proje sahibi onayı |
 
 ## Faz 0 ilerleme (2026-09-10)
 
