@@ -7,11 +7,11 @@
 | 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (bilgilendirici) | **KAPANDI** 2026-09-10: 0/48 hücrede maliyet üstü beklenti; kapı kaldırıldı (ADR 0010); araştırma paralelde sürer | — |
 | 4 | Pozisyon yönetimi ve çıkış | **KAPANDI** 2026-09-10 (ADR 0012) | replay'de sabit TP/SL'ye göre iyileşme |
-| 5 | Risk Engine | **teslim edildi** 2026-09-10: assess K1–K18, runaway, kalıcı kill switch, mutabakat; çekirdeğe bağlandı (giriş zinciri) | hata enjeksiyon testleri |
-| 6 | Giriş mantığı | **teslim edildi** 2026-09-10: State Engine çekirdekte (araştırma ile bit-eşit), Decision Engine D1–D3, zincir bağlı; `allowed_cells` boş (Faz 3: 0/48) | replay maliyet dahil pozitif |
-| 7 | Paper trading (min 4 hafta) | bekliyor (tasarım notu: `docs/design/faz7-paper-trading.md`) | backtest ile tutarlı |
+| 5 | Risk Engine | **KAPANDI** 2026-09-10 (ADR 0014): 2026-09-10: assess K1–K18, runaway, kalıcı kill switch, mutabakat; çekirdeğe bağlandı (giriş zinciri) | hata enjeksiyon testleri |
+| 6 | Giriş mantığı | **KAPANDI** 2026-09-10 (ADR 0014): 2026-09-10: State Engine çekirdekte (araştırma ile bit-eşit), Decision Engine D1–D3, zincir bağlı; `allowed_cells` boş (Faz 3: 0/48) | replay maliyet dahil pozitif |
+| 7 | Paper trading (2 hafta ara rapor, 4 hafta hedef) | **AKTİF** 2026-09-10: `fbot-paper` container'ı izole çalışıyor (demo config, strateji değil) | backtest ile tutarlı |
 | 8 | Gözlemlenebilirlik | **kısmen başladı** 2026-09-10: fbot Console (ui/ + fbot/api, kayıt tail, /api/state, kill switch); Prometheus/Grafana/alarmlar bekliyor | tüm metrikler yayında |
-| 9 | Testnet canlı execution | bekliyor (tasarım notu: `docs/design/faz9-testnet-execution.md`) | 2 hafta hatasız |
+| 9 | Testnet execution | **AKTİF** 2026-09-10 (proje sahibi onayı): izole servis; emir durum makinesi + rate limiter + imzalama yazılıyor | 2 hafta hatasız |
 | 10 | Küçük sermaye canlı | bekliyor (tasarım notu: `docs/design/faz10-kucuk-sermaye-canli.md`) | proje sahibi onayı |
 
 ## Faz 0 ilerleme (2026-09-10)

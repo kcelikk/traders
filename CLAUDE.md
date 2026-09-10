@@ -225,11 +225,11 @@ make ui REC=<run_id> / make ui-stop   # 127.0.0.1:8787
 | 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
 | 3 | Offline araştırma (bilgilendirici; kapı **kaldırıldı**, ADR 0010) | tamamlandı 2026-09-10: 0/48 hücrede maliyet üstü beklenti; araştırma paralelde sürer |
 | 4 | Pozisyon yönetimi ve çıkış | kapandı 2026-09-10 |
-| 5 | Risk Engine | teslim edildi 2026-09-10 |
-| 6 | Giriş mantığı | teslim edildi 2026-09-10 (allowed_cells boş) |
+| 5 | Risk Engine | kapandı 2026-09-10 (ADR 0014) |
+| 6 | Giriş mantığı | kapandı 2026-09-10 (ADR 0014); allowed_cells boş |
 | 7 | Paper trading (2 hafta ara rapor, 4 hafta hedef) | — |
 | 8 | Gözlemlenebilirlik | — |
-| 9 | Testnet execution (test planı + ≥100 emir, beklenmeyen hata 0) | — |
+| 9 | Testnet execution | **AKTİF** (izole servis) |
 | 10 | Küçük sermaye ile canlı | — |
 
 **Kapılar (ADR 0010/0011):** Faz 3 kapı değildir; unit economics bilgilendiricidir; süre şartları yerine ölçülebilir kriterler. Araştırma sonucu ne olursa olsun Faz 4'e geçilir; ölçülmüş avantaj bulunana kadar her teslimde "kârlılık gösterilmedi" ibaresi yer alır.
