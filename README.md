@@ -6,7 +6,7 @@ Binance USDⓈ-M Futures üzerinde deterministik, event-driven işlem sistemi. D
 
 ```bash
 make setup          # venv + websockets + pytest
-make test           # 46 test
+make test           # 51 test
 ```
 
 Docker (Ubuntu deposu): `docker.io`, `docker-compose-v2`.
@@ -18,6 +18,7 @@ TOP 10 sembol (24 s hacim, stablecoin çiftleri hariç), `/public` ve `/market` 
 ```bash
 make run-recorder REC=deneme DURATION=60     # yerel, 60 s
 make verify-recording REC=deneme             # bütünlük raporu (Markdown)
+make verify-orderbook REC=deneme MAXF=2      # local order book replay doğrulaması
 
 make docker-build
 make up REC=rec-72h                          # arka planda, restart: unless-stopped

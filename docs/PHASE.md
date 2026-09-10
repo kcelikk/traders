@@ -47,7 +47,8 @@
 | Saf modüller (events, sequencer, universe, integrity, config) + writer + gateway | yazıldı, 46 test yeşil (sahte WS sunucusuyla yeniden bağlanma dahil) |
 | Recorder container `fbot-recorder`, run `rec-72h` | **başladı 2026-09-10 08:00 UTC**, git 8271224, config 75a167d5a57d; hedef bitiş ≥ 2026-09-13 08:00 UTC |
 | 45 s yerel duman testi | 89.597 olay, seq boşluğu 0, SHA OK, loop lag p99 3.85 ms, ~370 MB/saat gzip |
-| `scripts/verify_recording.py` | yazıldı; 72 saat sonunda kapı raporu üretir |
+| `scripts/verify_recording.py` | yazıldı; 2.75 saatlik kısmi kontrol: 10.9 M olay, seq boşluğu 0, 50 stream'de zincir kopuşu 0, loop lag p99 8.4 ms / maks 46.6 ms, kuyruk maks 569, ~220 MB/saat gzip |
+| `fbot/orderbook.py` + `scripts/verify_orderbook.py` (kriter 7) | yazıldı, 5 test; kayıt üzerinde replay sonucu aşağıda |
 
 ## Faz 1 — hedef
 

@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup test measure-latency summarize-latency unit-economics run-recorder verify-recording docker-build up down logs
+.PHONY: setup test measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -35,6 +35,9 @@ run-recorder:            # yerel, ön planda; DURATION=saniye opsiyonel
 
 verify-recording:
 	$(PY) -m scripts.verify_recording data/recordings/$(REC)
+
+verify-orderbook:        # local order book replay; MAXF=dosya sayısı, SYMS=btcusdt,ethusdt opsiyonel
+	$(PY) -m scripts.verify_orderbook data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),) $(if $(SYMS),--symbols $(SYMS),)
 
 docker-build:
 	GIT_SHA=$(GIT_SHA) docker compose build

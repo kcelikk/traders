@@ -180,14 +180,19 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 make setup
 
 # testler
-make test              # birim (Faz 0: 23 test)
+make test              # birim (51 test)
 
 # Faz 0 ölçüm
 make measure-latency RUN=<run_id>    # 24 saat, 4 process, nohup
 make summarize-latency RUN=<run_id>
 make unit-economics                  # docs/unit-economics.generated.md
 
-# (Faz 1+ ile gelecek: run-paper, replay, up)
+# Faz 1 kayıt
+make up REC=<run_id> / make down / make logs
+make verify-recording REC=<run_id>
+make verify-orderbook REC=<run_id> MAXF=2
+
+# (Faz 2+ ile gelecek: run-paper, replay)
 ```
 
 ---
