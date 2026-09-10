@@ -111,7 +111,7 @@ PROCESS 2 recorder | PROCESS 3 persistence | PROCESS 4 api/metrics
 - **Fast Path (P0):** açık pozisyonu yönetir. Yeni pozisyon açma kararı bu yolda değildir.
 - **Analytics Path (P2):** yeni giriş fırsatını değerlendirir.
 - Bir modül, işi için gerek duymadığı başka bir modülün sonucunu beklemez.
-- Fast path'te hiçbir senkron iş 1 ms'yi geçmez. Loop lag ölçülür ve yayınlanır.
+- Fast path'te 1 ms **bütçe**: loop lag p99 ölçülür ve yayınlanır, aşım alarm üretir (ADR 0011).
 - Veritabanı hot path'te yoktur. Aktif pozisyon state'i bellektedir.
 - Paralellik sembol shard'ıyla sağlanır, thread ile değil.
 
@@ -220,12 +220,12 @@ make research-report REC=<run_id>
 | 4 | Pozisyon yönetimi ve çıkış | **AKTİF** (2026-09-10) |
 | 5 | Risk Engine | — |
 | 6 | Giriş mantığı | — |
-| 7 | Paper trading (min 4 hafta) | — |
+| 7 | Paper trading (2 hafta ara rapor, 4 hafta hedef) | — |
 | 8 | Gözlemlenebilirlik | — |
-| 9 | Testnet canlı execution | — |
+| 9 | Testnet execution (test planı + ≥100 emir, beklenmeyen hata 0) | — |
 | 10 | Küçük sermaye ile canlı | — |
 
-**Faz 3 kapı değildir (ADR 0010).** Araştırma sonucu ne olursa olsun Faz 4'e geçilir; ölçülmüş avantaj bulunana kadar her teslimde "kârlılık gösterilmedi" ibaresi yer alır.
+**Kapılar (ADR 0010/0011):** Faz 3 kapı değildir; unit economics bilgilendiricidir; süre şartları yerine ölçülebilir kriterler. Araştırma sonucu ne olursa olsun Faz 4'e geçilir; ölçülmüş avantaj bulunana kadar her teslimde "kârlılık gösterilmedi" ibaresi yer alır.
 
 Her faz teslim sırası: hedef → **kabul kriterleri** → ADR → dosya ağacı → **testler** → kod → docker → config → README → çalıştırma komutları ve çıktıları → yapılmayanlar listesi.
 
@@ -244,7 +244,7 @@ Her faz teslim sırası: hedef → **kabul kriterleri** → ADR → dosya ağac�
 - Ölçülmüş darboğaz olmadan Rust'a geçmek
 - Hot path'e ağ hop'u eklemek
 - Fast path'te thread kullanmak
-- Ağırlıklı çok-faktörlü skorlamayı v1'e koymak (ağırlık = serbest parametre = overfit)
+- Walk-forward doğrulamasız model/skorlama (ağırlık = serbest parametre = overfit; ADR 0011)
 - Market State'i 5 durumdan fazlaya çıkarmak
 - Auto-cancel'ı koruma emirlerine uygulamak
 - listenKey keepalive döngüsü yazmak
