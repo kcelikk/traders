@@ -21,11 +21,11 @@ status:                  # arka plan süreçleri ve veri durumu
 	@echo "sonraki: 2026-09-11 07:39Z gecikme nihai raporu; 08:00Z sonrası 24 s araştırma ön raporu; 2026-09-13 08:00Z sonrası nihai/DUR"
 
 ui:                      # konsol: http://127.0.0.1:8787 (SSH tüneli: ssh -L 8787:127.0.0.1:8787 <sunucu>)
-	nohup $(PY) -m fbot.api.server --run-dir data/recordings/$(REC) --history-files $(or $(HIST_FILES),5) > data/ui.log 2>&1 &
+	@nohup $(PY) -m fbot.api.server --run-dir data/recordings/$(REC) --history-files $(or $(HIST_FILES),5) > data/ui.log 2>&1 & echo $$! > data/ui.pid
 	@sleep 2; curl -s http://127.0.0.1:8787/api/health; echo
 
-ui-stop:
-	-pkill -f "fbot.api.serve[r]"
+ui-stop:                 # pidfile ile (pkill -f pattern'i kendi shell'ini de öldürebiliyor)
+	@if [ -f data/ui.pid ]; then kill $$(cat data/ui.pid) 2>/dev/null; rm -f data/ui.pid; echo "durduruldu"; else echo "pidfile yok"; fi
 
 test:
 	$(PYTEST) -q tests

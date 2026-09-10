@@ -83,22 +83,30 @@ class Tailer(threading.Thread):
         return sorted(self.run_dir.glob("events-*.jsonl.gz"), key=lambda p: p.name)
 
     def _feed_lines(self, lines, chunk: int = 5000):
-        """Kilit parça parça tutulur; uzun geçmiş oynatımında API bloklanmaz."""
-        for i in range(0, len(lines), chunk):
-            with self.lock:
-                for line in lines[i:i + chunk]:
-                    try:
-                        self.view.feed(decode(line))
-                        self.lines += 1
-                    except Exception:  # noqa: BLE001 — görünüm, hot path değil; bozuk satır atlanır
-                        continue
+        """Akışı parça parça tüketir; kilit sık bırakılır, satırlar biriktirilmez (bellek sınırlı)."""
+        batch = []
+        for line in lines:
+            batch.append(line)
+            if len(batch) >= chunk:
+                self._drain(batch)
+                batch = []
+        if batch:
+            self._drain(batch)
+
+    def _drain(self, batch):
+        with self.lock:
+            for line in batch:
+                try:
+                    self.view.feed(decode(line))
+                    self.lines += 1
+                except Exception:  # noqa: BLE001 — görünüm, hot path değil; bozuk satır atlanır
+                    continue
 
     def run(self):
         files = self._files()
         start = max(0, len(files) - self.history_files)
         for p in files[start:-1] if files else []:
-            r = GrowingGzipReader(p)
-            self._feed_lines(list(r.read_new()))
+            self._feed_lines(GrowingGzipReader(p).read_new())
             self.done.add(p.name)
         self.loading = False
         while True:
@@ -110,9 +118,10 @@ class Tailer(threading.Thread):
             p = pending[0]
             if self.current != p:
                 self.current, self.reader = p, GrowingGzipReader(p)
-            lines = list(self.reader.read_new())
-            if lines:
-                self._feed_lines(lines)
+            before = self.lines
+            self._feed_lines(self.reader.read_new())
+            if self.lines > before:
+                pass
             elif self.reader.finished or len(pending) > 1 and self._closed(p):
                 self.done.add(p.name)
             else:
