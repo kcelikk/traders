@@ -16,6 +16,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from fbot.api.auth import AuthConfig, check as auth_check
+from fbot.api.keys import KeyError_, key_status, write_keys
 from fbot.api.live_view import LiveView, parse_phase_table
 from fbot.api.paper_view import environments, paper_snapshot
 from fbot.api.tail import GrowingGzipReader
@@ -246,6 +247,9 @@ def make_handler(api: Api):
                 from urllib.parse import parse_qs, urlparse
                 run = (parse_qs(urlparse(self.path).query).get("run") or [None])[0]
                 return self._json(api.state(run))
+            if self.path.startswith("/api/keys"):
+                return self._json({"status": key_status(ROOT / ".env"),
+                                   "note": "gizli anahtar hiçbir zaman döndürülmez; yazma tek yönlüdür"})
             if self.path.startswith("/api/health"):
                 return self._json({"ok": True, "loading": api.tailer.loading, "lines": api.tailer.lines})
             if self.path in ("/", ""):
@@ -262,6 +266,14 @@ def make_handler(api: Api):
                 api.kill.trigger(body.get("reason") or "manual (konsol)", time.time_ns(), git_sha())
                 api._cache = (0.0, None)
                 return self._json({"active": api.kill.active, **api.kill.state})
+            if self.path == "/api/keys":
+                env_name = body.get("env")
+                vals = {k: body[k] for k in ("key", "secret", "armed") if k in body}
+                try:
+                    res = write_keys(ROOT / ".env", env_name, vals, require_gate=True)
+                except KeyError_ as e:
+                    return self._json({"error": str(e)}, 400)
+                return self._json({**res, "status": key_status(ROOT / ".env")})
             if self.path == "/api/kill/reset":
                 api.kill = KillSwitch(api.kill.path)
                 api.kill.reset(body.get("note") or "manual reset (konsol)", time.time_ns())

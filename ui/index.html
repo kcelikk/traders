@@ -729,5 +729,109 @@ class Component extends DCLogic {
   }
 }
 </script>
+<!-- API anahtarı paneli — tasarım şablonundan bağımsız ek katman (ui/index.html'e eklenir).
+     Yalnızca yazma: sunucu gizli anahtarı asla geri döndürmez. -->
+<style>
+  #fbot-keys-btn { position:fixed; right:14px; bottom:14px; z-index:9998; padding:8px 12px; font:700 11px "JetBrains Mono",monospace;
+    letter-spacing:.06em; background:#0c1320; color:#9fb0c3; border:1px solid #1a2536; cursor:pointer; }
+  #fbot-keys-btn:hover { color:#35c8ff; border-color:#35c8ff; }
+  #fbot-keys { position:fixed; inset:0; z-index:9999; background:rgba(7,11,18,.86); display:none; align-items:center; justify-content:center; }
+  #fbot-keys.open { display:flex; }
+  #fbot-keys .box { width:min(720px,94vw); max-height:92vh; overflow:auto; background:#0c1320; border:1px solid #1a2536;
+    font:13px "JetBrains Mono",monospace; color:#dbe7f3; }
+  #fbot-keys h3 { margin:0; padding:12px 16px; border-bottom:1px solid #1a2536; font:700 13px "Space Grotesk",sans-serif; letter-spacing:.08em; }
+  #fbot-keys section { padding:14px 16px; border-bottom:1px solid #111a28; }
+  #fbot-keys label { display:block; font-size:11px; color:#6f849c; margin:8px 0 3px; }
+  #fbot-keys input { width:100%; padding:7px 8px; background:#070b12; border:1px solid #1a2536; color:#dbe7f3; font:12px "JetBrains Mono",monospace; }
+  #fbot-keys .row { display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  #fbot-keys button { padding:7px 12px; border:0; font:700 11px "JetBrains Mono",monospace; cursor:pointer; }
+  #fbot-keys .save { background:#00e5a0; color:#070b12; }
+  #fbot-keys .danger { background:#ff5470; color:#070b12; }
+  #fbot-keys .ghost { background:transparent; color:#6f849c; border:1px solid #1a2536; }
+  #fbot-keys .warn { background:rgba(255,176,32,.08); border-left:2px solid #ffb020; padding:9px 11px; font-size:11px; color:#ffb020; line-height:1.5; }
+  #fbot-keys .stat { font-size:11px; color:#6f849c; }
+  #fbot-keys .ok { color:#00e5a0; } #fbot-keys .off { color:#6f849c; } #fbot-keys .bad { color:#ff5470; }
+</style>
+<button id="fbot-keys-btn">API ANAHTARLARI</button>
+<div id="fbot-keys"><div class="box">
+  <h3>API ANAHTARLARI · yalnızca yazma</h3>
+  <section>
+    <div class="warn">
+      Anahtar bu formdan sunucuya gönderilir ve <b>.env</b> dosyasına yazılır (izin 600). Sunucu gizli anahtarı
+      hiçbir zaman geri döndürmez. Trafik Cloudflare üzerinden geçtiği için düz metni Cloudflare de görür;
+      en yüksek gizlilik isteniyorsa anahtarı SSH ile doğrudan <b>.env</b> içine yazın.
+      Binance anahtarında <b>çekim yetkisi kapalı</b>, <b>IP whitelist açık</b> olmalıdır.
+    </div>
+  </section>
+  <section id="k-testnet">
+    <b>TESTNET</b> <span class="stat" id="st-testnet"></span>
+    <label>API Key</label><input type="password" autocomplete="off" id="tn-key" placeholder="değiştirmek için yazın; boş bırakılırsa dokunulmaz">
+    <label>API Secret</label><input type="password" autocomplete="off" id="tn-sec" placeholder="boş bırakılırsa dokunulmaz">
+    <div class="row">
+      <button class="save" data-env="testnet" data-arm="1">Kaydet ve etkinleştir</button>
+      <button class="ghost" data-env="testnet" data-arm="0">Etkinliği kaldır</button>
+      <span class="stat">değişiklik sonrası: <code>make testnet-down &amp;&amp; make testnet-up</code></span>
+    </div>
+  </section>
+  <section id="k-live">
+    <b>CANLI (mainnet)</b> <span class="stat" id="st-live"></span>
+    <div class="warn" id="live-gate"></div>
+    <label>API Key</label><input type="password" autocomplete="off" id="lv-key" placeholder="boş bırakılırsa dokunulmaz">
+    <label>API Secret</label><input type="password" autocomplete="off" id="lv-sec" placeholder="boş bırakılırsa dokunulmaz">
+    <div class="row">
+      <button class="danger" data-env="live" data-arm="1">Kaydet</button>
+      <button class="ghost" data-env="live" data-arm="0">Etkinliği kaldır</button>
+    </div>
+  </section>
+  <section class="row" style="justify-content:space-between;">
+    <span class="stat" id="k-msg"></span>
+    <button class="ghost" id="k-close">Kapat</button>
+  </section>
+</div></div>
+<script>
+(function () {
+  var box = document.getElementById('fbot-keys'), msg = document.getElementById('k-msg');
+  function token() { try { return localStorage.getItem('fbot_token') || ''; } catch (e) { return ''; } }
+  function ask() { var t = window.prompt('Konsol yazma tokenı (FBOT_UI_TOKEN):') || ''; if (t) { try { localStorage.setItem('fbot_token', t); } catch (e) {} } return t; }
+  function paint(s) {
+    function line(x) {
+      if (!x) return '';
+      var a = x.armed ? '<span class="ok">etkin</span>' : '<span class="off">etkin değil</span>';
+      var k = x.key_set ? ('anahtar ' + x.masked) : '<span class="bad">anahtar yok</span>';
+      return k + ' · ' + (x.secret_set ? 'gizli anahtar var' : '<span class="bad">gizli anahtar yok</span>') + ' · ' + a;
+    }
+    document.getElementById('st-testnet').innerHTML = line(s.testnet);
+    document.getElementById('st-live').innerHTML = line(s.live);
+    document.getElementById('live-gate').innerHTML = s.live && s.live.gate_open
+      ? 'Sunucu kapısı <b>açık</b>. Canlı emir yolu yine de yazılmadı (LiveExecutionAdapter korumalı stub): anahtar saklanır, kullanılmaz.'
+      : 'Sunucu kapısı <b>kapalı</b>: mainnet anahtarı yazılamaz. Açmak için sunucuda <code>FBOT_LIVE_KEYS_ALLOWED=1</code> tanımlayın. Canlı emir yolu zaten yazılmadı.';
+  }
+  function load() { fetch('/api/keys', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { if (d.status) paint(d.status); }); }
+  document.getElementById('fbot-keys-btn').onclick = function () { box.classList.add('open'); load(); };
+  document.getElementById('k-close').onclick = function () { box.classList.remove('open'); };
+  box.onclick = function (e) { if (e.target === box) box.classList.remove('open'); };
+  Array.prototype.forEach.call(box.querySelectorAll('button[data-env]'), function (b) {
+    b.onclick = function () {
+      var env = b.dataset.env, arm = b.dataset.arm === '1';
+      var kf = env === 'testnet' ? 'tn-key' : 'lv-key', sf = env === 'testnet' ? 'tn-sec' : 'lv-sec';
+      var body = { env: env, armed: arm ? new Date().toISOString().slice(0, 10) : '' };
+      var k = document.getElementById(kf).value.trim(), s = document.getElementById(sf).value.trim();
+      if (k) body.key = k; if (s) body.secret = s;
+      var t = token() || ask();
+      msg.textContent = 'gönderiliyor…';
+      fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Fbot-Token': t }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json().then(function (d) { return { s: r.status, d: d }; }); })
+        .then(function (r) {
+          if (r.s === 401) { try { localStorage.removeItem('fbot_token'); } catch (e) {} msg.textContent = 'token geçersiz'; return; }
+          if (r.d.error) { msg.textContent = 'hata: ' + r.d.error; return; }
+          document.getElementById(kf).value = ''; document.getElementById(sf).value = '';
+          msg.textContent = 'kaydedildi: ' + (r.d.updated || []).join(', ') + ' · ' + (r.d.note || '');
+          if (r.d.status) paint(r.d.status);
+        }).catch(function (e) { msg.textContent = 'ağ hatası: ' + e; });
+    };
+  });
+})();
+</script>
+
 </body>
 </html>
