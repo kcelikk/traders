@@ -2,9 +2,9 @@
 
 | Faz | Konu | Durum | Kapı |
 |---|---|---|---|
-| 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **AKTİF** (başlangıç 2026-09-10) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
-| 1 | Temel + ham veri kaydı | **AKTİF** (2026-09-10, proje sahibi talimatıyla; Faz 0 kapanışı 24 s ölçüm raporuna bağlı) | 72 saat kesintisiz kayıt |
-| 2 | Deterministik çekirdek + replay | bekliyor | bit-eşit replay testi CI'da |
+| 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **KAPANDI** 2026-09-10 (ölçüm ≥1 saat, ADR 0001/0003/0004 onaylı; 24 s ölçüm arka planda sürüyor) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
+| 1 | Temel + ham veri kaydı | **KAPANDI** 2026-09-10 (kapı raporu `docs/recording-gate-report.md`; kayıt sürüyor) | ≥1 saat kesintisiz kayıt (ADR 0006) |
+| 2 | Deterministik çekirdek + replay | **AKTİF** (2026-09-10) | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (**DUR kapısı**) | bekliyor | maliyet üstü beklenti var mı |
 | 4 | Pozisyon yönetimi ve çıkış | bekliyor | replay'de sabit TP/SL'ye göre iyileşme |
 | 5 | Risk Engine | bekliyor | hata enjeksiyon testleri |
@@ -45,7 +45,7 @@
 |---|---|
 | Docker (docker.io 29.1.3, compose 2.40.3) | kuruldu, hello-world doğrulandı |
 | Saf modüller (events, sequencer, universe, integrity, config) + writer + gateway | yazıldı, 46 test yeşil (sahte WS sunucusuyla yeniden bağlanma dahil) |
-| Recorder container `fbot-recorder`, run `rec-72h` | **başladı 2026-09-10 08:00 UTC**, git 8271224, config 75a167d5a57d; hedef bitiş ≥ 2026-09-13 08:00 UTC |
+| Recorder container `fbot-recorder`, run `rec-72h` | başladı 2026-09-10 08:00 UTC, git 8271224, config 75a167d5a57d; **kapı 1 saat ile geçildi** (ADR 0006), kayıt sürüyor |
 | 45 s yerel duman testi | 89.597 olay, seq boşluğu 0, SHA OK, loop lag p99 3.85 ms, ~370 MB/saat gzip |
 | `scripts/verify_recording.py` | yazıldı; 2.75 saatlik kısmi kontrol: 10.9 M olay, seq boşluğu 0, 50 stream'de zincir kopuşu 0, loop lag p99 8.4 ms / maks 46.6 ms, kuyruk maks 569, ~220 MB/saat gzip |
 | `fbot/orderbook.py` + `scripts/verify_orderbook.py` (kriter 7) | **doğrulandı** (ilk saat, 10 sembol): dokümandaki 9 kural ile local book kuruldu; sonraki REST snapshot'larla seviye eşitliği %96.9–99.7 (kalan fark: local book snapshot'tan ≤100 ms ileride); `pu` kopuşu 0; senkron kurulumu her snapshot'ta başarılı. Rapor `docs/orderbook-replay-hour1.md` |
@@ -63,7 +63,7 @@ TOP 10 sembolün ham market verisini kategori bazlı WS bağlantılarından tek 
 3. Her dosyanın SHA-256'sı manifest ile eşleşir; kesilmiş/bozuk gzip yok.
 4. Stream düzeyi bütünlük raporlanır: aggTrade `a` ardışıklığı, bookTicker `u` monotonluğu, depth `pu == önceki u` zinciri; kopuş sayıları ve nedenleri (reconnect ile eşleşme) listelenir.
 5. Reconnect sayısı, kategori bazlı bayatlık olayları, snapshot sayısı, loop lag (p50/p99/max) ve kuyruk derinliği raporlanır.
-6. Kayıt **en az 72 saat** kesintisiz (process yeniden başlasa bile run manifest'i devam eder; her restart raporda görünür).
+6. Kayıt **en az 1 saat** kesintisiz (ADR 0006; eski kural 72 saat). Process yeniden başlasa bile run manifest'i devam eder; her restart raporda görünür.
 7. Depth snapshot + diff zinciri ile local order book replay'de en az bir sembol için doğrulanır (ilk event koşulu `U <= lastUpdateId <= u`).
 8. Testler: saf modüller birim testli; sahte WS sunucusuyla kopma/yeniden bağlanma entegrasyon testi geçiyor; `make test` yeşil.
 9. README güncel; komut çıktıları teslimde gösterilir.

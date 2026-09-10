@@ -199,13 +199,15 @@ make verify-orderbook REC=<run_id> MAXF=2
 
 ## FAZ DURUMU
 
+> Kapı süreleri: kayıt ≥ 1 saat, ölçüm ≥ 1 saat (ADR 0006). İzleyiciler en fazla 1 saat.
+
 > Tek doğruluk kaynağı `docs/PHASE.md`. Burası özet.
 
 | Faz | Konu | Durum |
 |---|---|---|
-| 0 | Ölçüm, build-vs-buy, unit economics | **AKTİF** (2026-09-10) |
-| 1 | Temel + ham veri kaydı | Faz 0 kapısı bekliyor (24 s ölçüm) |
-| 2 | Deterministik çekirdek + replay | — |
+| 0 | Ölçüm, build-vs-buy, unit economics | kapandı 2026-09-10 |
+| 1 | Temel + ham veri kaydı | kapandı 2026-09-10 (kapı ≥1 saat, ADR 0006) |
+| 2 | Deterministik çekirdek + replay | **AKTİF** |
 | 3 | Offline araştırma (**DUR kapısı**) | — |
 | 4 | Pozisyon yönetimi ve çıkış | — |
 | 5 | Risk Engine | — |
