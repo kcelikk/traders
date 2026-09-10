@@ -72,7 +72,7 @@ Bunlar tartışılmış ve karara bağlanmıştır. İtirazın varsa yaz, onay a
 | Kaldıraç | 5x veya 10x, config'den, sembol başına. |
 | Günlük işlem sayısı | Sert limit yok. Maliyet sürüklenmesi ölçülür ve alarm üretir. |
 | Emir yolu | WebSocket API + Ed25519. REST yalnızca fallback / snapshot / mutabakat. |
-| Kimlik doğrulama | `session.logon` + `userDataStream.subscribe`. **listenKey keepalive döngüsü yazma.** |
+| Kimlik doğrulama | `session.logon` + `userDataStream.subscribe`. **listenKey keepalive döngüsü yazma.** ⚠ Futures dokümanında `userDataStream.subscribe` yok; bkz. ADR 0003, karar bekliyor. |
 | Tax Report API | Kapsam dışı. Kullanılmaz. |
 | Hot path | Tek process, tek thread. Event bus hot path'te yok. |
 | Determinizm | Rule Zero zorunlu. |
@@ -178,15 +178,14 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 make setup
 
 # testler
-make test              # birim + entegrasyon
-make test-determinism  # Rule Zero doğrulaması
+make test              # birim (Faz 0: 23 test)
 
-# çalıştırma
-make run-paper
-make replay FILE=<kayit>
+# Faz 0 ölçüm
+make measure-latency RUN=<run_id>    # 24 saat, 4 process, nohup
+make summarize-latency RUN=<run_id>
+make unit-economics                  # docs/unit-economics.generated.md
 
-# gözlem
-make up                # compose: prometheus, grafana, db
+# (Faz 1+ ile gelecek: run-paper, replay, up)
 ```
 
 ---
@@ -197,7 +196,7 @@ make up                # compose: prometheus, grafana, db
 
 | Faz | Konu | Durum |
 |---|---|---|
-| 0 | Ölçüm, build-vs-buy, unit economics | — |
+| 0 | Ölçüm, build-vs-buy, unit economics | **AKTİF** (2026-09-10) |
 | 1 | Temel + ham veri kaydı | — |
 | 2 | Deterministik çekirdek + replay | — |
 | 3 | Offline araştırma (**DUR kapısı**) | — |

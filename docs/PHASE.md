@@ -14,6 +14,17 @@
 | 9 | Testnet canlı execution | bekliyor | 2 hafta hatasız |
 | 10 | Küçük sermaye canlı | bekliyor | proje sahibi onayı |
 
+## Faz 0 ilerleme (2026-09-10)
+
+| Teslim | Durum |
+|---|---|
+| Kurulum (python3-venv, make, venv, websockets 17.1, pytest 9.1.1) | tamam |
+| `docs/binance-api-verification.md` | tamam — 2 kritik sapma: user data stream (ADR 0003), koşullu emirler Algo Service'e taşındı |
+| Gecikme ölçümü | **sürüyor** — `baseline-24h-20260910`, başlangıç 07:33 UTC, 4 process; 1 saatlik ara rapor + 24 saat nihai |
+| `docs/decisions/0001-build-vs-buy.md` | yazıldı, onay bekliyor (öneri: sıfırdan, ince yüzey) |
+| `docs/unit-economics.md` | yazıldı; 3 girdi proje sahibinden bekleniyor |
+| Proje sahibi kararları | ADR 0003 seçeneği, ADR 0001 onayı, semboller, sermaye, komisyon kademesi |
+
 ## Faz 0 kabul kriterleri
 
 1. `docs/latency-baseline.md`: REST RTT (yeni bağlantı ve keep-alive ayrı), WS event→receive farkı (public ve market kategorisi ayrı), WS API istek→cevap, clock skew ve kayması. Her biri p50/p95/p99, en az 1 saat, hedef 24 saat.
