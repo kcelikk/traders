@@ -13,11 +13,14 @@ class FeatureConfig:
 
 
 def rolling_pct(values: list, i: int, W: int) -> float | None:
-    """values[i]'nin önceki W değer içindeki persentili (≤ oranı). Mevcut değer dahil edilmez."""
+    """values[i]'nin önceki W değer içindeki persentili (≤ oranı). Mevcut değer dahil edilmez.
+    Pencere sabitse (tüm değerler eşit) persentil anlamsızdır → None (sabit spread artefaktı, ADR 0009 §3)."""
     if i < W:
         return None
     window = values[i - W:i]
     if any(v is None for v in window) or values[i] is None:
+        return None
+    if min(window) == max(window) == values[i]:
         return None
     return sum(1 for v in window if v <= values[i]) / W
 

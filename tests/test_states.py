@@ -30,3 +30,7 @@ def test_directions_per_state():
     assert directions("S3", f(imb_short=0.0)) == []
     assert directions("S4", f(ret_short=0.002)) == [("long", "cont"), ("short", "rev")]
     assert directions("S0", f()) == []
+
+
+def test_S3_without_spread_percentile_uses_rv_only():
+    assert label_state(f(pct_rv_long=0.1, pct_spread=None), CFG) == "S3"

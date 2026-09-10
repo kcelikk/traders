@@ -26,8 +26,8 @@ def label_state(f: dict, cfg: StateConfig) -> str:
         return "S1"
     if pr is not None and pr < cfg.p_lo and _in_band(prv_l, cfg.p_lo, cfg.p_hi):
         return "S2"
-    if prv_l is not None and psp is not None and prv_l < cfg.p_lo and psp < cfg.p_hi:
-        return "S3"
+    if prv_l is not None and prv_l < cfg.p_lo and (psp is None or psp < cfg.p_hi):
+        return "S3"  # spread persentili yoksa (sabit spread) yalnızca volatilite koşulu
     return "S0"
 
 

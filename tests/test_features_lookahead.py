@@ -39,3 +39,10 @@ def test_feature_values_are_defined_from_history():
     assert f[3]["rv_long"] > 0
     assert -1.0 <= f[3]["imb_short"] <= 1.0
     assert f[CFG.W + CFG.N_long]["pct_ret_long"] is not None and f[CFG.W]["pct_ret_long"] is None
+
+
+def test_constant_spread_has_no_percentile():
+    from fbot.research.features import compute_features, FeatureConfig
+    b = bars(40)
+    f = compute_features(b, FeatureConfig(W=10, N_short=2, N_long=3))
+    assert all(x["pct_spread"] is None for x in f)   # spread sabit (1.0) → persentil anlamsız
