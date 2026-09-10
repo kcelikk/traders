@@ -24,7 +24,9 @@ def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("bars")
     ap.add_argument("--config", default="config/research.toml")
+    ap.add_argument("--json-out", default=None, help="hücre tablosunu JSON olarak da yaz (UI için)")
     a = ap.parse_args(argv)
+    jcells = []
     cfg_bytes = Path(a.config).read_bytes()
     cfg = tomllib.loads(cfg_bytes.decode())
     cfg_hash = hashlib.sha256(cfg_bytes).hexdigest()[:12]
@@ -107,6 +109,8 @@ def main(argv):
                     else:
                         karar = "n yetersiz" if s["n"] < min_n else "doğrulanamadı"
                 out.append(f"| {st} | {tag} | {d} | {h} dk | {'keşif' if part == 'disc' else 'doğrulama'} | {s['n']} | {fmt(gross)} | {fmt(cost)} | **{fmt(s['mean'])}** | {fmt(s['median'])} | {fmt(s['win_rate'], 2)} | {fmt(lo)} | {fmt(hi)} | {karar} |")
+                jcells.append({"scenario": sc.name, "state": st, "tag": tag, "dir": d, "h": h, "part": part, "n": s["n"], "gross": gross, "cost": cost,
+                               "mean": s["mean"], "median": s["median"], "win_rate": s["win_rate"], "lo": None if lo != lo else lo, "hi": None if hi != hi else hi, "karar": karar.strip("*")})
 
     out += ["", "## Sembol × durum", "", "| sembol | " + " | ".join(STATES) + " |", "|---|" + "---|" * len(STATES)]
     for sym in sorted(sym_state):
@@ -122,7 +126,12 @@ def main(argv):
         out.append(f"\n> Veri {hours:.1f} saat (< 72). Bu rapor ÖN rapordur; ADR 0008 §11 nihai karar için ≥ 3 gün ister.")
     body = "\n".join(out)
     print(body)
-    print(f"\nRapor hash: `{hashlib.sha256(body.encode()).hexdigest()[:16]}`")
+    rh = hashlib.sha256(body.encode()).hexdigest()[:16]
+    print(f"\nRapor hash: `{rh}`")
+    if a.json_out:
+        Path(a.json_out).write_text(json.dumps({"hours": hours, "symbols": len(by_sym), "bars": sum(len(v) for v in by_sym.values()), "config_hash": cfg_hash,
+                                                "state_counts": {s: state_counts[s] for s in STATES}, "transitions": {f"{a_}>{b_}": n for (a_, b_), n in transitions.items()},
+                                                "cells": jcells, "passed": len(decision_cells), "hash": rh}, indent=0))
 
 
 if __name__ == "__main__":

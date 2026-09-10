@@ -204,6 +204,9 @@ make fetch-history / build-history-bars   # Binance geçmiş aggTrades (ADR 0009
 # Faz 4
 make replay-positions REC=<run_id> SL=0.5 TP=1.0 W=120
 
+# Konsol (fbot Console, ui/)
+make ui REC=<run_id> / make ui-stop   # 127.0.0.1:8787
+
 # (Faz 7+ ile gelecek: run-paper)
 ```
 

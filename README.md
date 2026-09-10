@@ -51,6 +51,17 @@ make research-report REC=rec-72h    # → docs/research/rapor-rec-72h.md (determ
 
 Metodoloji ADR 0008; hipotezler `docs/research/hipotezler.md`; config `config/research.toml`.
 
+## Konsol (fbot Console)
+
+Tasarım: claude.ai/design projesi "Binance Trading Bot Interface" (`ui/design/` kaynak). `ui/index.html` = tasarım şablonu + `/api/state`'e bağlı veri sınıfı (`ui/console-logic.html`). React/Babel `ui/vendor/` altında (SRI doğrulandı), dış CDN yok.
+
+```bash
+make ui REC=rec-72h     # API + statik servis, 127.0.0.1:8787; kayıt dosyasını canlı tail eder
+make ui-stop
+```
+
+API: `GET /api/state` (çekirdekle türetilen canlı piyasa görünümü, recorder istatistikleri, fazlar, araştırma ve replay JSON'ları, config, kill switch), `POST /api/kill`, `POST /api/kill/reset`. Yalnızca yerel bağlama; uzaktan erişim SSH tüneli ile. Pozisyon ve risk ekranları paper trading (Faz 7) başlayana kadar boş.
+
 ## Faz 0 — ölçüm
 
 ```bash

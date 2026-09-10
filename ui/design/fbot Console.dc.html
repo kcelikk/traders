@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; background:#070b12; color:#dbe7f3; font-family:"JetBrains Mono", ui-monospace, monospace; font-size:13px; }
+    a { color:#35c8ff; } a:hover { color:#00e5a0; }
+    * { box-sizing:border-box; }
+    button { font:inherit; }
+    ::selection { background:rgba(0,229,160,.3); }
+    @keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+    @keyframes draw { from{stroke-dashoffset:1} to{stroke-dashoffset:0} }
+    @keyframes scan { from{top:-10%} to{top:110%} }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(0,229,160,.7)} 100%{box-shadow:0 0 0 10px rgba(0,229,160,0)} }
+    @keyframes pulseRed { 0%{box-shadow:0 0 0 0 rgba(255,84,112,.7)} 100%{box-shadow:0 0 0 10px rgba(255,84,112,0)} }
+    @keyframes flash { from{background:rgba(53,200,255,.35)} to{background:transparent} }
+    @keyframes rise { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+    @keyframes slideIn { from{opacity:0;transform:translateX(-12px)} to{opacity:1;transform:none} }
+    @keyframes blink { 50%{opacity:.2} }
+    @keyframes glow { 0%,100%{opacity:.5} 50%{opacity:1} }
+    @keyframes rot { to{transform:rotate(360deg)} }
+    @keyframes flowDash { to{stroke-dashoffset:-24} }
+  </style>
+</helmet>
+<div style="display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto 1fr; min-height:100vh; overflow-x:hidden; background:radial-gradient(1200px 600px at 80% -10%, rgba(53,200,255,.08), transparent 60%), radial-gradient(800px 500px at 0% 100%, rgba(0,229,160,.06), transparent 60%), #070b12;">
+
+  <!-- Top bar -->
+  <header style="display:flex; align-items:center; flex-wrap:wrap; gap:10px 18px; padding:10px 20px; border-bottom:1px solid #1a2536; background:rgba(7,11,18,.85); backdrop-filter:blur(8px); position:sticky; top:0; z-index:5;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:30px;height:30px;border:1px solid #00e5a0;display:grid;place-items:center;position:relative;overflow:hidden;font-family:'Space Grotesk';font-weight:700;color:#00e5a0;">f<div style="position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#00e5a0,transparent);animation:scan 2.4s linear infinite;"></div></div>
+      <div style="font-family:'Space Grotesk';font-weight:700;font-size:17px;letter-spacing:.02em;white-space:nowrap;">fbot <span style="color:#6f849c;font-weight:500;font-size:12px;">USDⓈ-M Futures · one-way</span></div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; margin-left:8px;">
+      <span style="font-size:11px;color:#6f849c;">FAZ</span>
+      <sc-for list="{{ phases }}" as="p" hint-placeholder-count="11">
+        <span title="{{ p.title }}" style="{{ p.style }}">{{ p.n }}</span>
+      </sc-for>
+      <span style="font-size:11px;color:#35c8ff;margin-left:4px;white-space:nowrap;">4 · Pozisyon yönetimi ve çıkış</span>
+    </div>
+    <div style="margin-left:auto; display:flex; align-items:center; flex-wrap:wrap; gap:8px 14px; font-size:12px; min-width:0; white-space:nowrap;">
+      <div style="display:flex;align-items:center;gap:6px;"><span style="{{ dotPublic }}"></span>public</div>
+      <div style="display:flex;align-items:center;gap:6px;"><span style="{{ dotMarket }}"></span>market</div>
+      <div style="display:flex;align-items:center;gap:6px;"><span style="{{ dotPrivate }}"></span>private <span style="color:#6f849c;">(anahtar yok)</span></div>
+      <div style="color:#6f849c;">loop p99 <b style="color:#dbe7f3;">{{ loopLag }} ms</b></div>
+      <div style="display:inline-flex;border:1px solid #1a2536;">
+        <button onClick="{{ setPaper }}" style="{{ paperBtn }}">PAPER</button>
+        <button onClick="{{ setLive }}" style="{{ liveBtn }}">LIVE</button>
+      </div>
+      <span style="{{ modeTagStyle }}">{{ modeTag }}</span>
+      <div style="color:#6f849c;">git <b style="color:#dbe7f3;">8271224</b> · cfg <b style="color:#dbe7f3;">75a167d</b></div>
+    </div>
+  </header>
+
+  <!-- Ticker -->
+  {{ ticker }}
+
+  <div style="display:grid; grid-template-columns:200px minmax(0,1fr); min-height:0; min-width:0;">
+    <!-- Side nav -->
+    <aside style="border-right:1px solid #1a2536; padding:16px 12px; display:flex; flex-direction:column; gap:4px;">
+      <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="7">
+        <button onClick="{{ n.go }}" style="{{ n.style }}" style-hover="background:rgba(53,200,255,.08);"><span style="color:#6f849c;font-size:10px;width:18px;">{{ n.num }}</span>{{ n.label }}<span style="margin-left:auto;font-size:10px;color:{{ n.badgeColor }};">{{ n.badge }}</span></button>
+      </sc-for>
+      <div style="margin-top:auto; display:flex; flex-direction:column; gap:10px;">
+        <div style="border:1px solid #1a2536; padding:12px; position:relative; overflow:hidden; background:rgba(12,19,32,.6);">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">KILL SWITCH</div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:6px; font-family:'Space Grotesk'; font-weight:700; font-size:18px;">{{ killDot }}{{ killLabel }}</div>
+          <div style="font-size:10px; color:#6f849c; margin-top:4px;">{{ killSub }}</div>
+        </div>
+        <button onClick="{{ toggleKill }}" style="{{ killBtn }}" style-hover="filter:brightness(1.15);">{{ killBtnLabel }}</button>
+        <div style="font-size:10px; color:#6f849c; line-height:1.5;">Sıfırlama yalnızca elle. Çıkışlar her zaman serbest.</div>
+      </div>
+    </aside>
+
+    <main style="padding:20px 24px; display:flex; flex-direction:column; gap:18px; min-width:0; animation:rise .45s ease-out;">
+      <div style="display:flex; align-items:baseline; gap:14px;">
+        <h1 style="margin:0; font-family:'Space Grotesk'; font-weight:700; font-size:24px; letter-spacing:-.01em;">{{ screenTitle }}</h1>
+        <span style="color:#6f849c; font-size:12px;">{{ screenSub }}</span>
+        <span style="margin-left:auto; font-size:11px; color:#ffb020; border:1px solid rgba(255,176,32,.4); padding:3px 8px; white-space:nowrap;">KÂRLILIK GÖSTERİLMEDİ · ADR 0010</span>
+      </div>
+
+      <!-- ===== DURUM ===== -->
+      <sc-if value="{{ isStatus }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
+          <sc-for list="{{ statusCards }}" as="c" hint-placeholder-count="6">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; position:relative; overflow:hidden;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">{{ c.label }}</div>
+              <div style="font-family:'Space Grotesk'; font-weight:700; font-size:24px; margin-top:4px; color:{{ c.color }}; white-space:nowrap;">{{ c.value }}</div>
+              <div style="font-size:11px; color:#6f849c; margin-top:2px;">{{ c.sub }}</div>
+              {{ c.spark }}
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:12px;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <div><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">MARK PRICE · 1 DK BAR</div><div style="font-family:'Space Grotesk'; font-weight:700; font-size:16px;">{{ activeSymbol }} <span style="color:#6f849c; font-weight:500; font-size:12px;">{{ activeLev }}</span></div></div>
+              <span style="{{ stateChipStyle }}">{{ activeState }}</span>
+              <div style="margin-left:auto; font-family:'Space Grotesk'; font-weight:700; font-size:22px;">{{ activePriceLive }}</div>
+            </div>
+            <div ref="{{ chartRef }}" style="height:260px; position:relative; overflow:hidden;">{{ chart }}</div>
+            <div style="display:flex; gap:16px; font-size:11px; color:#6f849c; flex-wrap:wrap;">
+              <span>trigger <b style="color:#dbe7f3;">MARK_PRICE</b> · priceProtect</span><span>pnl <b style="color:#dbe7f3;">mark / income</b></span><span>exec est. <b style="color:#dbe7f3;">bookTicker karşı taraf − defter</b></span><span style="margin-left:auto;">spread <b style="color:#dbe7f3;">{{ spreadBps }} bp</b></span>
+            </div>
+          </div>
+
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; align-items:center;"><div><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">EVREN · TOP 10</div><div style="font-family:'Space Grotesk'; font-weight:700; font-size:16px;">24 s quoteVolume</div></div><span style="margin-left:auto; font-size:10px; color:#6f849c;">yenileme 00:00 UTC</span></div>
+            <div style="display:grid; grid-template-columns:auto 1fr auto auto auto; gap:4px 10px; font-size:12px; align-items:center;">
+              <span style="font-size:10px;color:#6f849c;">#</span><span style="font-size:10px;color:#6f849c;">sembol</span><span style="font-size:10px;color:#6f849c;">durum</span><span style="font-size:10px;color:#6f849c;text-align:right;">mark</span><span style="font-size:10px;color:#6f849c;text-align:right;">ısınma</span>
+              <sc-for list="{{ universe }}" as="u" hint-placeholder-count="10">
+                <span style="color:#6f849c;">{{ u.i }}</span>
+                <button onClick="{{ u.go }}" style="{{ u.style }}" style-hover="color:#35c8ff;">{{ u.sym }} <span style="color:#6f849c;font-size:10px;">{{ u.lev }}</span></button>
+                <span style="{{ u.stateStyle }}">{{ u.state }}</span>
+                <span style="text-align:right; font-variant-numeric:tabular-nums;">{{ u.price }}</span>
+                <span style="text-align:right;"><span style="display:inline-block;width:44px;height:4px;background:#1a2536;vertical-align:middle;"><span style="{{ u.warmStyle }}"></span></span></span>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:12px;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">AÇIK POZİSYONLAR · {{ posCount }}/5</div><button onClick="{{ goPositions }}" style="margin-left:auto; background:none; border:0; color:#35c8ff; cursor:pointer; font-size:12px;">Tümü →</button></div>
+            <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;">
+              <thead><tr style="color:#6f849c; font-size:10px; letter-spacing:.1em; text-align:left;"><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">POS_ID</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">SEMBOL</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">YÖN</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">DURUM</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">GİRİŞ</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">MARK</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">SL / TP</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536; text-align:right;">NET %</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ positions }}" as="p" hint-placeholder-count="3">
+                  <tr style="animation:slideIn .4s ease-out both;">
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c;">{{ p.id }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-weight:500;">{{ p.sym }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ p.sideStyle }}">{{ p.side }}</span></td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ p.stateStyle }}">{{ p.state }}</span></td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums;">{{ p.entry }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums;">{{ p.mark }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums; color:#6f849c;">{{ p.sl }} <span style="color:#35c8ff;">v{{ p.slv }}</span> / {{ p.tp }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; color:{{ p.color }};">{{ p.net }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table></div>
+          </div>
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px; min-width:0;">
+            <div style="display:flex; align-items:center;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">KOMUT AKIŞI · BUS</div><span style="margin-left:auto; font-size:10px; color:#00e5a0; animation:blink 1.2s infinite;">● canlı</span></div>
+            <div style="display:flex; flex-direction:column; gap:5px; font-size:11px; overflow:hidden;">
+              <sc-for list="{{ feed }}" as="f" hint-placeholder-count="8">
+                <div style="display:grid; grid-template-columns:58px 74px 1fr; gap:8px; animation:slideIn .35s ease-out both; min-width:0;"><span style="color:#6f849c;">{{ f.t }}</span><span style="color:{{ f.color }}; font-size:10px; letter-spacing:.06em;">{{ f.kind }}</span><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ f.msg }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== POZİSYONLAR ===== -->
+      <sc-if value="{{ isPositions }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:10px;">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">DURUM MAKİNESİ · fbot/core/position.py</div>
+          <div style="display:flex; align-items:center; gap:0; flex-wrap:wrap;">
+            <sc-for list="{{ fsm }}" as="s" hint-placeholder-count="5">
+              <div style="display:flex; align-items:center;">
+                <div style="{{ s.style }}"><div style="font-size:12px; font-weight:700;">{{ s.name }}</div><div style="font-size:10px; color:#6f849c; margin-top:2px;">{{ s.count }}</div></div>
+                <sc-if value="{{ s.arrow }}" hint-placeholder-val="{{ true }}"><svg width="46" height="14" viewBox="0 0 46 14" style="flex:none;"><line x1="0" y1="7" x2="38" y2="7" stroke="#35c8ff" stroke-width="1" stroke-dasharray="4 4" style="animation:flowDash 1s linear infinite;"></line><path d="M38 2 L46 7 L38 12 Z" fill="#35c8ff"></path></svg></sc-if>
+              </div>
+            </sc-for>
+            <div style="display:flex; gap:8px; margin-left:auto;">
+              <div style="border:1px dashed #ffb020; color:#ffb020; padding:8px 12px; font-size:11px;">FROZEN <span style="color:#6f849c;">bayat / kill · borsa koruması devrede</span></div>
+              <div style="border:1px dashed #ff5470; color:#ff5470; padding:8px 12px; font-size:11px;">EMERGENCY <span style="color:#6f849c;">koruma ACK &gt; t_protect</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:10px;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">AÇIK POZİSYONLAR · 80 USDT NOTIONAL · NET = BRÜT − KOMİSYON − FUNDING − SLIPPAGE</div><span style="margin-left:auto; font-size:11px; color:#6f849c;">tick_ms 1000</span></div>
+          <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;">
+            <thead><tr style="color:#6f849c; font-size:10px; letter-spacing:.1em; text-align:left;">
+              <sc-for list="{{ posCols }}" as="h" hint-placeholder-count="12"><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">{{ h }}</th></sc-for>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ positions }}" as="p" hint-placeholder-count="3">
+                <tr style="animation:slideIn .4s ease-out both;">
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c;">{{ p.id }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-weight:500;">{{ p.sym }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ p.sideStyle }}">{{ p.side }}</span> <span style="color:#6f849c;">{{ p.lev }}</span></td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ p.stateStyle }}">{{ p.state }}</span></td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="border:1px solid #1a2536; padding:1px 6px; color:#35c8ff;">{{ p.entryState }}</span></td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums;">{{ p.qty }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums;">{{ p.entry }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums;">{{ p.mark }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums;">{{ p.sl }} <span style="color:#35c8ff;">v{{ p.slv }}</span></td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums;">{{ p.tp }} <span style="color:#35c8ff;">v1</span></td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums; color:#6f849c;">{{ p.gross }} − {{ p.cost }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums; font-weight:700; color:{{ p.color }};">{{ p.net }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-variant-numeric:tabular-nums; color:{{ p.color }};">{{ p.roe }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c;">{{ p.hold }}</td>
+                  <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ p.lockStyle }}">{{ p.lock }}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table></div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:12px;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">ÇIKIŞ KURALLARI · ÖNCELİK SIRASI · null = kapalı</div>
+            <sc-for list="{{ rules }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid; grid-template-columns:32px 1fr auto; gap:10px; align-items:center; padding:7px 0; border-bottom:1px solid #111a28; font-size:12px;">
+                <b style="color:#35c8ff;">{{ r.id }}</b>
+                <div><div>{{ r.name }}</div><div style="font-size:10px; color:#6f849c;">{{ r.param }}</div></div>
+                <span style="{{ r.style }}">{{ r.status }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">ÇIKIŞ NEDENİ DAĞILIMI · REPLAY (b) KURALLI</div>
+            <sc-for list="{{ exitReasons }}" as="e" hint-placeholder-count="6">
+              <div style="display:grid; grid-template-columns:110px 1fr 40px; gap:10px; align-items:center; font-size:12px;"><span>{{ e.name }}</span><div style="height:8px; background:#111a28; position:relative;"><div style="{{ e.bar }}"></div></div><span style="text-align:right; color:#6f849c;">{{ e.n }}</span></div>
+            </sc-for>
+            <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px;">
+              <div style="border:1px solid #1a2536; padding:10px;"><div style="font-size:10px; color:#6f849c;">KÂRDAN ZARARA DÖNEN</div><div style="font-family:'Space Grotesk'; font-weight:700; font-size:20px;">(a) 31% → (b) <span style="color:#00e5a0;">18%</span></div></div>
+              <div style="border:1px solid #1a2536; padding:10px;"><div style="font-size:10px; color:#6f849c;">NET BEKLENTİ / İŞLEM</div><div style="font-family:'Space Grotesk'; font-weight:700; font-size:20px;">(a) −0.04% → (b) <span style="color:#ffb020;">−0.01%</span></div></div>
+            </div>
+            <div style="font-size:10px; color:#6f849c;">Kapı: (b) dönme oranını düşürür ve net beklentiyi düşürmez. Bilgilendirici (ADR 0011).</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== RİSK ===== -->
+      <sc-if value="{{ isRisk }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap:12px; align-items:start;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; align-items:center;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">KONTROL KATALOĞU K1–K18 · assess(intent, state, cfg, now) → APPROVE | REJECT | RESIZE</div><span style="margin-left:auto; font-size:11px; color:#ff5470;">fail-closed</span></div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:6px;">
+              <sc-for list="{{ checks }}" as="k" hint-placeholder-count="18">
+                <div style="display:grid; grid-template-columns:30px 1fr auto; gap:8px; align-items:center; border:1px solid #111a28; padding:7px 9px; font-size:11px; animation:rise .4s ease-out both;">
+                  <b style="color:#6f849c;">{{ k.id }}</b>
+                  <div><div>{{ k.name }}</div><div style="font-size:10px; color:#6f849c;">{{ k.param }}</div></div>
+                  <span style="{{ k.style }}">{{ k.val }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">SON KARARLAR · gerekçe sırası deterministik</div>
+              <sc-for list="{{ verdicts }}" as="v" hint-placeholder-count="6">
+                <div style="display:grid; grid-template-columns:52px 76px 1fr; gap:8px; font-size:11px; padding:6px 0; border-bottom:1px solid #111a28; animation:slideIn .35s ease-out both;"><span style="color:#6f849c;">{{ v.t }}</span><span style="{{ v.style }}">{{ v.kind }}</span><span>{{ v.sym }} <span style="color:#6f849c;">{{ v.reasons }}</span></span></div>
+              </sc-for>
+            </div>
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">MARUZİYET</div>
+              <sc-for list="{{ exposure }}" as="e" hint-placeholder-count="3">
+                <div style="font-size:12px;"><div style="display:flex; justify-content:space-between;"><span>{{ e.name }}</span><span style="font-variant-numeric:tabular-nums;">{{ e.val }} <span style="color:#6f849c;">/ {{ e.cap }}</span></span></div><div style="height:6px; background:#111a28; margin-top:4px;"><div style="{{ e.bar }}"></div></div></div>
+              </sc-for>
+              <div style="font-size:10px; color:#6f849c;">gross_cap ve beta_cap: proje sahibi kararı bekleniyor (Faz 5 §8).</div>
+            </div>
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">EMİR BÜTÇESİ · gerçek header değeri</div>
+              <div style="display:flex; justify-content:space-between;"><span>weight_1m</span><span style="font-variant-numeric:tabular-nums;">{{ weight1m }} / 2400</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>orders_10s</span><span style="font-variant-numeric:tabular-nums;">2 / 300</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>orders_1m</span><span style="font-variant-numeric:tabular-nums;">9 / 1200</span></div>
+              <div style="display:flex; justify-content:space-between; color:#6f849c;"><span>reserve_orders (SL+TP+iptal)</span><span>3</span></div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== ALGORİTMA & SİNYAL ===== -->
+      <sc-if value="{{ isAlgo }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; align-items:center;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">KARAR ZİNCİRİ · her bar kapanışında · saf çekirdek · replay'de bit-eşit</div><span style="margin-left:auto; font-size:11px; color:#6f849c;">v1: ağırlıklı skorlama yok · en fazla 3 sert koşul AND</span></div>
+          <div style="display:flex; align-items:stretch; flex-wrap:wrap; gap:0;">
+            <sc-for list="{{ pipeline }}" as="s" hint-placeholder-count="6">
+              <div style="display:flex; align-items:center;">
+                <div style="{{ s.style }}"><div style="font-size:10px; letter-spacing:.1em; color:{{ s.color }};">{{ s.step }}</div><div style="font-weight:700; font-size:13px; margin-top:2px;">{{ s.name }}</div><div style="font-size:10px; color:#6f849c; margin-top:3px; line-height:1.4;">{{ s.detail }}</div><div style="font-size:11px; margin-top:6px; color:{{ s.color }};">{{ s.out }}</div></div>
+                <sc-if value="{{ s.arrow }}" hint-placeholder-val="{{ true }}"><svg width="34" height="14" viewBox="0 0 34 14" style="flex:none;"><line x1="0" y1="7" x2="26" y2="7" stroke="#35c8ff" stroke-dasharray="4 4" style="animation:flowDash 1s linear infinite;"></line><path d="M26 2 L34 7 L26 12 Z" fill="#35c8ff"></path></svg></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap:12px; align-items:start;">
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">FEATURE SETİ · {{ activeSymbol }} · bar kapanışı · geçmişe bakan · W=240 N_short=5 N_long=15</div><span style="margin-left:auto; font-size:10px; color:#6f849c;">fbot/research/features.py</span></div>
+              <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;">
+                <thead><tr style="color:#6f849c; font-size:10px; letter-spacing:.1em; text-align:left;"><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">FEATURE</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">TANIM</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536; text-align:right;">HAM</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">PERSENTİL (W)</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">KOŞUL</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ features }}" as="f" hint-placeholder-count="7">
+                    <tr style="animation:slideIn .4s ease-out both;">
+                      <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-weight:500; color:#35c8ff;">{{ f.name }}</td>
+                      <td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c; font-size:11px;">{{ f.def }}</td>
+                      <td style="padding:7px 8px; border-bottom:1px solid #111a28; text-align:right; font-variant-numeric:tabular-nums;">{{ f.raw }}</td>
+                      <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="display:inline-block; width:120px; height:6px; background:#111a28; vertical-align:middle; position:relative;"><span style="position:absolute; left:20%; width:60%; top:0; bottom:0; background:rgba(53,200,255,.12);"></span><span style="{{ f.pctStyle }}"></span></span> <span style="font-variant-numeric:tabular-nums; color:#6f849c;">{{ f.pct }}</span></td>
+                      <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ f.condStyle }}">{{ f.cond }}</span></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table></div>
+              <div style="font-size:10px; color:#6f849c;">Band [p_lo 0.2, p_hi 0.8] gölgeli. Persentil önceki W bar içinde, mevcut değer hariç; pencere sabitse None (ADR 0009 §3). Look-ahead yok: kesme testi bit-eşit.</div>
+            </div>
+
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">DURUM KURALLARI · öncelik sabit: S4 &gt; S1/S2 &gt; S3 &gt; S0 · her biri ≤ 2 koşul AND</div>
+              <sc-for list="{{ stateRules }}" as="r" hint-placeholder-count="5">
+                <div style="display:grid; grid-template-columns:34px 1fr auto auto; gap:10px; align-items:center; padding:7px 0; border-bottom:1px solid #111a28; font-size:12px; {{ r.rowStyle }}">
+                  <b style="color:{{ r.color }}; font-family:'Space Grotesk'; font-size:15px;">{{ r.id }}</b>
+                  <div><div><b>{{ r.name }}</b> <span style="color:#6f849c;">{{ r.rule }}</span></div><div style="font-size:10px; color:#6f849c;">yön: {{ r.dir }} · hipotez {{ r.hyp }}</div></div>
+                  <span style="{{ r.matchStyle }}">{{ r.match }}</span>
+                  <span style="font-size:10px; color:#6f849c; width:70px; text-align:right;">{{ r.share }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">DECISION ENGINE · decide() → EntryIntent | None</div><span style="margin-left:auto; font-size:10px; color:#6f849c;">{{ activeSymbol }} · son bar</span></div>
+              <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="3">
+                <div style="display:grid; grid-template-columns:28px 1fr auto; gap:10px; align-items:start; padding:8px 0; border-bottom:1px solid #111a28; font-size:12px;">
+                  <b style="color:#35c8ff;">{{ d.id }}</b>
+                  <div><div>{{ d.name }}</div><div style="font-size:10px; color:#6f849c; margin-top:2px;">{{ d.detail }}</div></div>
+                  <span style="{{ d.style }}">{{ d.val }}</span>
+                </div>
+              </sc-for>
+              <div style="{{ intentStyle }}">
+                <div style="font-size:10px; letter-spacing:.1em;">SONUÇ</div>
+                <div style="font-family:'Space Grotesk'; font-weight:700; font-size:18px; margin-top:2px;">{{ intentResult }}</div>
+                <div style="font-size:10px; margin-top:4px; opacity:.85;">{{ intentNote }}</div>
+              </div>
+            </div>
+
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">EntryIntent ŞABLONU · ADR 0004</div>
+              <sc-for list="{{ intentFields }}" as="f" hint-placeholder-count="8">
+                <div style="display:grid; grid-template-columns:120px 1fr; gap:10px; padding:4px 0; border-bottom:1px solid #111a28;"><span style="color:#6f849c;">{{ f.k }}</span><span style="{{ f.style }}">{{ f.v }}</span></div>
+              </sc-for>
+            </div>
+
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">HİPOTEZLER · yanlışlanabilir · hist-30d sonucu</div>
+              <sc-for list="{{ hypotheses }}" as="hp" hint-placeholder-count="6">
+                <div style="display:grid; grid-template-columns:34px 1fr auto; gap:8px; padding:5px 0; border-bottom:1px solid #111a28; align-items:center;"><b style="color:#6f849c;">{{ hp.id }}</b><span style="font-size:11px;">{{ hp.text }}</span><span style="{{ hp.style }}">{{ hp.res }}</span></div>
+              </sc-for>
+              <div style="font-size:10px; color:#ffb020; margin-top:4px;">1–15 dk ufuklarında durumlar yön bilgisi taşımıyor; 60 dk long pozitifliği dönem sürüklenmesi. Seçenek B: yeni hipotez döngüsü (forceOrder, depth, funding uçları, beta-nötr çiftler).</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== PİYASA DURUMU ===== -->
+      <sc-if value="{{ isStates }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px;">
+          <sc-for list="{{ stateDefs }}" as="s" hint-placeholder-count="5">
+            <div style="border:1px solid {{ s.color }}; background:rgba(12,19,32,.6); padding:12px 14px; position:relative; overflow:hidden;">
+              <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-family:'Space Grotesk'; font-weight:700; font-size:22px; color:{{ s.color }};">{{ s.id }}</span><span style="font-size:12px;">{{ s.name }}</span></div>
+              <div style="font-size:10px; color:#6f849c; margin-top:4px;">{{ s.rule }}</div>
+              <div style="margin-top:8px; font-size:11px;">şu an <b style="color:{{ s.color }};">{{ s.n }}</b> sembol</div>
+              <div style="position:absolute; inset:auto 0 0 0; height:2px; background:{{ s.color }}; opacity:.5; animation:glow 2.4s ease-in-out infinite;"></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap:12px; align-items:start;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">SEMBOL BAŞINA DURUM · StateChanged(symbol, from, to, confidence, evidence, t)</div>
+            <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;">
+              <thead><tr style="color:#6f849c; font-size:10px; letter-spacing:.1em; text-align:left;"><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">SEMBOL</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">DURUM</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">SÜRE</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">CONFIDENCE</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">KANIT</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">KARŞIT</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">D1 HÜCRE</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ symStates }}" as="s" hint-placeholder-count="10">
+                  <tr style="animation:slideIn .4s ease-out both;">
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; font-weight:500;">{{ s.sym }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ s.style }}">{{ s.state }}</span></td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c;">{{ s.age }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="display:inline-block;width:60px;height:4px;background:#111a28;vertical-align:middle;"><span style="{{ s.confBar }}"></span></span> <span style="color:#6f849c;">{{ s.conf }}</span></td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c; font-size:11px;">{{ s.evidence }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c; font-size:11px;">{{ s.counter }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="{{ s.cellStyle }}">{{ s.cell }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table></div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">GEÇİŞ MATRİSİ · son 24 s</div>
+              <div style="display:grid; grid-template-columns:auto repeat(5,1fr); gap:3px; font-size:11px; text-align:center;">
+                <span></span><sc-for list="{{ stateIds }}" as="h" hint-placeholder-count="5"><span style="color:#6f849c;">{{ h }}</span></sc-for>
+                <sc-for list="{{ matrix }}" as="row" hint-placeholder-count="5">
+                  <span style="color:#6f849c; text-align:right; padding-right:4px;">{{ row.from }}</span>
+                  <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="5"><span style="{{ c.style }}">{{ c.v }}</span></sc-for>
+                </sc-for>
+              </div>
+            </div>
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">allowed_cells · config · rapor hash 5ea6c20</div>
+              <div style="color:#ffb020;">Boş liste → sıfır intent.</div>
+              <div style="color:#6f849c; font-size:11px;">Faz 3: 0/48 hücrede doğrulama bölümünde CI alt sınırı &gt; 0. Araştırma paralelde sürer; hücre geçince D1 açılır.</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== REPLAY & ARAŞTIRMA ===== -->
+      <sc-if value="{{ isReplay }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
+          <sc-for list="{{ replayCards }}" as="c" hint-placeholder-count="6">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">{{ c.label }}</div>
+              <div style="font-family:'Space Grotesk'; font-weight:700; font-size:22px; margin-top:4px; color:{{ c.color }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.value }}</div>
+              <div style="font-size:11px; color:#6f849c; margin-top:2px;">{{ c.sub }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:12px; align-items:start;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">HÜCRE TABLOSU · (durum, ufuk, yön) · NET · DOĞRULAMA %30</div>
+              <div style="margin-left:auto; display:inline-flex; border:1px solid #1a2536;"><button onClick="{{ setCostTT }}" style="{{ costTTBtn }}">taker/taker</button><button onClick="{{ setCostMT }}" style="{{ costMTBtn }}">maker/taker</button></div>
+            </div>
+            <div style="display:grid; grid-template-columns:auto repeat(4, 1fr); gap:3px; font-size:11px;">
+              <span></span><span style="color:#6f849c; text-align:center;">1 dk</span><span style="color:#6f849c; text-align:center;">5 dk</span><span style="color:#6f849c; text-align:center;">15 dk</span><span style="color:#6f849c; text-align:center;">60 dk</span>
+              <sc-for list="{{ cellRows }}" as="r" hint-placeholder-count="8">
+                <span style="color:#6f849c; padding:6px 8px 6px 0; white-space:nowrap;">{{ r.label }}</span>
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="4"><div style="{{ c.style }}" title="{{ c.title }}"><div style="font-weight:700;">{{ c.mean }}</div><div style="font-size:9px; opacity:.8;">CI {{ c.lo }} … {{ c.hi }} · n {{ c.n }}</div></div></sc-for>
+              </sc-for>
+            </div>
+            <div style="font-size:10px; color:#6f849c;">Karar hücresi: CI alt sınırı &gt; 0, n ≥ 100, keşifte de anlamlı (ADR 0008 §8). Şu an geçen hücre yok.</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">RULE ZERO · bit-eşit replay</div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:11px;">
+                <sc-for list="{{ replayRuns }}" as="r" hint-placeholder-count="3">
+                  <div style="display:grid; grid-template-columns:70px 1fr auto; gap:8px; align-items:center; border:1px solid #111a28; padding:6px 8px;"><span style="color:#6f849c;">{{ r.proc }}</span><span style="font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis;">{{ r.hash }}</span><span style="{{ r.style }}">{{ r.res }}</span></div>
+                </sc-for>
+              </div>
+              <div ref="{{ equityRef }}" style="height:140px;">{{ equity }}</div>
+              <div style="font-size:10px; color:#6f849c;">(a) statik SL/TP vs (b) R1–R5 · replay net PnL, maliyet dahil · basit dolum modeli</div>
+            </div>
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">KOMUTLAR</div>
+              <code style="color:#00e5a0; font-size:11px;">make replay REC=rec-72h MAXF=1</code>
+              <code style="color:#00e5a0; font-size:11px;">make export-bars REC=rec-72h</code>
+              <code style="color:#00e5a0; font-size:11px;">make research-report REC=rec-72h</code>
+              <code style="color:#00e5a0; font-size:11px;">make test-determinism</code>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== KAYIT ===== -->
+      <sc-if value="{{ isRecorder }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
+          <sc-for list="{{ recCards }}" as="c" hint-placeholder-count="6">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; position:relative; overflow:hidden;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">{{ c.label }}</div>
+              <div style="font-family:'Space Grotesk'; font-weight:700; font-size:22px; margin-top:4px; color:{{ c.color }}; white-space:nowrap;">{{ c.value }}</div>
+              <div style="font-size:11px; color:#6f849c; margin-top:2px;">{{ c.sub }}</div>
+              {{ c.spark }}
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap:12px; align-items:start;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">STREAM BÜTÜNLÜĞÜ · 10 sembol × 5 stream · rec-72h</div>
+            <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap;">
+              <thead><tr style="color:#6f849c; font-size:10px; letter-spacing:.1em; text-align:left;"><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">STREAM</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">KATEGORİ</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">KURAL</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536; text-align:right;">OLAY</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536; text-align:right;">KOPUŞ</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536; text-align:right;">BAYATLIK</th><th style="padding:6px 8px; border-bottom:1px solid #1a2536;">DURUM</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ streams }}" as="s" hint-placeholder-count="5">
+                  <tr><td style="padding:7px 8px; border-bottom:1px solid #111a28; font-weight:500;">{{ s.name }}</td><td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c;">{{ s.cat }}</td><td style="padding:7px 8px; border-bottom:1px solid #111a28; color:#6f849c; font-size:11px;">{{ s.rule }}</td><td style="padding:7px 8px; border-bottom:1px solid #111a28; text-align:right; font-variant-numeric:tabular-nums;">{{ s.n }}</td><td style="padding:7px 8px; border-bottom:1px solid #111a28; text-align:right; color:#00e5a0;">0</td><td style="padding:7px 8px; border-bottom:1px solid #111a28; text-align:right; font-variant-numeric:tabular-nums;">{{ s.stale }}</td><td style="padding:7px 8px; border-bottom:1px solid #111a28;"><span style="color:#00e5a0; font-size:11px;">● OK</span></td></tr>
+                </sc-for>
+              </tbody>
+            </table></div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">DOSYALAR · saatlik gzip · manifest SHA-256</div>
+              <sc-for list="{{ files }}" as="f" hint-placeholder-count="4">
+                <div style="display:grid; grid-template-columns:1fr auto auto; gap:10px; font-size:11px; padding:5px 0; border-bottom:1px solid #111a28;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ f.name }}</span><span style="color:#6f849c;">{{ f.size }}</span><span style="color:#00e5a0;">SHA ✓</span></div>
+              </sc-for>
+              <div style="display:flex; justify-content:space-between; color:#6f849c; font-size:11px; margin-top:4px;"><span>disk</span><span>{{ diskUsed }} GB · ~220 MB/saat</span></div>
+              <div style="height:6px; background:#111a28;"><div style="height:100%; width:38%; background:linear-gradient(90deg,#35c8ff,#00e5a0);"></div></div>
+            </div>
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px; font-size:12px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">ORDER BOOK REPLAY · saat 1</div>
+              <div style="display:flex; justify-content:space-between;"><span>seviye eşitliği</span><span style="color:#00e5a0;">%96.9 – 99.7</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>pu kopuşu</span><span>0</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>resync</span><span>her snapshot'ta başarılı</span></div>
+              <div style="font-size:10px; color:#ffb020; margin-top:4px;">Trader gateway resync'te snapshot'ı hemen yeniden çekmeli (ağırlık 20).</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== CONFIG ===== -->
+      <sc-if value="{{ isConfig }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:12px; align-items:start;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; align-items:center;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">KİLİTLİ KARARLAR</div><span style="margin-left:auto; font-size:10px; color:#ff5470;">ADR olmadan değişmez</span></div>
+            <sc-for list="{{ locked }}" as="l" hint-placeholder-count="8">
+              <div style="display:grid; grid-template-columns:130px 1fr; gap:10px; font-size:12px; padding:6px 0; border-bottom:1px solid #111a28;"><span style="color:#6f849c;">{{ l.k }}</span><span>{{ l.v }}</span></div>
+            </sc-for>
+          </div>
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; align-items:center;"><div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">PositionConfig · null = kural kapalı</div><span style="margin-left:auto; font-size:10px; color:#6f849c;">config hash 75a167d</span></div>
+            <sc-for list="{{ posCfg }}" as="c" hint-placeholder-count="12">
+              <div style="display:grid; grid-template-columns:1fr auto; gap:10px; font-size:12px; padding:5px 0; border-bottom:1px solid #111a28; align-items:center;"><span style="color:#dbe7f3;">{{ c.k }} <span style="color:#6f849c; font-size:10px;">{{ c.note }}</span></span><span style="{{ c.style }}">{{ c.v }}</span></div>
+            </sc-for>
+            <div style="font-size:10px; color:#6f849c; margin-top:4px;">Değerler Faz 3/4 replay'inden gelene kadar null. Değer yoksa pozisyon açılmaz (fail-closed).</div>
+          </div>
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:14px; display:flex; flex-direction:column; gap:6px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">BAYATLIK EŞİKLERİ · kategori bazlı · staleness_s</div>
+            <sc-for list="{{ staleCfg }}" as="s" hint-placeholder-count="3">
+              <div style="display:grid; grid-template-columns:70px 1fr auto; gap:10px; align-items:center; font-size:12px; padding:5px 0;"><span>{{ s.cat }}</span><div style="height:6px; background:#111a28;"><div style="{{ s.bar }}"></div></div><span style="font-variant-numeric:tabular-nums; color:#6f849c;">{{ s.now }} / {{ s.thr }} s</span></div>
+            </sc-for>
+            <div style="font-size:10px; color:#6f849c;">Eşikler başlangıç değeri; 72 saatlik kayıttan sonra ölçümle güncellenir.</div>
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-top:10px;">GÜVENLİK</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; font-size:11px;"><span style="border:1px solid #00e5a0; color:#00e5a0; padding:2px 8px;">çekim yetkisi kapalı</span><span style="border:1px solid #00e5a0; color:#00e5a0; padding:2px 8px;">IP whitelist</span><span style="border:1px solid #1a2536; color:#6f849c; padding:2px 8px;">Ed25519 session.logon · Faz 9</span><span style="border:1px solid #1a2536; color:#6f849c; padding:2px 8px;">.env gitignore</span></div>
+          </div>
+        </div>
+      </sc-if>
+    </main>
+  </div>
+
+  <sc-if value="{{ killDialog }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeKill }}" style="position:fixed; inset:0; background:rgba(3,6,10,.8); display:grid; place-items:center; z-index:20; backdrop-filter:blur(4px);">
+      <div onClick="{{ stop }}" style="width:min(460px,92vw); border:1px solid #ff5470; background:#0c1320; padding:20px; display:flex; flex-direction:column; gap:12px; box-shadow:0 0 60px rgba(255,84,112,.25); animation:rise .3s ease-out;">
+        <div style="font-family:'Space Grotesk'; font-weight:700; font-size:20px; color:#ff5470;">Kill switch · elle tetikle</div>
+        <div style="font-size:12px; color:#dbe7f3; line-height:1.6;">Kalıcı bayrak <code>data/state/kill_switch.json</code> yazılır, restart'ı hayatta kalır. K1 her girişi reddeder; açık pozisyonlar <b>FROZEN</b>, borsa SL/TP devrede. Çıkışlar serbest kalır. Sıfırlama yalnızca <code>make kill-reset REASON=…</code>.</div>
+        <div><div style="font-size:10px; color:#6f849c; margin-bottom:4px;">REASON</div><input placeholder="örn. manuel bakım" style="width:100%; background:#070b12; border:1px solid #1a2536; color:#dbe7f3; padding:8px 10px; font:inherit;"></div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;"><button onClick="{{ closeKill }}" style="background:none; border:1px solid #1a2536; color:#dbe7f3; padding:8px 14px; cursor:pointer;">Vazgeç</button><button onClick="{{ confirmKill }}" style="background:#ff5470; border:0; color:#070b12; font-weight:700; padding:8px 14px; cursor:pointer;">make kill</button></div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { screen: 'status', mode: 'paper', kill: false, killDialog: false, sym: 'BTCUSDT', j: {}, loop: 3.9, cost: 'tt', tickN: 0 };
+  chartRef = React.createRef(); equityRef = React.createRef();
+  SYMS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'BNBUSDT', 'ZECUSDT', 'HYPEUSDT', 'NEARUSDT', 'IOSTUSDT'];
+  BASE = { BTCUSDT: 78012, ETHUSDT: 3702.4, SOLUSDT: 151.3, XRPUSDT: 0.5812, DOGEUSDT: 0.1298, BNBUSDT: 612.7, ZECUSDT: 48.9, HYPEUSDT: 27.41, NEARUSDT: 4.86, IOSTUSDT: 0.00712 };
+  STATE = { BTCUSDT: 'S1', ETHUSDT: 'S1', SOLUSDT: 'S3', XRPUSDT: 'S0', DOGEUSDT: 'S2', BNBUSDT: 'S0', ZECUSDT: 'S4', HYPEUSDT: 'S3', NEARUSDT: 'S0', IOSTUSDT: 'S2' };
+  SC = { S0: '#6f849c', S1: '#00e5a0', S2: '#ff5470', S3: '#35c8ff', S4: '#ffb020' };
+  componentDidMount() {
+    this.t = setInterval(() => this.setState(s => { const j = { ...s.j }; this.SYMS.forEach(k => { j[k] = (j[k] || 1) * (1 + (Math.random() - 0.5) * 0.0011); }); return { j, loop: +(3.2 + Math.random() * 1.6).toFixed(1), tickN: s.tickN + 1 }; }), 1000);
+    this.ro = new ResizeObserver(() => this.measure()); this.observe();
+  }
+  componentDidUpdate() { this.observe(); }
+  componentWillUnmount() { clearInterval(this.t); if (this.ro) this.ro.disconnect(); }
+  observe() { [this.chartRef.current, this.equityRef.current].forEach(el => { if (el && !el.__obs) { el.__obs = true; this.ro.observe(el); } }); this.measure(); }
+  measure() { const c = this.chartRef.current ? Math.round(this.chartRef.current.getBoundingClientRect().width) : 0, e = this.equityRef.current ? Math.round(this.equityRef.current.getBoundingClientRect().width) : 0; if ((c && c !== this.state.cw) || (e && e !== this.state.ew)) this.setState({ cw: c || this.state.cw, ew: e || this.state.ew }); }
+  fmt(n, d) { if (d === undefined) d = n < 0.01 ? 5 : n < 1 ? 4 : n < 100 ? 2 : n < 10000 ? 1 : 0; return n.toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  sg(n, d = 2, suf = '') { return (n >= 0 ? '+' : '−') + this.fmt(Math.abs(n), d) + suf; }
+  live(sym) { return this.BASE[sym] * (this.state.j[sym] || 1); }
+  rnd(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+  spark(seed, color, up) { const r = this.rnd(seed), pts = []; let v = 50; for (let i = 0; i < 40; i++) { v += (r() - (up ? 0.44 : 0.5)) * 8; pts.push(i * 3 + ',' + (40 - v * 0.4)); } return React.createElement('svg', { viewBox: '0 0 117 40', preserveAspectRatio: 'none', style: { position: 'absolute', right: 0, bottom: 0, width: '60%', height: 40, opacity: .45, pointerEvents: 'none' } }, React.createElement('polyline', { points: pts.join(' '), fill: 'none', stroke: color, strokeWidth: 1.5, pathLength: 1, strokeDasharray: 1, style: { animation: 'draw 1.6s ease-out both' } })); }
+  ticker() { const items = this.SYMS.concat(this.SYMS).map((s, i) => { const chg = ((this.state.j[s] || 1) - 1) * 100 * 40 + [1.9, 2.4, -3.1, -0.8, 4.2, 0.6, -1.7, 5.1, 1.1, -0.4][i % 10]; return React.createElement('span', { key: i, style: { display: 'inline-flex', gap: 8, padding: '0 20px', borderRight: '1px solid #1a2536', whiteSpace: 'nowrap', alignItems: 'baseline' } }, React.createElement('b', { style: { fontFamily: 'Space Grotesk' } }, s.replace('USDT', '')), React.createElement('span', { style: { fontVariantNumeric: 'tabular-nums' } }, this.fmt(this.live(s))), React.createElement('span', { style: { fontSize: 10, color: chg >= 0 ? '#00e5a0' : '#ff5470' } }, this.sg(chg, 1, '%')), React.createElement('span', { style: { fontSize: 10, color: this.SC[this.STATE[s]] } }, this.STATE[s])); }); return React.createElement('div', { style: { overflow: 'hidden', borderBottom: '1px solid #1a2536', fontSize: 12, padding: '5px 0', background: 'rgba(12,19,32,.5)' } }, React.createElement('div', { style: { display: 'inline-flex', width: 'max-content', animation: 'ticker 45s linear infinite' } }, items)); }
+  chart() {
+    const W = this.state.cw || 700, H = 260, h = React.createElement, r = this.rnd(this.state.sym.length * 13), live = this.live(this.state.sym);
+    let p = live * 0.992; const raw = []; for (let i = 0; i < 72; i++) { const o = p, c = p * (1 + (r() - 0.49) * 0.004), hi = Math.max(o, c) * (1 + r() * 0.0015), lo = Math.min(o, c) * (1 - r() * 0.0015); raw.push({ o, c, h: hi, l: lo }); p = c; }
+    const k = live / raw[71].c, data = raw.map(d => ({ o: d.o * k, c: d.c * k, h: d.h * k, l: d.l * k }));
+    const sl = live * 0.9955, tp = live * 1.006, ent = live * 0.9985, hi = Math.max(...data.map(d => d.h), tp) * 1.0005, lo = Math.min(...data.map(d => d.l), sl) * 0.9995, y = v => 6 + (hi - v) / (hi - lo) * (H - 36), cw = W / 72;
+    const grid = [0, .25, .5, .75, 1].map(f => h('g', { key: f }, h('line', { x1: 0, x2: W, y1: 6 + f * (H - 36), y2: 6 + f * (H - 36), stroke: '#1a2536', strokeDasharray: '2 4' }), h('text', { x: W - 4, y: 6 + f * (H - 36) - 3, fontSize: 10, textAnchor: 'end', fill: '#6f849c', fontFamily: 'JetBrains Mono' }, this.fmt(hi - f * (hi - lo)))));
+    const cs = data.map((d, i) => { const x = i * cw + cw / 2, up = d.c >= d.o, col = up ? '#00e5a0' : '#ff5470'; return h('g', { key: i, style: { animation: 'rise .5s ease-out both', animationDelay: (i * 8) + 'ms' } }, h('line', { x1: x, x2: x, y1: y(d.h), y2: y(d.l), stroke: col }), h('rect', { x: x - cw * .3, y: y(Math.max(d.o, d.c)), width: cw * .6, height: Math.max(1, Math.abs(y(d.o) - y(d.c))), fill: up ? 'rgba(0,229,160,.25)' : col, stroke: col })); });
+    const vols = data.map((d, i) => { const v = Math.abs(d.c - d.o) / d.o * 6000; return h('rect', { key: 'v' + i, x: i * cw + cw * .2, y: H - 2 - v, width: cw * .6, height: v, fill: 'rgba(53,200,255,.18)' }); });
+    const lbl = this.fmt(live);
+    const hl = (v, col, txt) => [h('line', { x1: 0, x2: W, y1: y(v), y2: y(v), stroke: col, strokeDasharray: '4 3', strokeWidth: 1 }), h('text', { x: 4, y: y(v) - 4, fontSize: 10, fill: col, fontFamily: 'JetBrains Mono' }, txt)];
+    return h(React.Fragment, null, h('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%', style: { display: 'block' } }, grid, vols, cs, ...hl(ent, '#dbe7f3', 'giriş ' + this.fmt(ent)), ...hl(tp, '#00e5a0', 'TP v1 · TAKE_PROFIT_MARKET'), ...hl(sl, '#ff5470', 'SL v2 · STOP_MARKET · closePosition'), h('line', { x1: 0, x2: W, y1: y(live), y2: y(live), stroke: '#35c8ff', strokeDasharray: '2 3' }), h('rect', { x: W - 8 - lbl.length * 6.4, y: y(live) - 8, width: lbl.length * 6.4 + 8, height: 16, fill: '#35c8ff' }), h('text', { x: W - 4, y: y(live) + 4, fontSize: 11, textAnchor: 'end', fill: '#070b12', fontWeight: 700, fontFamily: 'JetBrains Mono' }, lbl)), h('div', { style: { position: 'absolute', left: 0, right: 0, height: '18%', background: 'linear-gradient(180deg, transparent, rgba(53,200,255,.07), transparent)', animation: 'scan 6s linear infinite', pointerEvents: 'none' } }));
+  }
+  equity() {
+    const W = this.state.ew || 400, H = 140, h = React.createElement, ra = this.rnd(3), rb = this.rnd(3); let a = 0, b = 0; const A = [], B = [];
+    for (let i = 0; i < 80; i++) { const d = (ra() - 0.52) * 0.3; a += d; b += d > 0 ? d : d * 0.55; A.push(a); B.push(b); }
+    const all = A.concat(B), hi = Math.max(...all), lo = Math.min(...all), y = v => 6 + (hi - v) / (hi - lo) * (H - 12), pts = arr => arr.map((v, i) => `${i * W / 79},${y(v)}`).join(' ');
+    return h('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%', style: { display: 'block' } }, h('line', { x1: 0, x2: W, y1: y(0), y2: y(0), stroke: '#1a2536', strokeDasharray: '3 3' }), h('polyline', { points: pts(A), fill: 'none', stroke: '#6f849c', strokeWidth: 1.2, pathLength: 1, strokeDasharray: 1, style: { animation: 'draw 2s ease-out both' } }), h('polyline', { points: pts(B), fill: 'none', stroke: '#35c8ff', strokeWidth: 1.5, pathLength: 1, strokeDasharray: 1, style: { animation: 'draw 2.6s ease-out both' } }), h('text', { x: 4, y: 12, fontSize: 10, fill: '#6f849c', fontFamily: 'JetBrains Mono' }, '(a) statik'), h('text', { x: 4, y: 24, fontSize: 10, fill: '#35c8ff', fontFamily: 'JetBrains Mono' }, '(b) R1–R5'));
+  }
+  renderVals() {
+    const S = this.state, go = s => () => this.setState({ screen: s }), chip = (c, bg) => `font-size:10px;letter-spacing:.06em;padding:2px 7px;border:1px solid ${c};color:${c};${bg ? 'background:' + bg + ';' : ''}white-space:nowrap;`;
+    const screens = [['status', 'Durum', '', '/status'], ['positions', 'Pozisyonlar', '3/5', 'Faz 4 · durum makinesi, R1–R5'], ['risk', 'Risk Engine', 'K18', 'Faz 5 · veto, kill switch, mutabakat'], ['algo', 'Algoritma & sinyal', 'D1–D3', 'Faz 3/6 · feature → durum → karar → risk → pozisyon'], ['states', 'Piyasa durumu', 'S0–S4', 'Faz 3/6 · durum etiketi ve karar hücreleri'], ['replay', 'Replay & araştırma', '', 'Faz 2/3 · Rule Zero, hücre tablosu'], ['recorder', 'Kayıt', 'rec-72h', 'Faz 1 · bütünlük ve dosyalar'], ['config', 'Config', '', 'kilitli kararlar ve parametreler']];
+    const cur = screens.find(s => s[0] === S.screen);
+    const navItems = screens.map((s, i) => ({ label: s[1], badge: s[2], badgeColor: S.screen === s[0] ? '#35c8ff' : '#6f849c', num: String(i + 1).padStart(2, '0'), go: go(s[0]), style: `display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0;border-left:2px solid ${S.screen === s[0] ? '#00e5a0' : 'transparent'};background:${S.screen === s[0] ? 'rgba(0,229,160,.07)' : 'transparent'};color:${S.screen === s[0] ? '#dbe7f3' : '#9fb0c3'};cursor:pointer;font-size:13px;white-space:nowrap;` }));
+    const phases = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => ({ n, title: ['Ölçüm', 'Kayıt', 'Çekirdek', 'Araştırma', 'Pozisyon', 'Risk', 'Giriş', 'Paper', 'Gözlem', 'Testnet', 'Canlı'][n], style: `width:20px;height:20px;display:grid;place-items:center;font-size:10px;border:1px solid ${n < 4 ? '#00e5a0' : n === 4 ? '#35c8ff' : '#1a2536'};color:${n < 4 ? '#00e5a0' : n === 4 ? '#070b12' : '#6f849c'};background:${n === 4 ? '#35c8ff' : n < 4 ? 'rgba(0,229,160,.1)' : 'transparent'};${n === 4 ? 'animation:pulse 1.8s ease-out infinite;box-shadow:0 0 0 0 rgba(53,200,255,.6);' : ''}` }));
+    const dot = (c, on) => `width:7px;height:7px;border-radius:50%;background:${c};display:inline-block;${on ? 'animation:pulse 1.6s ease-out infinite;' : ''}`;
+    const pos = [['fBTC1757509649L', 'BTCUSDT', 'long', '10x', 'MANAGED', 'S1', 0.001, 0.9975, 0.9915, 1.012, 2, true, '14 dk'], ['fETH1757508841L', 'ETHUSDT', 'long', '10x', 'MANAGED', 'S1', 0.021, 0.996, 0.990, 1.011, 1, false, '27 dk'], ['fDOGE1757510211S', 'DOGEUSDT', 'short', '5x', 'PROTECTING', 'S2', 616, 1.0008, 1.0085, 0.988, 1, false, '0.4 s']];
+    const stStyle = { MANAGED: chip('#00e5a0'), PROTECTING: chip('#ffb020'), CLOSING: chip('#35c8ff'), FROZEN: chip('#ffb020'), EMERGENCY: chip('#ff5470'), ENTRY_SENT: chip('#6f849c'), CLOSED: chip('#6f849c') };
+    const positions = pos.map(p => { const st = S.kill && p[4] !== 'CLOSED' ? 'FROZEN' : p[4], mark = this.live(p[1]), entry = mark * p[7], gross = (mark / entry - 1) * 100 * (p[2] === 'long' ? 1 : -1), cost = 0.10, net = gross - cost, lev = parseInt(p[3]); return { id: p[0], sym: p[1], side: p[2].toUpperCase(), lev: p[3], sideStyle: chip(p[2] === 'long' ? '#00e5a0' : '#ff5470'), state: st, stateStyle: stStyle[st], entryState: p[5], qty: p[6] + ' ' + p[1].replace('USDT', ''), entry: this.fmt(entry), mark: this.fmt(mark), sl: this.fmt(mark * p[8]), slv: p[10], tp: this.fmt(mark * p[9]), gross: this.sg(gross, 2, '%'), cost: cost.toFixed(2) + '%', net: this.sg(net, 2, '%'), roe: this.sg(net * lev, 1, '% ROE'), color: net >= 0 ? '#00e5a0' : '#ff5470', hold: p[12], lock: p[11] ? 'R3 kilitli' : '—', lockStyle: p[11] ? chip('#35c8ff') : 'color:#6f849c;font-size:11px;' }; });
+    const posCount = positions.length;
+    const card = (label, value, sub, color, spark) => ({ label, value, sub, color: color || '#dbe7f3', spark: spark || '' });
+    const warm = { BTCUSDT: 100, ETHUSDT: 100, SOLUSDT: 100, XRPUSDT: 100, DOGEUSDT: 100, BNBUSDT: 100, ZECUSDT: 62, HYPEUSDT: 100, NEARUSDT: 100, IOSTUSDT: 100 };
+    const universe = this.SYMS.map((s, i) => ({ i: i + 1, sym: s, lev: s === 'BTCUSDT' || s === 'ETHUSDT' ? '10x' : '5x', state: this.STATE[s], stateStyle: chip(this.SC[this.STATE[s]]), price: this.fmt(this.live(s)), warmStyle: `display:block;height:100%;width:${warm[s]}%;background:${warm[s] < 100 ? '#ffb020' : '#00e5a0'};`, go: () => this.setState({ sym: s }), style: `background:none;border:0;padding:0;text-align:left;cursor:pointer;color:${S.sym === s ? '#35c8ff' : '#dbe7f3'};font-weight:500;` }));
+    const feedRaw = [['SİNYAL', '#00e5a0', 'BTCUSDT S0→S1 · conf 0.31 · ret_long p84 · bar 13:41'], ['ALGO', '#35c8ff', 'place STOP_MARKET fBTC…-SL-v2 @77 350 · ACK 412 ms'], ['ALGO', '#35c8ff', 'cancel fBTC…-SL-v1 (önce yeni, sonra eski)'], ['RISK', '#ffb020', 'REJECT SOLUSDT long · K7 sembol maruziyeti, K13 spread 4.1 bp'], ['EXEC', '#dbe7f3', 'DOGEUSDT entry_fill 616 @0.1298 maker · PROTECTING'], ['ALGO', '#35c8ff', 'place STOP_MARKET fDOGE…-SL-v1 · place TAKE_PROFIT_MARKET fDOGE…-TP-v1'], ['BAR', '#6f849c', 'BarClosed ×10 · T 13:42:00 · buy_volume ok'], ['INFO', '#6f849c', 'loop_lag p99 3.9 ms · kuyruk 12 · rate weight 412/2400'], ['STALE', '#ffb020', 'market kategorisi 1.8 s (eşik 5 s) · normal'], ['RISK', '#00e5a0', 'APPROVE ETHUSDT long · K1–K18 geçti · 80 USDT · 0.021 ETH']];
+    const feed = feedRaw.map((f, i) => { const k = (i + S.tickN) % feedRaw.length, e = feedRaw[k], sec = 8 - i * 0.5 - (S.tickN % 60) / 60; const d = new Date(Date.UTC(2026, 8, 10, 13, 42, 0) - i * 4100 - (S.tickN % 4) * 1000); return { t: d.toISOString().slice(11, 19), kind: e[0], color: e[1], msg: e[2] }; });
+    const fsmCounts = { ENTRY_SENT: 0, PROTECTING: positions.filter(p => p.state === 'PROTECTING').length, MANAGED: positions.filter(p => p.state === 'MANAGED').length, CLOSING: 0, CLOSED: 41 };
+    const fsm = ['ENTRY_SENT', 'PROTECTING', 'MANAGED', 'CLOSING', 'CLOSED'].map((n, i) => ({ name: n, count: fsmCounts[n] + (n === 'CLOSED' ? ' bugün' : ' açık'), arrow: i < 4, style: `border:1px solid ${fsmCounts[n] && n !== 'CLOSED' ? '#00e5a0' : '#1a2536'};padding:8px 12px;background:${fsmCounts[n] && n !== 'CLOSED' ? 'rgba(0,229,160,.08)' : 'rgba(12,19,32,.6)'};min-width:110px;` }));
+    const rules = [['—', 'Koruma zaman aşımı → EMERGENCY', 't_protect_ms = 3000', 'aktif', '#00e5a0'], ['R2', 'Durum bozulması', 'degrade_map = {S1:[S2], S2:[S1]}', 'aktif', '#00e5a0'], ['R1', 'Yedek stop', 't_backup_ms = 1500', 'aktif', '#00e5a0'], ['R5', 'Zaman aşımı (yalnızca net ≤ 0)', 'max_hold_ms = null', 'kapalı', '#6f849c'], ['R4', 'Kısmi azaltma', 'tp1_pct = null · tp1_frac = null', 'kapalı', '#6f849c'], ['R3', 'Kâr kilidi / trail (yalnızca lehte)', 'lock_trigger 0.25% · trail_gap 0.15% · min_replace 5 s', 'aktif', '#00e5a0']].map(r => ({ id: r[0], name: r[1], param: r[2], status: r[3], style: chip(r[4]) }));
+    const exitReasons = [['tp', 118], ['sl', 96], ['backup_stop', 7], ['degradation', 41], ['timeout', 0], ['protect_timeout', 1]].map(e => ({ name: e[0], n: e[1], bar: `height:100%;width:${e[1] / 118 * 100}%;background:${e[0] === 'tp' ? '#00e5a0' : e[0] === 'sl' ? '#ff5470' : '#35c8ff'};` }));
+    const checks = [['K1', 'Kill switch', '—', S.kill ? 'REJECT' : 'ok'], ['K2', 'Mutabakat', 'reconcile_interval', 'ok'], ['K3', 'Isınma', 'W=240 · 2W bar', 'ZEC 62%'], ['K4', 'Bayatlık', 'staleness_ms', 'ok'], ['K5', 'Clock skew', 'skew_max · p99 191 ms', '+18 ms'], ['K6', 'Eşzamanlı pozisyon', '5 (kilitli)', posCount + '/5'], ['K7', 'Sembol maruziyeti', 'one-way', 'ok'], ['K8', 'Toplam maruziyet', 'gross_cap = null', 'bekliyor'], ['K9', 'BTC-beta net', 'beta_cap = null', 'bekliyor'], ['K10', 'Kaldıraç', 'BTC/ETH 10x, diğer 5x', 'eşleşti'], ['K11', 'Teminat', 'margin_buffer', 'ok'], ['K12', 'Filtreler', 'exchangeInfo · aşağı yuvarla', 'ok'], ['K13', 'Spread', 'spread_max persentil', 'SOL 4.1 bp'], ['K14', 'Likidite / katılım', 'depth_bps · participation_max', 'ok'], ['K15', 'Slippage tahmini', 'slippage_max_bps', 'ok'], ['K16', 'Cooldown', 'cooldown_ms / loss / stp', 'ok'], ['K17', 'Emir bütçesi', 'reserve_orders = 3', 'ok'], ['K18', '429 / 418', 'backoff_ms', 'ok']].map(k => { const bad = k[3] === 'REJECT', warn = k[3] === 'bekliyor' || /%|bp/.test(k[3]); return { id: k[0], name: k[1], param: k[2], val: k[3], style: chip(bad ? '#ff5470' : warn ? '#ffb020' : '#00e5a0') + (bad ? 'animation:blink 1s infinite;' : '') }; });
+    const verdicts = [['13:41:58', 'APPROVE', 'ETHUSDT long', 'K1–K18 geçti'], ['13:41:40', 'REJECT', 'SOLUSDT long', 'K7, K13'], ['13:40:12', 'RESIZE', 'HYPEUSDT short', 'K14 → 0.9× qty'], ['13:38:05', 'REJECT', 'ZECUSDT long', 'K3 ısınma'], ['13:37:51', 'REJECT', 'XRPUSDT short', 'D1 hücre yok (intent yok)'], ['13:35:20', 'APPROVE', 'DOGEUSDT short', 'K1–K18 geçti']].map(v => ({ t: v[0], kind: v[1], sym: v[2], reasons: v[3], style: chip(v[1] === 'APPROVE' ? '#00e5a0' : v[1] === 'REJECT' ? '#ff5470' : '#ffb020') }));
+    const exposure = [['Σ notional', 240, 400, '#35c8ff'], ['BTC-beta net', 168, 400, '#35c8ff'], ['teminat kullanımı', 24, 100, '#00e5a0']].map(e => ({ name: e[0], val: e[1] + (e[2] === 100 ? '%' : ' USDT'), cap: e[2] + (e[2] === 100 ? '%' : ' ?'), bar: `height:100%;width:${e[1] / e[2] * 100}%;background:${e[3]};` }));
+    const stateDefs = [['S0', 'nötr', 'p_lo ≤ pct ≤ p_hi', 3], ['S1', 'yukarı momentum', 'ret_long > p_hi · band dar', 2], ['S2', 'aşağı momentum', 'ret_long < p_lo · band dar', 2], ['S3', 'genişleme', 'range > p_hi', 2], ['S4', 'tükenme', 'imb ters · hacim düşüyor', 1]].map(s => ({ id: s[0], name: s[1], rule: s[2], n: s[3], color: this.SC[s[0]] }));
+    const symStates = this.SYMS.map((s, i) => { const st = this.STATE[s], conf = [0.31, 0.22, 0.44, 0.08, 0.27, 0.11, 0.19, 0.38, 0.05, 0.16][i], cell = st === 'S1' ? 'S1·5dk·long ?' : st === 'S2' ? 'S2·5dk·short ?' : '—'; return { sym: s, state: st, style: chip(this.SC[st]), age: [3, 9, 14, 41, 6, 27, 2, 11, 58, 4][i] + ' bar', conf: conf.toFixed(2), confBar: `display:block;height:100%;width:${conf * 200}%;background:${this.SC[st]};`, evidence: ['ret_long p84 · bw p31', 'ret_long p81 · bw p28', 'range p91', 'ret p52', 'ret_long p17 · bw p22', 'ret p48', 'imb −0.31 · vol p22', 'range p86', 'ret p55', 'ret_long p19'][i], counter: ['bw → p_hi 0.19', 'ret → p_hi 0.01', 'range → p_hi 0.11', '—', 'bw 0.07', '—', 'vol 0.04', 'range 0.06', '—', 'ret 0.03'][i], cell, cellStyle: cell === '—' ? 'color:#6f849c;' : chip('#ffb020') }; });
+    const stateIds = ['S0', 'S1', 'S2', 'S3', 'S4'], M = [[61, 8, 7, 4, 1], [9, 22, 2, 3, 1], [8, 2, 19, 3, 2], [5, 4, 3, 14, 3], [3, 1, 2, 1, 4]];
+    const matrix = stateIds.map((f, i) => ({ from: f, cells: M[i].map(v => ({ v, style: `padding:5px 0;background:rgba(53,200,255,${Math.min(.7, v / 70)});color:${v > 30 ? '#070b12' : '#dbe7f3'};` })) }));
+    const tt = S.cost === 'tt';
+    const cellRows = []; ['S1 long', 'S1 short', 'S2 long', 'S2 short', 'S3 long', 'S3 short', 'S4 long', 'S4 short'].forEach((lab, ri) => { const r = this.rnd(100 + ri + (tt ? 0 : 7)); cellRows.push({ label: lab, cells: [1, 5, 15, 60].map(hz => { const mean = (r() - 0.55) * 0.12 - (tt ? 0.02 : 0.005), w = 0.03 + r() * 0.06, n = Math.floor(60 + r() * 220), pass = mean - w > 0 && n >= 100; return { mean: this.sg(mean, 3, '%'), lo: this.sg(mean - w, 2), hi: this.sg(mean + w, 2), n, title: lab + ' · ' + hz + ' dk', style: `padding:6px 8px;font-size:11px;text-align:center;border:1px solid ${pass ? '#00e5a0' : '#111a28'};background:${mean >= 0 ? `rgba(0,229,160,${Math.min(.35, mean * 6)})` : `rgba(255,84,112,${Math.min(.35, -mean * 6)})`};animation:rise .4s ease-out both;` }; }) }); });
+    const replayRuns = [['process 1', 'f3db4dba4ed5c6ef…', 'eşit'], ['process 2', 'f3db4dba4ed5c6ef…', 'eşit'], ['negatif', 'a91c…(1 basamak değişti)', 'farklı ✓']].map(r => ({ proc: r[0], hash: r[1], res: r[2], style: chip('#00e5a0') }));
+    const streams = [['aggTrade', 'public', 'a ardışık', '6.21 M', '0'], ['bookTicker', 'market', 'u monoton', '3.84 M', '0'], ['depth@100ms', 'market', 'pu == önceki u', '0.72 M', '0'], ['markPrice@1s', 'market', '—', '36 k', '0'], ['forceOrder', 'public', '—', '412', '0']].map(s => ({ name: s[0], cat: s[1], rule: s[2], n: s[3], stale: s[4] }));
+    const files = [['events-2026-09-10T13-0011203311.jsonl.gz', '218 MB'], ['events-2026-09-10T12-0010871002.jsonl.gz', '224 MB'], ['events-2026-09-10T11-0010540877.jsonl.gz', '221 MB'], ['manifest.jsonl · runs.jsonl', '14 KB']].map(f => ({ name: f[0], size: f[1] }));
+    const locked = [['Piyasa', 'Binance USDⓈ-M Futures · spot yok'], ['Pozisyon modu', 'One-way'], ['Sembol evreni', 'TOP 10 (maks 20) · 24 s quoteVolume · stablecoin hariç · 00:00 UTC'], ['Eşzamanlı pozisyon', 'en fazla 5 · Risk Engine sert limit'], ['Kaldıraç', 'BTCUSDT/ETHUSDT 10x · diğerleri 5x'], ['İşlem büyüklüğü', '80 USDT notional · step\'e aşağı · filtre altı REJECT'], ['Emir yolu', 'WebSocket API + Ed25519 · REST fallback'], ['Açılışta koruma', 'SL + TP algo · closePosition=true · deterministik clientAlgoId'], ['Varsayılan mod', 'Paper'], ['Hot path', 'tek process, tek thread · 1 ms bütçe']].map(l => ({ k: l[0], v: l[1] }));
+    const posCfg = [['t_protect_ms', '3000', ''], ['t_backup_ms', '1500', '≥ tepki p99 + pay'], ['working_type', 'MARK_PRICE', 'sembol başına'], ['price_protect', 'true', ''], ['min_replace_interval_ms', '5000', ''], ['taker_fee_pct', '0.05', 'VIP0, doğrulanmadı'], ['maker_fee_pct', '0.02', ''], ['max_hold_ms', 'null', 'R5'], ['lock_trigger_pct', '0.25', 'R3'], ['lock_offset_pct', '0.05', 'R3'], ['trail_step_pct', '0.05', 'R3'], ['trail_gap_pct', '0.15', 'R3'], ['tp1_pct', 'null', 'R4'], ['tp1_frac', 'null', 'R4'], ['degrade_map', '{S1:[S2], S2:[S1]}', 'R2']].map(c => ({ k: c[0], v: c[1], note: c[2], style: c[1] === 'null' ? chip('#6f849c') : 'color:#00e5a0;font-variant-numeric:tabular-nums;' }));
+    const staleNow = { public: 0.6, market: 1.8, private: 0 };
+    const staleCfg = [['public', 5], ['market', 5], ['private', 30]].map(s => ({ cat: s[0], thr: s[1], now: staleNow[s[0]].toFixed(1), bar: `height:100%;width:${staleNow[s[0]] / s[1] * 100}%;background:${staleNow[s[0]] / s[1] > .6 ? '#ffb020' : '#00e5a0'};` }));
+    const cur_state = this.STATE[S.sym], fr = this.rnd(S.sym.length * 31 + 5);
+    const featRaw = { S1: [0.0041, 0.0092, 0.0031, 0.0058, 0.18, 1.12, 0.9], S2: [-0.0038, -0.0087, 0.0029, 0.0061, -0.22, 1.05, 1.1], S3: [0.0004, 0.0009, 0.0011, 0.0019, 0.31, 0.62, 0.8], S4: [0.0112, 0.0140, 0.0098, 0.0104, -0.31, 3.4, 2.6], S0: [0.0009, 0.0021, 0.0027, 0.0049, 0.04, 0.98, 1.0] }[cur_state];
+    const featPct = { S1: [null, 0.84, null, 0.31, null, 0.55, 0.42], S2: [null, 0.17, null, 0.28, null, 0.49, 0.61], S3: [null, 0.48, null, 0.12, null, 0.21, 0.44], S4: [null, 0.71, 0.93, 0.66, null, 0.91, 0.88], S0: [null, 0.52, null, 0.47, null, 0.50, 0.53] }[cur_state];
+    const featDefs = [['ret_short', 'log(close_t / close_t−5)', 4], ['ret_long', 'log(close_t / close_t−15)', 4], ['rv_short', '√Σ r² · 5 bar', 4], ['rv_long', '√Σ r² · 15 bar', 4], ['imb_short', '(2·buy_vol − vol) / vol · 5 bar · aggTrade m', 2], ['vol_ratio', 'hacim_t / ort(hacim, W)', 2], ['spread_bps', 'bookTicker · bar kapanışı', 1]];
+    const condFor = (i, p) => { if (p == null) return ['ham girdi', '#6f849c']; if (i === 1) return p > 0.8 ? ['> p_hi → trend up', '#00e5a0'] : p < 0.2 ? ['< p_lo → trend down', '#ff5470'] : ['bantta', '#6f849c']; if (i === 3) return p >= 0.2 && p <= 0.8 ? ['∈ [p_lo, p_hi] ✓', '#00e5a0'] : p < 0.2 ? ['< p_lo → sıkışma', '#35c8ff'] : ['> p_hi · aşırı', '#ffb020']; if (i === 2) return p > 0.8 ? ['> p_hi → S4 adayı', '#ffb020'] : ['—', '#6f849c']; if (i === 5) return p > 0.8 ? ['> p_hi → S4 adayı', '#ffb020'] : ['—', '#6f849c']; if (i === 6) return p < 0.8 ? ['< p_hi ✓ (S3 için)', '#6f849c'] : ['> p_hi · likit değil', '#ff5470']; return ['—', '#6f849c']; };
+    const features = featDefs.map((f, i) => { const p = featPct[i], c = condFor(i, p); return { name: f[0], def: f[1], raw: featRaw[i].toFixed(f[2]) + (i === 6 ? ' bp' : ''), pct: p == null ? 'None' : p.toFixed(2), pctStyle: p == null ? 'display:none;' : `position:absolute;top:-2px;bottom:-2px;width:2px;left:${p * 100}%;background:${c[1]};box-shadow:0 0 6px ${c[1]};`, cond: c[0], condStyle: chip(c[1]) }; });
+    const stateRules = [['S4', 'AŞIRI GENİŞLEME', 'pct(rv_5) > p_hi ∧ pct(vol_ratio) > p_hi', 'cont / rev (ret_5 işareti)', 'H4a/H4b', '3%'], ['S1', 'TREND UP', 'pct(ret_15) > p_hi ∧ pct(rv_15) ∈ band', 'long', 'H1', '11%'], ['S2', 'TREND DOWN', 'pct(ret_15) < p_lo ∧ pct(rv_15) ∈ band', 'short', 'H2', '10%'], ['S3', 'SIKIŞMA', 'pct(rv_15) < p_lo ∧ pct(spread) < p_hi', 'imb_5 işareti (breakout)', 'H3', '14%'], ['S0', 'NÖTR', 'diğerlerinin hiçbiri', '— · işlem yok', '—', '62%']].map(r => { const on = r[0] === cur_state; return { id: r[0], name: r[1], rule: r[2], dir: r[3], hyp: r[4], share: r[5] + ' bar', color: this.SC[r[0]], match: on ? 'EŞLEŞTİ' : '—', matchStyle: on ? chip(this.SC[r[0]], 'rgba(255,255,255,.04)') : 'color:#6f849c;font-size:11px;', rowStyle: on ? `background:linear-gradient(90deg, ${this.SC[r[0]]}14, transparent); margin:0 -8px; padding-left:8px; padding-right:8px;` : '' }; });
+    const dirOf = { S1: 'long', S2: 'short', S3: 'long (imb +0.31)', S4: 'long cont / short rev', S0: '—' }[cur_state];
+    const decisions = [['D1', 'Hücre allowed_cells içinde', `(${cur_state}, ${dirOf}) · liste boş · rapor hash a693aa07`, 'HAYIR', '#ff5470'], ['D2', 'Durum yeni girildi', 'StateChanged aynı bar ya da yaş ≤ max_state_age_bars (null)', cur_state === 'S0' ? '—' : '3 bar', cur_state === 'S0' ? '#6f849c' : '#00e5a0'], ['D3', 'Yürütme uygunluğu', 'spread ≤ araştırma ort. × spread_mult · bayatlık yok · funding_guard', 'EVET', '#00e5a0']].map(d => ({ id: d[0], name: d[1], detail: d[2], val: d[3], style: chip(d[4]) }));
+    const intentFields = [['symbol', S.sym, ''], ['dir', dirOf, ''], ['notional', '80 USDT · step\'e aşağı', ''], ['horizon h', 'hücreden · yok', 'null'], ['sl / tp', 'Faz 3/4 replay\'inden · null', 'null'], ['clientOrderId', `e${S.sym}{bar_end_ms}${cur_state === 'S2' ? 'S' : 'L'}`, ''], ['entry', 'maker GTX / priceMatch=QUEUE · entry_timeout iptal', ''], ['correlation_id · git · cfg', 'uuid · 8271224 · 75a167d', '']].map(f => ({ k: f[0], v: f[1], style: f[2] === 'null' ? 'color:#ffb020;' : '' }));
+    const hypotheses = [['H1', 'S1 → 15/60 dk long net > 0', 'red'], ['H2', 'S2 → 15/60 dk short net > 0', 'red'], ['H3', 'S3 → imb_5 yönü 5/15 dk net > 0', 'red'], ['H4a', 'S4 → ters yön 5 dk net > 0 (tükenme)', 'red'], ['H4b', 'S4 → aynı yön 15 dk net > 0 (devam)', 'red'], ['H0', 'hiçbiri geçmez → DUR', 'gerçekleşti']].map(x => ({ id: x[0], text: x[1], res: x[2], style: chip(x[2] === 'red' ? '#ff5470' : '#ffb020') }));
+    const pipeline = [['FEATURE', 'Feature Engine', 'ret, rv, imb, vol_ratio, spread → rolling persentil (W=240)', '7 feature · look-ahead yok', '#35c8ff'], ['STATE', 'Market State', 'S0–S4 · ≤2 koşul AND · öncelik S4>S1/S2>S3', cur_state + ' · conf ' + (0.05 + fr() * 0.4).toFixed(2), this.SC[cur_state]], ['DECIDE', 'Decision Engine', 'D1 ∧ D2 ∧ D3 → EntryIntent', 'D1 başarısız · intent yok', '#ff5470'], ['RISK', 'Risk Engine', 'K1–K18 veto · APPROVE/REJECT/RESIZE', 'beklemede', '#6f849c'], ['EXEC', 'Order Sender', 'WS API · maker GTX · deterministik id', 'beklemede', '#6f849c'], ['POS', 'Position Manager', 'fill → SL+TP algo → R1–R5', 'P0 fast path', '#6f849c']].map((p, i) => ({ step: p[0], name: p[1], detail: p[2], out: p[3], color: p[4], arrow: i < 5, style: `border:1px solid ${p[4] === '#6f849c' ? '#1a2536' : p[4]};padding:10px 12px;width:190px;background:rgba(12,19,32,.6);animation:rise .4s ease-out both;animation-delay:${i * 80}ms;` }));
+    const live = this.live(S.sym);
+    return {
+      features, stateRules, decisions, intentFields, hypotheses, pipeline,
+      intentResult: 'None · intent üretilmedi', intentNote: 'allowed_cells boş (Faz 3: 0/48). Hücre geçince D1 açılır; sl/tp null iken de intent üretilmez (fail-closed).', intentStyle: 'border:1px dashed #ff5470;color:#ff5470;padding:10px 12px;margin-top:6px;',
+      navItems, phases, screenTitle: cur[1], screenSub: cur[3],
+      isAlgo: S.screen === 'algo', isStatus: S.screen === 'status', isPositions: S.screen === 'positions', isRisk: S.screen === 'risk', isStates: S.screen === 'states', isReplay: S.screen === 'replay', isRecorder: S.screen === 'recorder', isConfig: S.screen === 'config', goPositions: go('positions'),
+      dotPublic: dot('#00e5a0', true), dotMarket: dot('#00e5a0', true), dotPrivate: dot('#1a2536', false), loopLag: S.loop.toFixed(1),
+      setPaper: () => this.setState({ mode: 'paper' }), setLive: () => this.setState({ mode: 'live' }),
+      paperBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${S.mode === 'paper' ? '#00e5a0' : 'transparent'};color:${S.mode === 'paper' ? '#070b12' : '#6f849c'};font-weight:700;`,
+      liveBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${S.mode === 'live' ? '#ff5470' : 'transparent'};color:${S.mode === 'live' ? '#070b12' : '#6f849c'};font-weight:700;`,
+      modeTag: S.mode === 'live' ? 'LIVE · LiveExecutionAdapter korumalı stub' : 'PAPER · simüle execution', modeTagStyle: S.mode === 'live' ? chip('#ff5470') + 'animation:blink 1.4s infinite;' : chip('#00e5a0'),
+      ticker: this.ticker(),
+      killDot: React.createElement('span', { style: { width: 10, height: 10, borderRadius: '50%', background: S.kill ? '#ff5470' : '#00e5a0', display: 'inline-block', animation: (S.kill ? 'pulseRed' : 'pulse') + ' 1.6s ease-out infinite' } }),
+      killLabel: S.kill ? 'AKTİF' : 'kapalı', killSub: S.kill ? 'trigger manual · 13:44 UTC · git 8271224' : 'son tetik yok · restart\'ı hayatta kalır',
+      killBtn: `padding:9px 10px;border:1px solid ${S.kill ? '#1a2536' : '#ff5470'};background:${S.kill ? 'transparent' : 'rgba(255,84,112,.1)'};color:${S.kill ? '#6f849c' : '#ff5470'};font-weight:700;font-size:12px;cursor:pointer;`,
+      killBtnLabel: S.kill ? 'make kill-reset REASON=…' : 'make kill', toggleKill: () => S.kill ? this.setState({ kill: false }) : this.setState({ killDialog: true }),
+      killDialog: S.killDialog, closeKill: () => this.setState({ killDialog: false }), confirmKill: () => this.setState({ kill: true, killDialog: false }), stop: e => e.stopPropagation(),
+      statusCards: [card('MOD', S.mode.toUpperCase(), 'varsayılan paper', S.mode === 'live' ? '#ff5470' : '#00e5a0'), card('MUTABAKAT', S.kill ? 'LOCKED' : 'OK', 'REST snapshot 13:40 · fark 0', S.kill ? '#ff5470' : '#00e5a0'), card('ISINMA', '9/10', 'ZECUSDT 2W bekliyor', '#ffb020'), card('AÇIK POZİSYON', posCount + ' / 5', '240 USDT notional', '#dbe7f3', this.spark(3, '#35c8ff', true)), card('NET GERÇEKLEŞMEMİŞ', this.sg(positions.reduce((a, p) => a + parseFloat(p.net.replace('−', '-').replace(',', '.')), 0) * 0.8, 2, ' USDT'), 'mark · maliyet düşülmüş', '#00e5a0', this.spark(5, '#00e5a0', true)), card('ws_lag p99', '212 ms', 'public 184 · market 212', '#dbe7f3', this.spark(9, '#6f849c', false))],
+      activeSymbol: S.sym, activeLev: (S.sym === 'BTCUSDT' || S.sym === 'ETHUSDT' ? '10x' : '5x') + ' · isolated · PERPETUAL', activeState: this.STATE[S.sym] + ' · ' + stateDefs.find(s => s.id === this.STATE[S.sym]).name, stateChipStyle: chip(this.SC[this.STATE[S.sym]]),
+      activePriceLive: React.createElement('span', { key: live.toFixed(3), style: { padding: '0 6px', animation: 'flash .8s ease-out', fontVariantNumeric: 'tabular-nums' } }, this.fmt(live)),
+      chart: this.chart(), equity: this.equity(), chartRef: this.chartRef, equityRef: this.equityRef, spreadBps: (0.8 + (S.tickN % 5) * 0.2).toFixed(1),
+      universe, positions, posCount, feed, fsm, rules, exitReasons,
+      posCols: ['POS_ID', 'SEMBOL', 'YÖN', 'DURUM', 'GİRİŞ DURUMU', 'MİKTAR', 'GİRİŞ', 'MARK', 'SL', 'TP', 'BRÜT − MALİYET', 'NET %', 'ROE', 'SÜRE', 'R3'],
+      checks, verdicts, exposure, weight1m: 380 + (S.tickN % 40),
+      stateDefs, symStates, stateIds, matrix,
+      replayCards: [card('REPLAY HIZI', '65 k olay/s', 'tek çekirdek · JSON dahil', '#35c8ff'), card('İLK SAAT', '3.47 M olay', '54 s · 560 BarClosed'), card('HASH', 'f3db4dba…', '2 process eşit', '#00e5a0'), card('BAR (araştırma)', '2 960', '4.9 saat · 10 sembol'), card('ETİKETLİ', 'S1 14 · S2 11 · S3 11', 'S4 0 → yetersiz veri', '#ffb020'), card('GEÇEN HÜCRE', '0 / 48', 'DUR kapısı kaldırıldı', '#ff5470')],
+      setCostTT: () => this.setState({ cost: 'tt' }), setCostMT: () => this.setState({ cost: 'mt' }),
+      costTTBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${tt ? '#35c8ff' : 'transparent'};color:${tt ? '#070b12' : '#6f849c'};`, costMTBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${!tt ? '#35c8ff' : 'transparent'};color:${!tt ? '#070b12' : '#6f849c'};`,
+      cellRows, replayRuns,
+      recCards: [card('RUN', 'rec-72h', 'başladı 08:00 UTC · restart 0', '#35c8ff'), card('OLAY', (10.9 + S.tickN * 0.00001).toFixed(2) + ' M', 'seq boşluğu 0 · tekrar 0', '#dbe7f3', this.spark(7, '#35c8ff', true)), card('LOOP LAG', S.loop.toFixed(1) + ' ms p99', 'maks 46.6 ms', '#00e5a0', this.spark(11, '#00e5a0', false)), card('KUYRUK', String(9 + (S.tickN % 7)), 'maks 569'), card('RECONNECT', '0', 'backoff 1 → 30 s', '#00e5a0'), card('SNAPSHOT', '48', 'depth 1000 · her 10 dk')],
+      streams, files, diskUsed: (5.8 + S.tickN * 0.00006).toFixed(2),
+      locked, posCfg, staleCfg
+    };
+  }
+}
+</script>
+</body>
+</html>

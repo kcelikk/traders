@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup status test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup status ui ui-stop test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -20,6 +20,13 @@ status:                  # arka plan süreçleri ve veri durumu
 	@echo "gecikme ölçümü process: $$(pgrep -cf '[m]easure_latency --duration')"; wc -l < data/latency/$(RUN)/rest_keepalive.jsonl 2>/dev/null | awk '{print "REST örnek:", $$1, "(24 s ≈ 43200)"}'
 	@echo "sonraki: 2026-09-11 07:39Z gecikme nihai raporu; 08:00Z sonrası 24 s araştırma ön raporu; 2026-09-13 08:00Z sonrası nihai/DUR"
 
+ui:                      # konsol: http://127.0.0.1:8787 (SSH tüneli: ssh -L 8787:127.0.0.1:8787 <sunucu>)
+	nohup $(PY) -m fbot.api.server --run-dir data/recordings/$(REC) --history-files $(or $(HIST_FILES),5) > data/ui.log 2>&1 &
+	@sleep 2; curl -s http://127.0.0.1:8787/api/health; echo
+
+ui-stop:
+	-pkill -f "fbot.api.serve[r]"
+
 test:
 	$(PYTEST) -q tests
 
@@ -32,7 +39,7 @@ replay:                  # gerçek kayıt; MAXF=dosya sayısı
 
 # ---- Faz 4
 replay-positions:        # statik SL/TP vs kurallı yönetim (bilgilendirici); MAXF, SL, TP, W
-	$(PY) -m scripts.replay_positions data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),) --sl $(or $(SL),0.5) --tp $(or $(TP),1.0) --W $(or $(W),120) > docs/design/faz4-replay-karsilastirma.md
+	$(PY) -m scripts.replay_positions data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),) --sl $(or $(SL),0.5) --tp $(or $(TP),1.0) --W $(or $(W),120) --json-out data/research/replay-positions.json > docs/design/faz4-replay-karsilastirma.md
 
 # ---- Faz 3
 export-bars:             # replay → data/research/$(REC)/bars.jsonl ; MAXF opsiyonel
@@ -53,7 +60,7 @@ research-scan:           # yalnızca keşif bölümü; parametre duyarlılığı
 	$(PY) -m scripts.research_scan data/research/$(REC)/bars.jsonl
 
 research-report:         # → docs/research/rapor-$(REC).md
-	$(PY) -m scripts.research_report data/research/$(REC)/bars.jsonl > docs/research/rapor-$(REC).md
+	$(PY) -m scripts.research_report data/research/$(REC)/bars.jsonl --json-out data/research/$(REC)/report.json > docs/research/rapor-$(REC).md
 
 # ---- Faz 0
 measure-latency:

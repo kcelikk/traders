@@ -171,6 +171,7 @@ class Runner:
         if n == 0:
             return {"positions": 0}
         nets = [r["net"] for r in closed]
+        self._nets = [float(x) for x in nets]
         was_profit = [r for r in closed if r["max_net"] > Decimal("0.10")]
         p2l = [r for r in was_profit if r["net"] < 0]
         return {
@@ -180,7 +181,7 @@ class Runner:
             "profit_to_loss_rate": (len(p2l) / len(was_profit)) if was_profit else None, "was_profit": len(was_profit),
             "exit_reasons": dict(Counter(r["reason"] for r in closed)),
             "replacements": sum(r["replacements"] for r in self.records.values()),
-            "commands": dict(self.cmd_counts), "synthetic_ticks": not self.had_ticks,
+            "commands": dict(self.cmd_counts), "synthetic_ticks": not self.had_ticks, "nets": self._nets,
         }
 
 
@@ -191,6 +192,7 @@ def main(argv):
     ap.add_argument("--sl", default="0.5")
     ap.add_argument("--tp", default="1.0")
     ap.add_argument("--W", type=int, default=120, help="persentil penceresi (bar); kısa kayıtta 120")
+    ap.add_argument("--json-out", default=None)
     a = ap.parse_args(argv)
     filters = load_filters()
     res = {}
@@ -198,6 +200,8 @@ def main(argv):
         res[name] = Runner(Path(a.run_dir), a.max_files, rules, Decimal(a.sl), Decimal(a.tp), filters, a.W).run()
     print(f"# Faz 4 replay karşılaştırması — `{Path(a.run_dir).name}` (SL {a.sl}%, TP {a.tp}%, W={a.W}, giriş S1 long / S2 short, 80 USDT, taker/taker)\n")
     print("Kârlılık gösterilmedi (ADR 0010). Bilgilendirici karşılaştırma (ADR 0011).\n")
+    if a.json_out:
+        Path(a.json_out).write_text(json.dumps({"sl": a.sl, "tp": a.tp, "W": a.W, "results": res}, default=str))
     keys = ["positions", "open_at_end", "net_mean_pct", "net_sum_pct", "win_rate", "was_profit", "profit_to_loss_rate", "replacements", "exit_reasons", "commands", "synthetic_ticks"]
     print("| ölçüt | " + " | ".join(res) + " |")
     print("|---|" + "---|" * len(res))
