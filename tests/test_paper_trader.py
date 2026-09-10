@@ -140,3 +140,45 @@ def test_two_identical_runs_produce_identical_streams():
     a = live_run(cells)[0].stream
     b = live_run(cells)[0].stream
     assert [(e.seq, e.cat, e.stream, e.raw) for e in a] == [(e.seq, e.cat, e.stream, e.raw) for e in b]
+
+
+def test_store_receives_decisions_orders_fills_positions(tmp_path):
+    from fbot.paper.store import PaperStore
+    cells = discovered_cells()
+    host = Host()
+    store = PaperStore(tmp_path / "p.db", run_id="t1")
+    trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit, store=store)
+    for cat, s, d in market_events():
+        host.now += 200_000_000
+        trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
+        host.now += 100_000_000
+        trader.on_tick(host.now)
+    store.flush()
+    sm = store.summary()
+    assert sm["decisions"] > 0 and sm["approve"] > 0
+    assert sm["orders"] > 0 and sm["fills"] > 0
+    assert sm["positions_closed"] > 0 and sm["exit_reasons"]
+    pos = store.recent_positions(5)
+    assert pos and pos[0]["entry_state"] in ("S1", "S2", "S3", "S4")
+    assert all(p["net_pct"] is not None for p in pos if p["state"] == "CLOSED")
+
+
+def test_closed_position_net_uses_exit_price_not_mark(tmp_path):
+    from fbot.paper.store import PaperStore
+    cells = discovered_cells()
+    host = Host()
+    store = PaperStore(tmp_path / "n.db", run_id="t2")
+    trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit, store=store)
+    for cat, s, d in market_events():
+        host.now += 200_000_000
+        trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
+        host.now += 100_000_000
+        trader.on_tick(host.now)
+    store.flush()
+    closed = [p for p in store.recent_positions(50) if p["state"] == "CLOSED"]
+    assert closed
+    for p in closed:
+        assert p["closed_ns"] is not None and p["closed_ns"] >= p["opened_ns"]
+        # net = brüt − maliyet; TP çıkışında pozitif, SL çıkışında negatif olmalı
+        net = float(p["net_pct"])
+        assert (net > 0) == (p["exit_reason"] == "tp"), (p["exit_reason"], net)
