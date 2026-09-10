@@ -201,3 +201,14 @@ Strateji-bağımsız pozisyon yönetimi: pozisyon durum makinesi, açılışta b
 7. Engine `exec` ve `tick` olaylarını işler; replay determinizmi korunur (mevcut testler + yeni fixture ile).
 8. Recorder `tick_ms` ile `ctrl/tick` üretir (replay'de aynı).
 9. Replay karşılaştırması (statik SL/TP vs kurallı): basit dolum modeliyle (mark tetik, bookTicker karşı taraf) rapor; **kapı değil**, bilgilendirici (ADR 0011).
+
+## Faz 5 — hedef ve kabul kriterleri (başlangıç 2026-09-10; tasarım `docs/design/faz5-risk-engine.md`)
+
+Hedef: bağımsız, veto yetkili, saf Risk Engine (`assess`), kalıcı kill switch, runaway dedektörü, mutabakat kilidi. Kârlılık gösterilmedi (ADR 0010).
+
+1. `fbot/core/risk.py` saf; K1–K18 `RiskConfig` ile; `None` = kontrol kapalı; gerekçeler katalog sırasında.
+2. Çıkış niyetleri (`reduce_only`/`close_position`) K1–K11 ve K13–K16 tarafından **engellenmez**; yalnızca K12 filtre uygulanır (test).
+3. Her kontrol için en az bir REJECT ve bir APPROVE testi; RESIZE (K8/K9/K14) filtre altına düşünce REJECT.
+4. Kill switch: dosyada kalıcı, restart sonrası okunur, yalnızca elle sıfırlanır (`fbot/gateway/killswitch.py`, I/O kenarı; çekirdek yalnızca bayrağı okur).
+5. Runaway dedektörü: kayan pencerede emir sayısı ve ardışık ret sayısı eşikleri → `KillSwitchTriggered` komutu.
+6. Determinizm: aynı girdi aynı karar (test).
