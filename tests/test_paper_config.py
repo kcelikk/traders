@@ -27,3 +27,9 @@ def test_leverage_must_match_locked_decision(tmp_path):
     p = tmp_path / "p.toml"; p.write_text(src)
     with pytest.raises(PaperConfigError, match="kaldıraç"):
         load_paper_config(p)
+
+
+def test_sim_params_loaded():
+    cfg, _ = load_paper_config("config/paper.toml")
+    assert cfg.sim_jitter_ms == 600 and cfg.sim_partial_timeout_ms == 5000
+    assert cfg.sim_prob_fill_on_touch == 0.0 and cfg.sim_book_levels == 20

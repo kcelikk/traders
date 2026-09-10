@@ -80,9 +80,13 @@ backoff_ms = 10000
 warmup_bars = 60              # 2W
 # beta_cap_usdt, cooldown_*, participation_max, slippage_max_bps: ölçülmedi → kapalı
 
-[sim]                          # dolum simülatörü (docs/design/faz7-paper-trading.md §3)
-latency_ms = 400               # Faz 0 ölçümü p50 ≈ 420 ms
+[sim]
+latency_ms = 400
+jitter_ms = 600
 seed = 20260910
+partial_timeout_ms = 5000
+prob_fill_on_touch = 0.0
+book_levels = 20
 
 [account]                      # paper: sanal hesap; borsa yok → kaldıraç görünümü config'in kendisi
 paper = true

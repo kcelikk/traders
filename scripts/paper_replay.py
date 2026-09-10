@@ -52,7 +52,10 @@ def main(argv):
         out_stream.append(ev)
         return ev
 
-    trader = PaperTrader(Engine(core), SimExecutor(SimConfig(latency_ms=cfg.sim_latency_ms, seed=cfg.sim_seed)), emit, store=store)
+    trader = PaperTrader(Engine(core), SimExecutor(SimConfig(latency_ms=cfg.sim_latency_ms, seed=cfg.sim_seed, jitter_ms=cfg.sim_jitter_ms,
+                                                partial_timeout_ms=cfg.sim_partial_timeout_ms,
+                                                prob_fill_on_touch=cfg.sim_prob_fill_on_touch)), emit, store=store)
+    trader.book_levels = cfg.sim_book_levels
     n = 0
     last_tick = None
     for line in iter_lines(Path(a.run_dir), a.max_files):

@@ -76,9 +76,13 @@ backoff_ms = 10000
 warmup_bars = 480              # 2W
 # beta_cap_usdt, cooldown_*, participation_max, slippage_max_bps: ölçülmedi → kapalı
 
-[sim]                          # dolum simülatörü (docs/design/faz7-paper-trading.md §3)
-latency_ms = 400               # Faz 0 ölçümü p50 ≈ 420 ms
+[sim]                          # dolum simülatörü — ADR 0013 (NautilusTrader/Hummingbot kuralları, L2 defter yürüyüşü)
+latency_ms = 400               # Faz 0 ölçümü: p50 ≈ 420 ms
+jitter_ms = 600                # p99 ≈ 1 s → [400, 1000] ms, seed'li
 seed = 20260910
+partial_timeout_ms = 5000      # kısmi dolumda kalan miktar bu süre sonunda iptal
+prob_fill_on_touch = 0.0       # maker: dokunma yetmez, geçiş gerekir (muhafazakâr)
+book_levels = 20               # simülatöre verilen L2 derinlik
 
 [account]                      # paper: sanal hesap; borsa yok → kaldıraç görünümü config'in kendisi
 paper = true

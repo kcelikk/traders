@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup status ui ui-stop test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -37,6 +37,28 @@ test-determinism:        # Rule Zero: fixture iki ayrı process'te, hash eşit; 
 # ---- Faz 2
 replay:                  # gerçek kayıt; MAXF=dosya sayısı
 	$(PY) -m scripts.replay data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),)
+
+# ---- Faz 7 (paper trading)
+PAPER ?= paper-$(shell date -u +%Y%m%dT%H%MZ)
+PAPER_CFG ?= config/paper.toml
+
+run-paper:               # yerel (venv), arka plan; PAPER_CFG=config/paper-demo.toml makine testi içindir
+	@mkdir -p data/recordings
+	@nohup $(PY) -m fbot.paper.main --config $(PAPER_CFG) --run-id $(PAPER) $(if $(DURATION),--duration $(DURATION),) > data/paper.log 2>&1 & echo $$! > data/paper.pid
+	@sleep 3; head -1 data/paper.log; echo "run_id=$(PAPER)  log=data/paper.log"
+
+paper-stop:
+	@if [ -f data/paper.pid ]; then kill $$(cat data/paper.pid) 2>/dev/null; rm -f data/paper.pid; echo "durduruldu"; else echo "pidfile yok"; fi
+
+paper-summary:           # SQLite özeti; PAPER=<run_id>
+	$(PY) -m scripts.paper_summary data/recordings/$(PAPER)/paper.db
+
+paper-up:                # container (izole: kendi volume, restart, kaynak limiti)
+	mkdir -p data/recordings && chown -R 10001 data/recordings
+	GIT_SHA=$(GIT_SHA) FBOT_PAPER_RUN_ID=$(PAPER) FBOT_PAPER_CONFIG=$(PAPER_CFG) docker compose up -d paper
+
+paper-down:
+	docker compose stop paper
 
 # ---- Faz 4
 replay-positions:        # statik SL/TP vs kurallı yönetim (bilgilendirici); MAXF, SL, TP, W

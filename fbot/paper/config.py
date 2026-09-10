@@ -25,6 +25,10 @@ class PaperConfig:
     core: CoreConfig
     sim_latency_ms: int
     sim_seed: int
+    sim_jitter_ms: int = 0
+    sim_partial_timeout_ms: int | None = None
+    sim_prob_fill_on_touch: float = 0.0
+    sim_book_levels: int = 20
 
 
 def _dec(v):
@@ -80,4 +84,8 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
     core = CoreConfig(bar_ms=int(t["core"]["bar_ms"]), staleness_ms={k: int(v * 1000) for k, v in rec.staleness_s.items()},
                       position=pcfg, filters={}, tick_ms=rec.tick_ms, state_engine=se, decision=dcfg, risk=rcfg,
                       account=dict(t["account"]))
-    return PaperConfig(recorder=rec, core=core, sim_latency_ms=int(t["sim"]["latency_ms"]), sim_seed=int(t["sim"]["seed"])), h
+    sim = t["sim"]
+    return PaperConfig(recorder=rec, core=core, sim_latency_ms=int(sim["latency_ms"]), sim_seed=int(sim["seed"]),
+                       sim_jitter_ms=int(sim.get("jitter_ms", 0)), sim_partial_timeout_ms=sim.get("partial_timeout_ms"),
+                       sim_prob_fill_on_touch=float(sim.get("prob_fill_on_touch", 0.0)),
+                       sim_book_levels=int(sim.get("book_levels", 20))), h

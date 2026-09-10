@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from decimal import Decimal
@@ -53,9 +54,12 @@ class PaperRecorder(Recorder):
         core = self.pcfg.core
         core = type(core)(**{**core.__dict__, "filters": filters_from_exchange_info(ex, set(syms))})
         engine = Engine(core)
-        self.trader = PaperTrader(engine, SimExecutor(SimConfig(latency_ms=self.pcfg.sim_latency_ms, seed=self.pcfg.sim_seed)),
+        self.trader = PaperTrader(engine, SimExecutor(SimConfig(latency_ms=self.pcfg.sim_latency_ms, seed=self.pcfg.sim_seed, jitter_ms=self.pcfg.sim_jitter_ms,
+                                                                partial_timeout_ms=self.pcfg.sim_partial_timeout_ms,
+                                                                prob_fill_on_touch=self.pcfg.sim_prob_fill_on_touch)),
                                   lambda cat, stream, raw, recv_ns=None, mono_ns=None: self.emit(cat, stream, raw, recv_ns, mono_ns, notify=False),
                                   store=self.store)
+        self.trader.book_levels = self.pcfg.sim_book_levels
         self.trader.engine_state.kill_switch = self.kill.active
         self.ctrl("paper_start", {"cells": [c.key() for c in core.decision.allowed_cells], "notional": str(core.decision.notional_usdt),
                                   "kill_switch": self.kill.active, "sim_latency_ms": self.pcfg.sim_latency_ms,
@@ -90,7 +94,7 @@ class PaperRecorder(Recorder):
 def parse(argv):
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="config/paper.toml")
-    p.add_argument("--run-id", default=None)
+    p.add_argument("--run-id", default=os.environ.get("FBOT_RUN_ID"))
     p.add_argument("--duration", type=float, default=None)
     p.add_argument("--db", default=None)
     return p.parse_args(argv)

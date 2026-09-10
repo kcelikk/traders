@@ -18,3 +18,33 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+  # Paper trading (Faz 7) — canlı veri, simüle execution. Gerçek emir YOK (LiveExecutionAdapter korumalı stub).
+  # İzolasyon: kendi container'ı, kendi kayıt dizini, kendi WS bağlantıları, kendi SQLite'ı.
+  # Ortak olan tek şey kill switch dosyasıdır (tasarım gereği: tek anahtar tüm işlem yollarını durdurur).
+  paper:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: fbot-recorder:latest
+    container_name: fbot-paper
+    restart: unless-stopped
+    entrypoint: ["python", "-m", "fbot.paper.main"]
+    command: ["--config", "${FBOT_PAPER_CONFIG:-config/paper.toml}"]
+    environment:
+      - FBOT_RUN_ID=${FBOT_PAPER_RUN_ID:-paper}
+      - PYTHONUNBUFFERED=1
+      - TZ=UTC
+    volumes:
+      - ./data/recordings:/app/data/recordings
+      - ./data/state:/app/data/state
+    stop_grace_period: 20s
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
