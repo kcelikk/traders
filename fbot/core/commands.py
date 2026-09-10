@@ -16,6 +16,7 @@ class BarClosed:
     close: Decimal
     volume: Decimal
     trades: int
+    buy_volume: Decimal = Decimal(0)  # alıcı agresif hacim (aggTrade m == False)
 
 
 @dataclass(frozen=True, slots=True)

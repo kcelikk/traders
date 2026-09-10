@@ -5,7 +5,7 @@
 | 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **KAPANDI** 2026-09-10 (ölçüm ≥1 saat, ADR 0001/0003/0004 onaylı; 24 s ölçüm arka planda sürüyor) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
 | 1 | Temel + ham veri kaydı | **KAPANDI** 2026-09-10 (kapı raporu `docs/recording-gate-report.md`; kayıt sürüyor) | ≥1 saat kesintisiz kayıt (ADR 0006) |
 | 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
-| 3 | Offline araştırma (**DUR kapısı**) | **AKTİF — hazırlık** (2026-09-10); kod, veri ≥24 s olunca | ADR 0008 §10 karar kuralı |
+| 3 | Offline araştırma (**DUR kapısı**) | **AKTİF** (2026-09-10; kod yazıldı, veri birikiyor) | ADR 0008 §10 karar kuralı |
 | 4 | Pozisyon yönetimi ve çıkış | bekliyor | replay'de sabit TP/SL'ye göre iyileşme |
 | 5 | Risk Engine | bekliyor | hata enjeksiyon testleri |
 | 6 | Giriş mantığı | bekliyor | replay maliyet dahil pozitif |
@@ -159,7 +159,19 @@ Kayıtlı veri üzerinde en fazla 5 piyasa durumu tanımlamak ve her durumdan so
 6. **Rapor:** `docs/research/rapor-<run>.md`, hücre tablosu + durum süre dağılımı + geçiş matrisi + sembol kırılımı; ön rapor ≥24 s, nihai ≥3 gün.
 7. **Karar:** Faz 4'e geçiş ya da DUR, proje sahibine açık gerekçeyle.
 
-## Faz 3 — dosya ağacı (kod henüz yazılmadı)
+## Faz 3 ilerleme (2026-09-10)
+
+| Teslim | Durum |
+|---|---|
+| `fbot/research/` (features, states, forward, stats) | yazıldı; 12 test (kesme testi, durum kuralları, getiri matematiği, seed'li bootstrap) |
+| `BarClosed.buy_volume` | çekirdeğe eklendi (imb feature'ı için); determinizm testleri yeşil |
+| `scripts/export_bars.py`, `scripts/research_report.py`, `config/research.toml` | yazıldı; `make export-bars`, `make research-report` |
+| Ön çalıştırma (4.9 saat, 10 sembol) | 28.6 M olay → 2.960 bar (7.4 dk); rapor `docs/research/rapor-rec-72h.md`; etiketli bar S1 14 / S2 11 / S3 11 / S4 0 → **yetersiz veri**, karar yok |
+| Toplam test | 87 |
+
+Sonraki adım: ≥24 saat kayıtla ön rapor (2026-09-11), ≥3 günle nihai rapor ve DUR kararı (2026-09-13 sonrası).
+
+## Faz 3 — dosya ağacı
 
 ```
 fbot/research/

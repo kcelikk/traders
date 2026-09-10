@@ -36,3 +36,12 @@ def test_book_ticker_and_mark_price_update_view():
     assert m.best_bid == Decimal("99.5") and m.best_ask == Decimal("100.5")
     assert m.mark_price == Decimal("100.0") and m.funding_rate == Decimal("0.0001") and m.next_funding_ms == 999
     assert m.book_update_id == 5
+
+
+def test_bar_tracks_buyer_aggressor_volume_from_m_flag():
+    m = SymbolMarket("BTCUSDT", bar_ms=60_000)
+    t1 = trade(0, "1", "3", 1); t1["m"] = False      # alıcı agresif (buyer is not maker)
+    t2 = trade(1000, "1", "2", 2); t2["m"] = True    # satıcı agresif
+    m.on_agg_trade(t1); m.on_agg_trade(t2)
+    b = m.on_agg_trade(trade(60_000, "1", "1", 3))[0]
+    assert b.volume == Decimal("5") and b.buy_volume == Decimal("3")

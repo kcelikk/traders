@@ -38,6 +38,7 @@ class SymbolMarket:
 
     def on_agg_trade(self, d: dict) -> list:
         p, q, T = Decimal(d["p"]), Decimal(d["q"]), d["T"]
+        bq = q if not d.get("m", False) else Decimal(0)
         self.last_price, self.last_qty, self.last_trade_ms, self.last_agg_id = p, q, T, d.get("a")
         start = (T // self.bar_ms) * self.bar_ms
         out = []
@@ -45,7 +46,7 @@ class SymbolMarket:
         if b is None or start != b[0]:
             if b is not None:
                 out.append(self._close(b))
-            self._bar = [start, p, p, p, p, q, 1]
+            self._bar = [start, p, p, p, p, q, 1, bq]
         else:
             if p > b[2]:
                 b[2] = p
@@ -54,7 +55,8 @@ class SymbolMarket:
             b[4] = p
             b[5] += q
             b[6] += 1
+            b[7] += bq
         return out
 
     def _close(self, b) -> BarClosed:
-        return BarClosed(self.symbol, b[0], b[0] + self.bar_ms - 1, b[1], b[2], b[3], b[4], b[5], b[6])
+        return BarClosed(self.symbol, b[0], b[0] + self.bar_ms - 1, b[1], b[2], b[3], b[4], b[5], b[6], b[7])

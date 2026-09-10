@@ -180,7 +180,7 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 make setup
 
 # testler
-make test              # birim (75 test)
+make test              # birim (87 test)
 make test-determinism  # Rule Zero doğrulaması (fixture, iki process)
 
 # Faz 0 ölçüm
@@ -195,6 +195,10 @@ make verify-orderbook REC=<run_id> MAXF=2
 
 # Faz 2 replay
 make replay REC=<run_id> MAXF=<dosya>
+
+# Faz 3 araştırma
+make export-bars REC=<run_id>
+make research-report REC=<run_id>
 
 # (Faz 7+ ile gelecek: run-paper)
 ```
@@ -212,7 +216,7 @@ make replay REC=<run_id> MAXF=<dosya>
 | 0 | Ölçüm, build-vs-buy, unit economics | kapandı 2026-09-10 |
 | 1 | Temel + ham veri kaydı | kapandı 2026-09-10 (kapı ≥1 saat, ADR 0006) |
 | 2 | Deterministik çekirdek + replay | kapandı 2026-09-10 |
-| 3 | Offline araştırma (**DUR kapısı**) | **AKTİF** — hazırlık (ADR 0008) |
+| 3 | Offline araştırma (**DUR kapısı**) | **AKTİF** — kod hazır, veri birikiyor (ADR 0008) |
 | 4 | Pozisyon yönetimi ve çıkış | — |
 | 5 | Risk Engine | — |
 | 6 | Giriş mantığı | — |

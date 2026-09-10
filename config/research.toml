@@ -1,0 +1,32 @@
+# Faz 3 araştırma config'i. Değerler BAŞLANGIÇ değeridir; hiçbiri ölçümle sabitlenmemiştir.
+# Keşif/doğrulama ayrımı bu değerleri de kapsar: doğrulama bölümünde değiştirilmez.
+
+[bars]
+bar_ms = 60000
+
+[features]
+W = 240          # persentil penceresi: 4 saat (1 dk bar)
+N_short = 5
+N_long = 15
+
+[states]
+p_lo = 0.2
+p_hi = 0.8
+
+[horizons]
+minutes = [1, 5, 15, 60]
+
+[costs]                       # % notional; VIP0 üçüncü taraf, doğrulanmadı (docs/unit-economics.md)
+scenarios = [
+  { name = "taker/taker", fee_in_pct = 0.05, fee_out_pct = 0.05 },
+  { name = "maker/taker", fee_in_pct = 0.02, fee_out_pct = 0.05 },
+]
+
+[sampling]
+discovery_frac = 0.7
+min_n = 100
+
+[bootstrap]
+n_boot = 2000
+seed = 20260910
+alpha = 0.05

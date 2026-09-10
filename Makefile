@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup test test-determinism replay measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: setup test test-determinism replay export-bars research-report measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -22,6 +22,13 @@ test-determinism:        # Rule Zero: fixture iki ayrı process'te, hash eşit; 
 # ---- Faz 2
 replay:                  # gerçek kayıt; MAXF=dosya sayısı
 	$(PY) -m scripts.replay data/recordings/$(REC) $(if $(MAXF),--max-files $(MAXF),)
+
+# ---- Faz 3
+export-bars:             # replay → data/research/$(REC)/bars.jsonl ; MAXF opsiyonel
+	$(PY) -m scripts.export_bars data/recordings/$(REC) data/research/$(REC)/bars.jsonl $(if $(MAXF),--max-files $(MAXF),)
+
+research-report:         # → docs/research/rapor-$(REC).md
+	$(PY) -m scripts.research_report data/research/$(REC)/bars.jsonl > docs/research/rapor-$(REC).md
 
 # ---- Faz 0
 measure-latency:

@@ -6,7 +6,7 @@ Binance USDⓈ-M Futures üzerinde deterministik, event-driven işlem sistemi. D
 
 ```bash
 make setup          # venv + websockets + pytest
-make test           # 75 test
+make test           # 87 test
 make test-determinism   # Rule Zero: iki process, aynı hash
 ```
 
@@ -41,6 +41,15 @@ make replay REC=rec-72h MAXF=1      # gerçek kayıt; hash, komut sayısı, olay
 ```
 
 Maliyet modeli `fbot/costs.py` (komisyon, funding, slippage; oranlar `CostConfig`). Execution: `fbot/execution/adapter.py`, Live adapter korumalı stub.
+
+## Faz 3 — offline araştırma (DUR kapısı)
+
+```bash
+make export-bars REC=rec-72h        # replay → data/research/rec-72h/bars.jsonl
+make research-report REC=rec-72h    # → docs/research/rapor-rec-72h.md (deterministik, seed'li)
+```
+
+Metodoloji ADR 0008; hipotezler `docs/research/hipotezler.md`; config `config/research.toml`.
 
 ## Faz 0 — ölçüm
 
