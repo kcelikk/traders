@@ -558,7 +558,9 @@ class Component extends DCLogic {
   }
   componentDidUpdate() { this.observe(); }
   componentWillUnmount() { clearInterval(this.t); if (this.ro) this.ro.disconnect(); }
-  poll() { fetch('/api/state', { cache: 'no-store' }).then(r => r.json()).then(api => this.setState(s => ({ api, err: null, tickN: s.tickN + 1, sym: s.sym || (api.universe[0] && api.universe[0].sym) || 'BTCUSDT' }))).catch(e => this.setState({ err: String(e) })); }
+  runParam() { try { return new URLSearchParams(location.search).get('run') || ''; } catch (e) { return ''; } }
+  goRun(id) { location.search = id ? '?run=' + encodeURIComponent(id) : ''; }
+  poll() { const r = this.runParam(); fetch('/api/state' + (r ? '?run=' + encodeURIComponent(r) : ''), { cache: 'no-store' }).then(r => r.json()).then(api => this.setState(s => ({ api, err: null, tickN: s.tickN + 1, sym: s.sym || (api.universe[0] && api.universe[0].sym) || 'BTCUSDT' }))).catch(e => this.setState({ err: String(e) })); }
   token() { try { return localStorage.getItem('fbot_token') || ''; } catch (e) { return ''; } }
   post(path, body) {
     let t = this.token();
@@ -609,6 +611,12 @@ class Component extends DCLogic {
     const phases = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => { const st = phStatus[n] || 'pending', done = st === 'done', act = st === 'active'; return { n, title: ['Ölçüm', 'Kayıt', 'Çekirdek', 'Araştırma', 'Pozisyon', 'Risk', 'Giriş', 'Paper', 'Gözlem', 'Testnet', 'Canlı'][n], style: `width:20px;height:20px;display:grid;place-items:center;font-size:10px;border:1px solid ${done ? '#00e5a0' : act ? '#35c8ff' : '#1a2536'};color:${done ? '#00e5a0' : act ? '#070b12' : '#6f849c'};background:${act ? '#35c8ff' : done ? 'rgba(0,229,160,.1)' : 'transparent'};${act ? 'animation:pulse 1.8s ease-out infinite;box-shadow:0 0 0 0 rgba(53,200,255,.6);' : ''}` }; });
     const dot = (c, on) => `width:7px;height:7px;border-radius:50%;background:${c};display:inline-block;${on ? 'animation:pulse 1.6s ease-out infinite;' : ''}`;
     const P0 = (A && A.paper) || {}, PM = P0.metrics || {};
+    const envs = (A && A.environments) || [], envKind = P0.env || 'paper', hasTestnet = envs.some(e => e.env === 'testnet');
+    const envColor = envKind === 'testnet' ? '#ffb020' : envKind === 'live' ? '#ff5470' : '#00e5a0';
+    const envLabel = !P0.run_id ? 'KOŞU YOK · canlı yol korumalı stub'
+      : envKind === 'testnet' ? 'TESTNET · ' + P0.run_id + ' · GERÇEK testnet emirleri · kârlılık kanıtı değil'
+      : envKind === 'live' ? 'CANLI · ' + P0.run_id
+      : 'PAPER · ' + P0.run_id + ' · simüle execution (L2 defter)';
     const stStyle = { MANAGED: chip('#00e5a0'), PROTECTING: chip('#ffb020'), CLOSING: chip('#35c8ff'), FROZEN: chip('#ffb020'), EMERGENCY: chip('#ff5470'), ENTRY_SENT: chip('#6f849c'), CLOSED: chip('#6f849c') };
     const positions = ((A && A.positions) || []).map(p => {
       const mk = (uni.find(x => x.sym === p.symbol) || {}).mark, mark = mk != null ? Number(mk) : null;
@@ -644,6 +652,7 @@ class Component extends DCLogic {
     const staleFlags = (A && A.stale_flags) || {}, skew = lat.skew ? lat.skew.p99 : null, anyStale = Object.values(staleFlags).some(Boolean);
     const chk = (id, name, param, val, kind) => ({ id, name, param, val, style: chip(kind === 'bad' ? '#ff5470' : kind === 'warn' ? '#ffb020' : kind === 'na' ? '#6f849c' : '#00e5a0') + (kind === 'bad' ? 'animation:blink 1s infinite;' : '') });
     const checks = [chk('K1', 'Kill switch', 'kalıcı dosya', kill ? 'REJECT' : 'kapalı', kill ? 'bad' : 'ok'), chk('K2', 'Mutabakat', 'REST snapshot', 'paper başlamadı', 'na'), chk('K3', 'Isınma', '2W bar', warmDone + '/' + nSym, warmDone === nSym ? 'ok' : 'warn'), chk('K4', 'Bayatlık', 'staleness_s', anyStale ? 'BAYAT' : 'ok', anyStale ? 'bad' : 'ok'), chk('K5', 'Clock skew', 'skew_max', skew == null ? '—' : 'p99 ' + skew + ' ms', skew == null ? 'na' : skew > 1000 ? 'warn' : 'ok'), chk('K6', 'Eşzamanlı pozisyon', '5 (kilitli)', '0/5', 'ok'), chk('K7', 'Sembol maruziyeti', 'one-way', 'ok', 'ok'), chk('K8', 'Toplam maruziyet', 'gross_cap = ' + (cfg.risk || {}).gross_cap_usdt + ' USDT', '0 USDT', 'ok'), chk('K9', 'BTC-beta net', 'beta_cap = null', 'kapalı', 'na'), chk('K10', 'Kaldıraç', 'BTC/ETH 10x, diğer 5x', 'anahtar yok', 'na'), chk('K11', 'Teminat', 'margin_buffer', 'anahtar yok', 'na'), chk('K12', 'Filtreler', 'exchangeInfo · aşağı yuvarla', 'ok', 'ok'), chk('K13', 'Spread', 'spread_max', u.spread_bps != null ? sym + ' ' + u.spread_bps.toFixed(2) + ' bp' : '—', 'ok'), chk('K14', 'Likidite / katılım', 'participation_max', 'depth · paper', 'na'), chk('K15', 'Slippage tahmini', 'slippage_max_bps', '≈ 0 (80 USDT ölçüldü)', 'ok'), chk('K16', 'Cooldown', 'cooldown_ms / loss / stp', 'null', 'na'), chk('K17', 'Emir bütçesi', 'reserve_orders = 3', 'anahtar yok', 'na'), chk('K18', '429 / 418', 'backoff_ms', 'ok', 'ok')];
+    if (envKind === 'testnet') checks.push(chk('TN', 'Testnet emir yolu', 'REST + HMAC · yalnızca testnet', P0.run_id ? 'aktif' : '—', 'warn'));
     const vsrc = (A && A.verdicts) || [];
     const verdicts = vsrc.length ? vsrc.map(v => ({ t: v.t_ms ? new Date(v.t_ms).toISOString().slice(11, 19) : '—', kind: v.kind,
         sym: v.symbol + ' · ' + (v.cell || ''), reasons: (v.reasons || []).join(', ') || (v.explain || '').slice(0, 70),
@@ -662,7 +671,9 @@ class Component extends DCLogic {
     const replayRuns = [['process 1', 'f3db4dba4ed5c6ef…', 'eşit'], ['process 2', 'f3db4dba4ed5c6ef…', 'eşit'], ['negatif (1 basamak)', 'farklı hash', 'farklı ✓']].map(r => ({ proc: r[0], hash: r[1], res: r[2], style: chip('#00e5a0') }));
     const frames = rec.frames || {};
     const streams = [['aggTrade', 'market', 'a ardışık'], ['markPrice@1s', 'market', '—'], ['forceOrder', 'market', '—'], ['bookTicker', 'public', 'u monoton'], ['depth@100ms', 'public', 'pu == önceki u']].map(s => ({ name: s[0], cat: s[1], rule: s[2], n: frames[s[1]] != null ? this.fmt(frames[s[1]], 0) + ' (kategori)' : '—', stale: (A && A.stale && A.stale[s[1]] != null) ? A.stale[s[1]].toFixed(1) + ' s' : '—' }));
-    const files = ((A && A.recorder_files) || []).map(f => ({ name: f.name, size: this.fmt(f.size / 1e6, 0) + ' MB' }));
+    const files = envs.map(e => ({ name: (e.env === 'testnet' ? '● TESTNET  ' : '○ paper    ') + e.run_id + (e.run_id === P0.run_id ? '   ← görüntülenen' : ''),
+                                   size: e.open + ' açık / ' + e.positions + ' pozisyon' }))
+      .concat(((A && A.recorder_files) || []).map(f => ({ name: f.name, size: this.fmt(f.size / 1e6, 0) + ' MB' })));
     const locked = (cfg.locked || []).map(l => ({ k: l[0], v: l[1] }));
     const posCfg = Object.entries(P).map(c => ({ k: c[0], v: String(c[1]), note: '', style: c[1] == null ? chip('#6f849c') : 'color:#00e5a0;font-variant-numeric:tabular-nums;' }));
     const staleNow = (A && A.stale) || {}, staleThr = (A && A.staleness_s) || {};
@@ -688,17 +699,18 @@ class Component extends DCLogic {
       navItems, phases, screenTitle: cur[1], screenSub: (S.err ? 'API HATASI: ' + S.err + ' · ' : '') + cur[3],
       isAlgo: S.screen === 'algo', isStatus: S.screen === 'status', isPositions: S.screen === 'positions', isRisk: S.screen === 'risk', isStates: S.screen === 'states', isReplay: S.screen === 'replay', isRecorder: S.screen === 'recorder', isConfig: S.screen === 'config', goPositions: go('positions'),
       dotPublic: dot(ageP != null && !staleFlags.public ? '#00e5a0' : '#ff5470', ageP != null), dotMarket: dot(ageM != null && !staleFlags.market ? '#00e5a0' : '#ff5470', ageM != null), dotPrivate: dot('#1a2536', false), loopLag: rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) : '—',
-      setPaper: () => {}, setLive: () => alert('LiveExecutionAdapter korumalı stub: canlı yol proje sahibi onayı olmadan etkinleştirilemez (Faz 9/10).'),
-      paperBtn: 'padding:4px 10px;border:0;font-size:11px;cursor:default;background:#00e5a0;color:#070b12;font-weight:700;',
-      liveBtn: 'padding:4px 10px;border:0;font-size:11px;cursor:not-allowed;background:transparent;color:#6f849c;font-weight:700;',
-      modeTag: (P0.run_id ? 'PAPER · ' + P0.run_id + ' · simüle execution (L2 defter)' : 'PAPER · koşu yok') + ' · canlı yol korumalı stub', modeTagStyle: chip('#00e5a0'),
+      setPaper: () => { const p = envs.find(e => e.env === 'paper'); this.goRun(p ? p.run_id : ''); },
+      setLive: () => { const t = envs.find(e => e.env === 'testnet'); if (t) { this.goRun(t.run_id); } else { alert('Testnet koşusu yok. Canlı (mainnet) yol yazılmadı: LiveExecutionAdapter korumalı stub (Faz 10).'); } },
+      paperBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${envKind === 'paper' ? '#00e5a0' : 'transparent'};color:${envKind === 'paper' ? '#070b12' : '#6f849c'};font-weight:700;`,
+      liveBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${envKind === 'testnet' ? '#ffb020' : 'transparent'};color:${envKind === 'testnet' ? '#070b12' : '#6f849c'};font-weight:700;` + (hasTestnet ? '' : 'opacity:.5;'),
+      modeTag: envLabel, modeTagStyle: chip(envColor) + (envKind === 'testnet' ? 'animation:blink 2s infinite;' : ''),
       ticker: this.ticker(),
       killDot: React.createElement('span', { style: { width: 10, height: 10, borderRadius: '50%', background: kill ? '#ff5470' : '#00e5a0', display: 'inline-block', animation: (kill ? 'pulseRed' : 'pulse') + ' 1.6s ease-out infinite' } }),
       killLabel: kill ? 'AKTİF' : 'kapalı', killSub: kill ? `trigger ${A.kill.reason} · ${this.tms(A.kill.ts_ns)} UTC · git ${A.kill.git_sha}` : 'son tetik yok · restart\'ı hayatta kalır · yalnızca elle sıfırlama',
       killBtn: `padding:9px 10px;border:1px solid ${kill ? '#1a2536' : '#ff5470'};background:${kill ? 'transparent' : 'rgba(255,84,112,.1)'};color:${kill ? '#6f849c' : '#ff5470'};font-weight:700;font-size:12px;cursor:pointer;`,
       killBtnLabel: kill ? 'kill-reset (elle)' : 'KILL SWITCH', toggleKill: () => kill ? this.post('/api/kill/reset', { note: 'konsol' }) : this.setState({ killDialog: true }),
       killDialog: S.killDialog, closeKill: () => this.setState({ killDialog: false }), confirmKill: () => { this.setState({ killDialog: false }); this.post('/api/kill', { reason: 'manual (konsol)' }); }, stop: e => e.stopPropagation(),
-      statusCards: [card('MOD', 'PAPER', P0.run_id ? P0.run_id : 'koşu yok', P0.run_id ? '#00e5a0' : '#6f849c'), card('MUTABAKAT', 'YOK', 'anahtar yok · Faz 9', '#6f849c'), card('ISINMA', warmDone + '/' + nSym, '2W = ' + 2 * ((cfg.research || {}).W || 240) + ' bar', warmDone === nSym ? '#00e5a0' : '#ffb020'), card('AÇIK POZİSYON', posCount + ' / 5', (posCount * 80) + ' USDT notional · ' + (PM['işlem'] || 0) + ' kapandı', '#dbe7f3'), card('PAPER NET', PM['net_toplam_pct'] != null && PM['işlem'] ? this.sg(PM['net_toplam_pct'], 3, '%') : '—', (PM['işlem'] || 0) + ' işlem · kazanma ' + (PM['kazanma_oranı'] != null ? (PM['kazanma_oranı'] * 100).toFixed(0) + '%' : '—') + ' · kârlılık gösterilmedi', (PM['net_toplam_pct'] || 0) >= 0 ? '#00e5a0' : '#ff5470'), card('ws_lag p99', wsLag, 'Faz 0 ölçümü · public', '#dbe7f3')],
+      statusCards: [card('ORTAM', envKind.toUpperCase(), (P0.run_id || 'koşu yok') + ' · ' + envs.length + ' koşu', envColor), card('MUTABAKAT', 'YOK', 'anahtar yok · Faz 9', '#6f849c'), card('ISINMA', warmDone + '/' + nSym, '2W = ' + 2 * ((cfg.research || {}).W || 240) + ' bar', warmDone === nSym ? '#00e5a0' : '#ffb020'), card('AÇIK POZİSYON', posCount + ' / 5', (posCount * 80) + ' USDT notional · ' + (PM['işlem'] || 0) + ' kapandı', '#dbe7f3'), card('NET (' + envKind.toUpperCase() + ')', PM['net_toplam_pct'] != null && PM['işlem'] ? this.sg(PM['net_toplam_pct'], 3, '%') : '—', (PM['işlem'] || 0) + ' işlem · kazanma ' + (PM['kazanma_oranı'] != null ? (PM['kazanma_oranı'] * 100).toFixed(0) + '%' : '—') + ' · kârlılık gösterilmedi', (PM['net_toplam_pct'] || 0) >= 0 ? '#00e5a0' : '#ff5470'), card('ws_lag p99', wsLag, 'Faz 0 ölçümü · public', '#dbe7f3')],
       activeSymbol: sym, activeLev: (sym === 'BTCUSDT' || sym === 'ETHUSDT' ? '10x' : '5x') + ' · PERPETUAL', activeState: cur_state + ' · ' + this.SNAME[cur_state], stateChipStyle: chip(this.SC[cur_state]),
       activePriceLive: React.createElement('span', { key: String(u.price), style: { padding: '0 6px', animation: 'flash .8s ease-out', fontVariantNumeric: 'tabular-nums' } }, this.fmt(u.price)),
       chart: this.chart(), equity: this.equity(), chartRef: this.chartRef, equityRef: this.equityRef, spreadBps: u.spread_bps != null ? u.spread_bps.toFixed(2) : '—',

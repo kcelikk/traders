@@ -33,3 +33,12 @@ def test_sim_params_loaded():
     cfg, _ = load_paper_config("config/paper.toml")
     assert cfg.sim_jitter_ms == 600 and cfg.sim_partial_timeout_ms == 5000
     assert cfg.sim_prob_fill_on_touch == 0.0 and cfg.sim_book_levels == 20
+
+
+def test_testnet_config_loads_and_is_narrow():
+    cfg, _ = load_paper_config("config/testnet.toml")
+    assert cfg.recorder.mode == "list" and cfg.recorder.symbols == ["BTCUSDT", "ETHUSDT"]
+    assert cfg.core.risk.max_positions == 2 and str(cfg.core.risk.gross_cap_usdt) == "160"
+    assert str(cfg.core.risk.beta_cap_usdt) == "750"
+    assert cfg.core.decision.allowed_cells == ()       # strateji yok → emir yok
+    assert cfg.core.account.get("paper") is False      # kaldıraç borsadan

@@ -5,8 +5,8 @@ from fbot.api.paper_view import find_paper_runs, paper_snapshot
 from fbot.paper.store import PaperStore
 
 
-def mk(db, run_id="paper-x"):
-    s = PaperStore(db, run_id=run_id)
+def mk(db, run_id="paper-x", env="paper"):
+    s = PaperStore(db, run_id=run_id, env=env)
     s.record_position({"pos_id": "p1", "symbol": "BTCUSDT", "side": "long", "state": "MANAGED", "qty": "0.001", "entry_price": "78000",
                        "sl": "77610", "tp": "78780", "net_pct": "0.21", "exit_reason": None, "opened_ns": 10**18, "closed_ns": None, "entry_state": "S1"})
     s.record_position({"pos_id": "p2", "symbol": "ETHUSDT", "side": "short", "state": "CLOSED", "qty": "0", "entry_price": "2500",
@@ -45,3 +45,31 @@ def test_snapshot_shapes_positions_decisions_metrics(tmp_path):
 def test_snapshot_without_any_run_is_empty(tmp_path):
     snap = paper_snapshot(tmp_path)
     assert snap["run_id"] is None and snap["positions"] == [] and snap["open_count"] == 0
+
+
+def test_environments_are_classified_by_run_id(tmp_path):
+    from fbot.api.paper_view import environments
+    for name in ("paper-demo-1", "testnet-20260910", "rec-72h"):
+        (tmp_path / name).mkdir()
+    mk(tmp_path / "paper-demo-1" / "paper.db", "paper-demo-1")
+    mk(tmp_path / "testnet-20260910" / "paper.db", "testnet-20260910", env="testnet")
+    envs = environments(tmp_path)
+    kinds = {e["run_id"]: e["env"] for e in envs}
+    assert kinds == {"paper-demo-1": "paper", "testnet-20260910": "testnet"}
+    tn = next(e for e in envs if e["env"] == "testnet")
+    assert tn["positions"] == 2 and tn["open"] == 1 and "metrics" in tn
+
+
+def test_snapshot_can_select_specific_run(tmp_path):
+    for name in ("paper-a", "testnet-b"):
+        (tmp_path / name).mkdir()
+        mk(tmp_path / name / "paper.db", name, env=("testnet" if name.startswith("testnet") else "paper"))
+    snap = paper_snapshot(tmp_path, run_id="testnet-b")
+    assert snap["run_id"] == "testnet-b" and snap["env"] == "testnet"
+    assert paper_snapshot(tmp_path)["env"] in ("paper", "testnet")
+
+
+def test_unknown_run_falls_back_to_newest(tmp_path):
+    (tmp_path / "paper-a").mkdir()
+    mk(tmp_path / "paper-a" / "paper.db", "paper-a")
+    assert paper_snapshot(tmp_path, run_id="yok")["run_id"] == "paper-a"

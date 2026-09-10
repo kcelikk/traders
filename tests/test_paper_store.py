@@ -56,3 +56,12 @@ def test_reopen_appends(tmp_path):
     s2.record_decision({"t_ms": 2, "symbol": "X", "kind": "APPROVE", "reasons": [], "cell": "c", "explain": ""})
     s2.flush()
     assert s2.summary()["decisions"] == 2
+
+
+def test_env_is_recorded_in_meta(tmp_path):
+    s = PaperStore(tmp_path / "m.db", run_id="r", env="testnet")
+    s.flush()
+    con = sqlite3.connect(tmp_path / "m.db")
+    assert con.execute("select value from meta where key='env'").fetchone()[0] == "testnet"
+    assert con.execute("select value from meta where key='run_id'").fetchone()[0] == "r"
+    assert PaperStore(tmp_path / "m.db", run_id="r").env == "testnet"

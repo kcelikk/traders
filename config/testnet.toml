@@ -1,0 +1,92 @@
+# fbot testnet (Faz 9, ADR 0015) — GERÇEK emir gönderir, ama yalnızca testnet.binancefuture.com'a.
+# Üç kapı birden gerekir: FBOT_TESTNET_ARMED + .env anahtar çifti + buradaki mode="testnet".
+# Testnet defteri incedir; sonuçlar kârlılık kanıtı DEĞİLDİR (ADR 0015). Tesisat doğrulama ortamıdır.
+
+[mode]
+mode = "testnet"
+
+[run]
+out_dir = "data/recordings"
+rotate_minutes = 60
+snapshot_interval_s = 600
+depth_snapshot_limit = 1000
+stats_interval_s = 10
+tick_ms = 1000
+
+[universe]
+mode = "list"
+top_n = 2
+symbols = ["BTCUSDT", "ETHUSDT"]     # testnet'te dar evren: tesisat doğrulama için yeterli
+exclude_bases = []
+
+[streams]
+public = ["{s}@bookTicker", "{s}@depth@100ms"]
+market = ["{s}@aggTrade", "{s}@markPrice@1s"]
+
+[staleness_s]
+public = 30
+market = 30
+
+[reconnect]
+backoff_initial_s = 1.0
+backoff_max_s = 30.0
+
+[core]
+bar_ms = 60000
+
+[state_engine]
+W = 240
+N_short = 5
+N_long = 15
+p_lo = 0.2
+p_hi = 0.8
+
+[decision]
+notional_usdt = "80"
+max_state_age_bars = 3
+spread_mult = "2"
+funding_guard_ms = 120000
+report_hash = "a693aa0742076410"
+allowed_cells = []              # strateji proje sahibinden gelecek; boşken emir üretilmez
+sl_pct = {}
+tp_pct = {}
+research_spread_bps = { BTCUSDT = "0.013", ETHUSDT = "0.041" }
+
+[position]
+t_protect_ms = 3000
+t_backup_ms = 1500
+working_type = "MARK_PRICE"
+price_protect = true
+min_replace_interval_ms = 5000
+taker_fee_pct = "0.05"
+maker_fee_pct = "0.02"
+max_hold_ms = 3600000
+lock_trigger_pct = "0.30"
+lock_offset_pct = "0.05"
+trail_step_pct = "0.10"
+trail_gap_pct = "0.30"
+degrade_map = { S1 = ["S2"], S2 = ["S1"] }
+
+[risk]
+max_positions = 2               # testnet: dar
+gross_cap_usdt = "160"
+beta_cap_usdt = "750"
+default_leverage = 5
+leverage = { BTCUSDT = 10, ETHUSDT = 10 }
+margin_buffer = "0.2"
+spread_max_bps = "20"           # testnet defteri ince: spread eşiği gevşek
+reserve_orders = 3
+backoff_ms = 10000
+warmup_bars = 480
+
+[sim]                           # testnet'te kullanılmaz (gerçek borsa), config şeması ortak olduğu için durur
+latency_ms = 400
+jitter_ms = 600
+seed = 20260910
+partial_timeout_ms = 5000
+prob_fill_on_touch = 0.0
+book_levels = 20
+
+[account]
+paper = false                   # kaldıraç görünümü borsadan okunur
+available_balance = "0"         # açılışta REST ile güncellenir

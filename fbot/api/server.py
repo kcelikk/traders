@@ -17,7 +17,7 @@ from pathlib import Path
 
 from fbot.api.auth import AuthConfig, check as auth_check
 from fbot.api.live_view import LiveView, parse_phase_table
-from fbot.api.paper_view import paper_snapshot
+from fbot.api.paper_view import environments, paper_snapshot
 from fbot.api.tail import GrowingGzipReader
 from fbot.events import decode
 from fbot.gateway.killswitch import KillSwitch
@@ -171,19 +171,23 @@ class Api:
         except ValueError:
             return None
 
-    def _paper(self) -> dict:
-        """Paper koşusu (Faz 7) — ayrı süreç/container; konsol yalnızca SQLite'ı salt okur."""
+    def _paper(self, run_id: str | None = None) -> dict:
+        """Paper/testnet koşusu — ayrı süreç/container; konsol yalnızca SQLite'ı salt okur."""
         try:
-            snap = paper_snapshot(ROOT / Path(self.run_dir).parent.name if False else Path(self.run_dir).parent)
+            base = Path(self.run_dir).parent
+            snap = paper_snapshot(base, run_id=run_id)
+            envs = environments(base)
         except Exception as e:  # noqa: BLE001 — konsol paper olmadan da çalışır
-            return {"paper": {"error": repr(e)}, "positions": [], "verdicts": [], "fsm": {}, "exit_reasons": {}, "paper_running": False}
-        return {"paper": {"run_id": snap["run_id"], "runs": snap["runs"], "metrics": snap["metrics"], "open_count": snap["open_count"]},
+            return {"paper": {"error": repr(e)}, "environments": [], "positions": [], "verdicts": [], "fsm": {}, "exit_reasons": {}, "paper_running": False}
+        return {"environments": envs,
+                "paper": {"run_id": snap["run_id"], "env": snap["env"], "runs": snap["runs"],
+                          "metrics": snap["metrics"], "open_count": snap["open_count"]},
                 "positions": snap["positions"], "verdicts": snap["verdicts"], "fsm": snap["fsm"],
                 "exit_reasons": snap["exit_reasons"], "paper_running": snap["run_id"] is not None}
 
-    def state(self) -> dict:
+    def state(self, run_id: str | None = None) -> dict:
         now = time.time()
-        if now - self._cache[0] < 1.0 and self._cache[1] is not None:
+        if run_id is None and now - self._cache[0] < 1.0 and self._cache[1] is not None:
             return self._cache[1]
         with self.lock:
             snap = self.view.snapshot(time.time_ns())
@@ -205,9 +209,10 @@ class Api:
             "replay_cmp": self._read_json(ROOT / "data" / "research" / "replay-positions.json"),
             "latency": parse_latency_md(lat_md),
             "config": assemble_config(ROOT / "config"),
-            **self._paper(),
+            **self._paper(run_id),
         }
-        self._cache = (now, out)
+        if run_id is None:
+            self._cache = (now, out)
         return out
 
 
@@ -238,7 +243,9 @@ def make_handler(api: Api):
             if not self._authorized():
                 return
             if self.path.startswith("/api/state"):
-                return self._json(api.state())
+                from urllib.parse import parse_qs, urlparse
+                run = (parse_qs(urlparse(self.path).query).get("run") or [None])[0]
+                return self._json(api.state(run))
             if self.path.startswith("/api/health"):
                 return self._json({"ok": True, "loading": api.tailer.loading, "lines": api.tailer.lines})
             if self.path in ("/", ""):

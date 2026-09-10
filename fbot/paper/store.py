@@ -16,17 +16,22 @@ CREATE TABLE IF NOT EXISTS positions (pos_id TEXT PRIMARY KEY, run_id TEXT, symb
                                       sl TEXT, tp TEXT, net_pct TEXT, exit_reason TEXT, opened_ns INTEGER, closed_ns INTEGER, entry_state TEXT);
 CREATE INDEX IF NOT EXISTS ix_dec_t ON decisions(t_ms);
 CREATE INDEX IF NOT EXISTS ix_pos_state ON positions(state);
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 
 class PaperStore:
-    def __init__(self, path: Path, run_id: str, flush_every: int = 200):
+    def __init__(self, path: Path, run_id: str, flush_every: int = 200, env: str = "paper"):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.run_id = run_id
         self.flush_every = flush_every
         self.con = sqlite3.connect(str(self.path), check_same_thread=False)
         self.con.executescript(SCHEMA)
+        cur = self.con.execute("SELECT value FROM meta WHERE key='env'").fetchone()
+        self.env = cur[0] if cur else env
+        self.con.executemany("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                             [("env", self.env), ("run_id", run_id)])
         self.con.commit()
         self.pending = 0
 
