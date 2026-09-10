@@ -81,7 +81,7 @@ def main(run_dir: Path):
     out = [f"# Ölçüm özeti — `{run_dir.name}`", ""]
     ev = list(iter_jsonl(run_dir / "events.jsonl"))
     if ev:
-        t0, t1 = ev[0]["wall_ms"], ev[-1]["wall_ms"]
+        t0, t1 = min(e["wall_ms"] for e in ev), max(e["wall_ms"] for e in ev)
         out.append(f"Süre: {(t1 - t0) / 3600000:.2f} saat ({t0} → {t1} ms epoch)")
         kinds = Counter(e["kind"] for e in ev)
         out.append("Olaylar: " + ", ".join(f"{k}={v}" for k, v in sorted(kinds.items())))
