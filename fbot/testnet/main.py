@@ -21,6 +21,7 @@ from pathlib import Path
 
 from fbot.core.engine import Engine
 from fbot.core.order_state import OrderBook as OrderTracker
+from fbot.execution.exchange_state import ReconcileSupervisor
 from fbot.execution.testnet_adapter import TestnetAdapter, TestnetDisarmed
 from fbot.gateway.killswitch import KillSwitch
 from fbot.gateway.testnet import TestnetClient, TestnetError
@@ -132,6 +133,12 @@ class TestnetRecorder(PaperRecorder):
         armed, why = adapter.armed, (ev or {}).get("reason", "—")
         if ev:
             self._emit_arming(ev)
+        # Açılışta mutabakat (CLAUDE.md mutlak kuralı): borsa tek doğruluk kaynağı, farkta kilit
+        lev = {s2: core.risk.leverage.get(s2, core.risk.default_leverage) for s2 in syms}
+        self.recon = ReconcileSupervisor(client=adapter.client, symbols=set(syms),
+                                         positions=lambda: self.trader.engine_state.positions,
+                                         expected_leverage=lev)
+        self._reconcile(lambda: int(time.time() * 1000))
         if self.pcfg.cost_drift is not None:
             from fbot.core.cost_drift import CostDriftMonitor
             self.trader.drift = CostDriftMonitor(self.pcfg.cost_drift)
@@ -148,6 +155,17 @@ class TestnetRecorder(PaperRecorder):
         self.pcfg.core.account["available_balance"] = str(usdt)
         return usdt
 
+    def _reconcile(self, now_ms) -> None:
+        """Mutabakat sonucunu çekirdeğe ve kayda yazar. Kilit çekirdekte: K2 her girişi reddeder."""
+        self.recon.client = self.trader.adapter.client        # silahlanma değiştiyse istemci de değişti
+        ev = self.recon.check(now_ms)
+        if ev is None:
+            return
+        self._recon_state = ev
+        self.trader.engine_state.reconciled = ev["reconciled"]
+        self.ctrl("reconcile", ev, notify=False)
+        print(json.dumps({"msg": "reconcile", **ev}, ensure_ascii=False), flush=True)
+
     def _emit_arming(self, ev: dict) -> None:
         """Silahlanma değişikliğini kayda ve konsola yazar. Gizli anahtar yazılmaz (yalnızca maske)."""
         self._arming_reason = ev.get("reason")
@@ -162,6 +180,11 @@ class TestnetRecorder(PaperRecorder):
                 self._emit_arming(ev)
         except Exception as e:  # noqa: BLE001 — denetçi hatası kaydı durdurmaz
             print(json.dumps({"msg": "arming_error", "err": repr(e)}), flush=True)
+        try:
+            self._reconcile(lambda: int(time.time() * 1000))
+        except Exception as e:  # noqa: BLE001 — mutabakat hatası kaydı durdurmaz, kilidi açmaz
+            self.trader.engine_state.reconciled = False
+            print(json.dumps({"msg": "reconcile_error", "err": repr(e)}), flush=True)
         st = self.trader.engine_state
         self.store.heartbeat(now_ns=time.time_ns(),
                              detail={"kill_switch": kill, "positions": len(st.positions), "stats": dict(self.trader.stats),
@@ -172,7 +195,9 @@ class TestnetRecorder(PaperRecorder):
                                      "orders": len(self.trader.orders.orders),
                                      "fills": self.trader.orders._stats["fills"],
                                      "rejected": self.trader.errors["rejected"],
-                                     "reconciled": None})
+                                     "reconciled": getattr(self, "_recon_state", {}).get("reconciled"),
+                                     "reconcile_reason": getattr(self, "_recon_state", {}).get("reason"),
+                                     "mismatches": getattr(self, "_recon_state", {}).get("mismatches") or []})
 
 
 def parse(argv):

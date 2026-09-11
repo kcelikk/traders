@@ -19,7 +19,8 @@
       "Bash(curl -s -o /dev/null -w \"index %{http_code} %{size_download}\\\\n\" localhost:8787/)",
       "Read(//etc/systemd/system/**)",
       "Bash(.venv/bin/python -c \"import json,sys; print\\(json.load\\(sys.stdin\\)['services']['testnet']\\)\")",
-      "Bash(echo *)"
+      "Bash(echo *)",
+      "Bash(.venv/bin/pytest -q tests/test_ui_build.py)"
     ]
   }
 }

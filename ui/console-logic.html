@@ -193,7 +193,7 @@ class Component extends DCLogic {
     const kchk = (id, name, param, val, kind) => chk(id, name, param, kHit(id) || val, kHit(id) ? 'warn' : kind);
     const checks = [
       kchk('K1', 'Kill switch', killEnv + ' · kalıcı dosya', kill ? 'REJECT' : 'kapalı', kill ? 'bad' : 'ok'),
-      kchk('K2', 'Mutabakat', 'REST snapshot', P0.run_id ? (envKind === 'paper' ? 'paper: gerekmez' : 'beklemede') : 'koşu yok', 'na'),
+      kchk('K2', 'Mutabakat', 'borsa snapshot · açılış + periyodik', SVC.reconciled == null ? (envKind === 'paper' ? 'paper: borsa hesabı yok' : 'koşu yok') : (SVC.reconciled ? 'tamam' : 'REJECT · ' + (SVC.mismatches || []).length + ' fark'), SVC.reconciled == null ? 'na' : SVC.reconciled ? 'ok' : 'bad'),
       kchk('K3', 'Isınma', '2W bar', warmDone + '/' + nSym, warmDone === nSym ? 'ok' : 'warn'),
       kchk('K4', 'Bayatlık', 'staleness_s', anyStale ? 'BAYAT' : 'ok', anyStale ? 'bad' : 'ok'),
       kchk('K5', 'Clock skew', 'skew_max', skew == null ? '—' : 'p99 ' + skew + ' ms', skew == null ? 'na' : skew > 1000 ? 'warn' : 'ok'),
@@ -341,7 +341,7 @@ class Component extends DCLogic {
       // Sistemde var olup konsolda izlenmeyen parçalar: sessiz kalmak yerine durumunu yaz
       wiring: [
         ['Emir durum makinesi', SVC.orders == null ? 'testnet koşusu bildirmiyor' : SVC.orders + ' emir · dolum ' + (SVC.fills || 0) + ' · ret ' + (SVC.rejected || 0), SVC.orders == null ? '#6f849c' : '#00e5a0'],
-        ['Açılışta mutabakat', SVC.reconciled == null ? 'bağlanmadı · fbot/core/reconcile.py yazıldı, süreçte çağrılmıyor' : (SVC.reconciled ? 'tamam' : 'UYUŞMAZLIK'), SVC.reconciled == null ? '#ffb020' : SVC.reconciled ? '#00e5a0' : '#ff5470'],
+        ['Mutabakat (borsa = doğruluk kaynağı)', SVC.reconciled == null ? 'bu ortamda yapılmıyor' : (SVC.reconciled ? 'tamam · ' + (SVC.reconcile_reason || '') : 'KİLİTLİ · ' + (SVC.reconcile_reason || 'uyuşmazlık')), SVC.reconciled == null ? '#6f849c' : SVC.reconciled ? '#00e5a0' : '#ff5470'],
         ['Defter senkronu', 'konsol görünümünde izlenmiyor · depthUpdate çekirdek görünümüne dahil değil (Faz 2)', '#6f849c'],
         ['Kill switch → pozisyon', kill ? 'aktif · yeni giriş yok, açıklar FROZEN' : 'kapalı', kill ? '#ff5470' : '#6f849c'],
         ['Silahlanma (testnet)', SVC.armed == null ? 'bilinmiyor' : (SVC.armed ? 'silahlı · ' + (SVC.arming_reason || '') : 'silahsız · ' + (SVC.arming_reason || '')), SVC.armed ? '#ffb020' : '#6f849c']

@@ -283,7 +283,7 @@ kararlarını geri almıyor; ne olmadığını kayda geçiriyor.
 | 0 | Slippage dağılımı ölçülmedi | Üç sakin anlık görüntü volatil anı temsil etmiyor; kayıt depth akışı henüz bu amaçla işlenmedi | `slippage_max_bps` config'de kapalı (K15 "ölçülmedi") |
 | 3 | Canlı kayıt üzerinde ≥3 günlük nihai rapor | Karar 32 günlük arşiv verisiyle verildi (ADR 0009); kayıt henüz 27 saat | Kendi verimizle doğrulama yok |
 | 4 | `clientAlgoId`/`clientOrderId` uzunluğunun borsada doğrulanması | Kriter Faz 9'a bırakılmıştı; hiç emir gönderilmedi | Gerçek emirde reddedilme riski ölçülmedi |
-| 5 | Mutabakat süreçte çağrılmıyor | `fbot/core/reconcile.py` yazıldı ve test edildi, hiçbir süreç kullanmıyor; `state.reconciled` hep True | **CLAUDE.md mutlak kuralı:** açılışta mutabakat, uyuşmazlıkta trading kilitlenir |
+| 5 | ~~Mutabakat süreçte çağrılmıyor~~ | **KAPANDI 2026-09-11:** `fbot/execution/exchange_state.py` borsa snapshot'ını çeker, `ReconcileSupervisor` açılışta ve 10 s'de bir karşılaştırır, farkta `state.reconciled=False` → K2 her girişi reddeder | — |
 | — | Binance income kayıtlarıyla PnL mutabakatı | `TestnetClient.income()` yazıldı, hiç çağrılmıyor | **CLAUDE.md maliyet kuralı:** PnL gerçeği iç hesap değil income kayıtlarıdır |
 | 2 | README güncel değildi | Komut listesi ve test sayısı eskimişti | 2026-09-11'de düzeltildi |
 

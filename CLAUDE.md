@@ -145,7 +145,7 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 
 **Auto-cancel (countdownCancelAll) emirleri iptal eder, pozisyonu kapatmaz.** Koruma emirlerine **asla** uygulanmaz, yalnızca giriş emirlerine. Bunu "kill switch" diye sunma.
 
-**Açılışta mutabakat:** borsa tek doğruluk kaynağıdır. Açık pozisyon ve emirler borsadan çekilir, iç state ile karşılaştırılır, uyuşmazlıkta trading kilitlenir.
+**Açılışta mutabakat:** borsa tek doğruluk kaynağıdır. Açık pozisyon ve emirler borsadan çekilir, iç state ile karşılaştırılır, uyuşmazlıkta trading kilitlenir. Uygulama: `fbot/execution/exchange_state.py` (açılış + 10 s periyot, fail-closed); paper'da borsa hesabı yok, bu yüzden yapılmaz.
 
 **Isınma:** restart sonrası feature pencereleri dolana kadar işlem açılmaz.
 
