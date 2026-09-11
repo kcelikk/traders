@@ -14,7 +14,9 @@
       "Bash(.venv/bin/python -c ' *)",
       "Bash(curl -s \"localhost:8787/api/history?limit=3\")",
       "Bash(.venv/bin/python -m scripts.build_ui)",
-      "Bash(systemctl restart *)"
+      "Bash(systemctl restart *)",
+      "Bash(curl -s -o /dev/null localhost:8787/api/health)",
+      "Bash(curl -s -o /dev/null -w \"index %{http_code} %{size_download}\\\\n\" localhost:8787/)"
     ]
   }
 }

@@ -812,9 +812,11 @@ class Component extends DCLogic {
     const exitReasons = Object.keys(exitSrc).length ? Object.entries(exitSrc).map(e => ({ name: e[0] + (exitSrcIsPaper ? ' (paper)' : ' (replay)'), n: e[1], bar: `height:100%;width:${e[1] / exitMax * 100}%;background:${e[0] === 'tp' ? '#00e5a0' : e[0] === 'sl' ? '#ff5470' : '#35c8ff'};` })) : [{ name: 'henüz çıkış yok', n: 0, bar: 'width:0' }];
     const staleFlags = (A && A.stale_flags) || {}, skew = lat.skew ? lat.skew.p99 : null, anyStale = Object.values(staleFlags).some(Boolean);
     const chk = (id, name, param, val, kind) => ({ id, name, param, val, style: chip(kind === 'bad' ? '#ff5470' : kind === 'warn' ? '#ffb020' : kind === 'na' ? '#6f849c' : '#00e5a0') + (kind === 'bad' ? 'animation:blink 1s infinite;' : '') });
+    const RC = cfg.risk || {}, num = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
+    const betaNow = num((A && A.beta_net_usdt)), grossCap = num(RC.gross_cap_usdt), betaCap = num(RC.beta_cap_usdt);
     const par = (k, v) => k + ' = ' + (v == null || v === '' ? 'yok' : v);
     const hasCfg = Object.keys(RC).length > 0;
-    const rejCount = {}; ((PM && PM['ret_nedenleri']) || {}) && Object.entries((PM && PM['ret_nedenleri']) || {}).forEach(e => { rejCount[e[0]] = e[1]; });
+    const rejCount = (PM && PM['ret_nedenleri']) || {};
     const kHit = k => { const n = Object.entries(rejCount).filter(e => e[0].indexOf(k + '_') === 0).reduce((a, b) => a + b[1], 0); return n ? n + ' ret' : null; };
     const kchk = (id, name, param, val, kind) => chk(id, name, param, kHit(id) || val, kHit(id) ? 'warn' : kind);
     const checks = [
@@ -845,8 +847,6 @@ class Component extends DCLogic {
     const lastV = vsrc[0] || null;
     if (CD.alarms && CD.alarms.length) CD.alarms.forEach(function (k) { checks.push(chk('6.4', 'Maliyet sürüklenmesi', k, (CD.detail && CD.detail[k]) ? CD.detail[k].slice(0, 46) : 'eşik aşıldı', 'bad')); });
     else if (CD.trades) checks.push(chk('6.4', 'Maliyet sürüklenmesi', CD.trades + ' işlem · net/işlem ' + (CD.net_per_trade_pct != null ? CD.net_per_trade_pct.toFixed(3) + '%' : '—'), 'eşik içinde', 'ok'));
-    const RC = cfg.risk || {}, num = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
-    const betaNow = num((A && A.beta_net_usdt)), grossCap = num(RC.gross_cap_usdt), betaCap = num(RC.beta_cap_usdt);
     const expRows = [['Σ notional', grossNow, grossCap, ' USDT', '#35c8ff'],
                      ['BTC-beta net', betaNow, betaCap, ' USDT', '#6f849c'],
                      ['pozisyon', posCount, num(RC.max_positions), '', '#00e5a0']];

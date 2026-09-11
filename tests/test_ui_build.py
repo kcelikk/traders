@@ -110,3 +110,57 @@ def test_history_screen_is_inserted_once():
     out = build()
     assert out.count('<sc-if value="{{ isHistory }}"') == 1
     assert out.count("</x-dc>") == 1 and out.count("<x-dc>") == 1
+
+
+def declarations_and_params(body: str) -> tuple[dict, set]:
+    """Maskelenmiş gövdeden `const`/`let` bildirimleri ve ok fonksiyonu parametreleri."""
+    decls: dict[str, int] = {}
+    for mo in re.finditer(r"\b(?:const|let)\s+([A-Za-z_$][\w$]*)", body):
+        decls.setdefault(mo.group(1), mo.start(1))
+    params = set()
+    for mo in re.finditer(r"(?:\(([^()]*)\)|([A-Za-z_$][\w$]*))\s*=>", body):
+        for part in (mo.group(1) or mo.group(2) or "").split(","):
+            part = part.strip()
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", part):
+                params.add(part)
+    return decls, params
+
+
+def mask_strings(src: str) -> str:
+    """Dizge ve satır yorumlarını boşlukla değiştirir; kimlik taraması metne takılmasın."""
+    out, i, n = list(src), 0, len(src)
+    while i < n:
+        c = src[i]
+        if c in "'\"`":
+            j = i + 1
+            while j < n and src[j] != c:
+                j += 2 if src[j] == "\\" else 1
+            for k in range(i, min(j + 1, n)):
+                out[k] = " "
+            i = j + 1
+            continue
+        if c == "/" and i + 1 < n and src[i + 1] == "/":
+            j = src.find("\n", i)
+            j = n if j < 0 else j
+            for k in range(i, j):
+                out[k] = " "
+            i = j
+            continue
+        i += 1
+    return "".join(out)
+
+
+def test_no_use_before_declaration_in_render():
+    """`const` bildiriminden önce kullanım tarayıcıda ReferenceError verir (RC hatası böyle çıktı)."""
+    src = (UI / "console-logic.html").read_text()
+    body = src[src.index("renderVals() {"):]
+    masked = mask_strings(body)
+    decls, params = declarations_and_params(masked)
+    bad = []
+    for name, pos in decls.items():
+        if name in params:
+            continue
+        use = re.search(rf"(?<![\w$.]){re.escape(name)}(?![\w$])", masked)
+        if use and use.start() < pos:
+            bad.append(f"{name} (kullanım satır {body[:use.start()].count(chr(10)) + 1}, bildirim satır {body[:pos].count(chr(10)) + 1})")
+    assert bad == [], "bildirimden önce kullanım: " + ", ".join(sorted(bad))
