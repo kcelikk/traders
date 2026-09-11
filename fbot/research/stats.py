@@ -30,3 +30,21 @@ def bootstrap_ci(values: list[float], n_boot: int, seed: int, alpha: float) -> t
     lo = means[int(alpha / 2 * n_boot)]
     hi = means[min(n_boot - 1, int((1 - alpha / 2) * n_boot))]
     return (lo, hi)
+
+
+def bootstrap_ci_fast(values: list[float], n_boot: int, seed: int, alpha: float) -> tuple[float, float]:
+    """`bootstrap_ci` ile aynı tahmin edici, C seviyesinde çekilişle ~10x hızlı.
+
+    Çekiliş **sırası** farklı olduğu için sayılar birebir aynı çıkmaz (örnekleme gürültüsü kadar
+    fark eder). Faz 3 raporunun hash'i bozulmasın diye eski fonksiyon değiştirilmedi; bu sürüm
+    yalnızca tarama gibi çok sayıda aralık hesaplayan yerlerde kullanılır. Seed'lidir (Rule Zero #5).
+    """
+    n = len(values)
+    if n == 0:
+        return (float("nan"), float("nan"))
+    rng = random.Random(seed)
+    choices = rng.choices
+    means = sorted(sum(choices(values, k=n)) / n for _ in range(n_boot))
+    lo = means[int(alpha / 2 * n_boot)]
+    hi = means[min(n_boot - 1, int((1 - alpha / 2) * n_boot))]
+    return (lo, hi)

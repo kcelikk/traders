@@ -36,3 +36,20 @@ def test_rerun_without_new_files_replays_nothing(tmp_path):
     export_bars(FIX, out)
     r = export_bars(FIX, out)
     assert r["files_replayed"] == 0 and r["files_cached"] == 1
+
+
+def test_incompatible_cache_is_replayed_not_crashed(tmp_path):
+    """Çekirdek state'i değişince eski pickle cache'i kullanılamaz; export çökmek yerine yeniden oynatmalı."""
+    import pickle
+
+    out = tmp_path / "bars.jsonl"
+    first = export_bars(FIX, out)
+    assert first["files_replayed"] == 1 and first["bars"] > 0
+    expected = out.read_bytes()
+
+    state_file = next((out.parent / "cache").glob("*.state.pkl"))
+    with state_file.open("wb") as f:               # eski sürümden kalmış, uyumsuz state
+        pickle.dump(("bu bir CoreState degil", 0), f)
+    second = export_bars(FIX, out)
+    assert second["files_replayed"] == 1 and second["files_cached"] == 0
+    assert second["bars"] == first["bars"] and out.read_bytes() == expected

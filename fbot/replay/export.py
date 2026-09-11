@@ -37,6 +37,22 @@ def _closed_files(run_dir: Path) -> set[str]:
     return {json.loads(l)["file"] for l in m.read_text().splitlines() if l.strip()}
 
 
+def _load_cache(path: Path):
+    """Cache, çekirdek state'inin pickle'ıdır: state şekli değişince eski cache kullanılamaz.
+    Uyumsuz veya bozuk cache sessizce atlanır, dosya yeniden oynatılır (çökmek yerine)."""
+    try:
+        with path.open("rb") as f:
+            obj = pickle.load(f)
+    except Exception:  # noqa: BLE001 — pickle her sınıf hatasını fırlatabilir
+        return None
+    if not (isinstance(obj, tuple) and len(obj) == 2 and isinstance(obj[0], CoreState) and isinstance(obj[1], int)):
+        return None
+    fresh = CoreState()
+    if any(not hasattr(obj[0], f) for f in vars(fresh)):
+        return None
+    return obj
+
+
 def export_bars(run_dir: Path, out: Path, cfg=DEFAULT_CFG, max_files: int | None = None) -> dict:
     run_dir, out = Path(run_dir), Path(out)
     cache = out.parent / "cache"
@@ -52,10 +68,10 @@ def export_bars(run_dir: Path, out: Path, cfg=DEFAULT_CFG, max_files: int | None
     with out.open("w") as fo:
         for path in files:
             cpart, cstate = cache / (path.name + ".bars.jsonl"), cache / (path.name + ".state.pkl")
-            if cpart.exists() and cstate.exists():
+            cached_state = _load_cache(cstate) if (cpart.exists() and cstate.exists()) else None
+            if cached_state is not None:
                 fo.write(cpart.read_text())
-                with cstate.open("rb") as f:
-                    state, clock_ns = pickle.load(f)
+                state, clock_ns = cached_state
                 clock.set(clock_ns)
                 cached += 1
                 n_bars += sum(1 for _ in cpart.open())

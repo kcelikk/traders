@@ -102,6 +102,9 @@ fetch-history:           # data.binance.vision günlük zip + checksum → data/
 build-history-bars:      # → data/research/$(HIST)/bars.jsonl (çekirdek SymbolMarket ile)
 	$(PY) -m scripts.build_history_bars --symbols $(SYMS) --start $(START) --end $(END) --out data/research/$(HIST)/bars.jsonl
 
+barrier-scan:            # hücre + SL/TP ızgarası: üçlü bariyer, keşif/doğrulama, maliyet dahil
+	$(PY) -m scripts.barrier_scan data/research/$(REC)/bars.jsonl --stride $(or $(STRIDE),3) --json-out data/research/$(REC)/barrier.json
+
 research-scan:           # yalnızca keşif bölümü; parametre duyarlılığı
 	$(PY) -m scripts.research_scan data/research/$(REC)/bars.jsonl
 
