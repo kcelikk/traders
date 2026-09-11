@@ -105,6 +105,9 @@ build-history-bars:      # → data/research/$(HIST)/bars.jsonl (çekirdek Symbo
 barrier-scan:            # hücre + SL/TP ızgarası: üçlü bariyer, keşif/doğrulama, maliyet dahil
 	$(PY) -m scripts.barrier_scan data/research/$(REC)/bars.jsonl --stride $(or $(STRIDE),3) --json-out data/research/$(REC)/barrier.json
 
+shuffle-control:         # permütasyon kontrolü: etiketler karışınca kaç birleşim "geçiyor"?
+	PYTHONPATH=. $(PY) -m scripts.shuffle_control data/research/$(REC)/bars.jsonl "$(or $(SCEN),maker/maker+bnb)" $(or $(TF),30) $(or $(STRIDE),5) $(or $(N),20)
+
 research-scan:           # yalnızca keşif bölümü; parametre duyarlılığı
 	$(PY) -m scripts.research_scan data/research/$(REC)/bars.jsonl
 

@@ -220,3 +220,89 @@ Bu, önceki iki turda görülen örüntünün aynısıdır.
 dolduramadığı için hiç ölçülemedi. Likidasyon verisi arşivde olmadığından tek yol kaydın
 birikmesini beklemek: **her gün +24 saat**. Bu hipotez, kayıt en az iki haftaya ulaştığında
 tekrar test edilmeye değer; o zaman keşif/doğrulama ayrımı farklı rejimler içerebilir.
+
+
+---
+
+## Dördüncü tur: maliyet senaryoları ve permütasyon kontrolü (2026-09-11)
+
+### Önce bir hata düzeltildi
+
+Eski maliyet modeli gidiş-dönüş işlemde **iki tam spread** yazıyordu
+(`scripts/barrier_scan.py`: `fee_in + fee_out + 2 * spread_cost`). Doğrusu **bir tam spread**tir:
+taker emir mid'e göre yarım spread öder, gidiş-dönüş iki geçiş = bir tam spread. Eski model
+sonuçları karamsar yönde yanlı yapıyordu; spread'i geniş sembollerde etki büyük (VTHO 3,39 bps'de
+0,068 puan fazla maliyet).
+
+Ayrıca çıkış türü maliyeti değiştirir: koruma emri (stop) ve süre dolumu piyasa emridir, senaryo
+maker dese bile taker öder. `fbot/research/costs.py` bunu modelliyor.
+
+### Senaryo maliyetleri (toplam %, sembolün ölçülmüş spread'i ile)
+
+| Senaryo | BTC | ETH | DOGE | VTHO |
+|---|---|---|---|---|
+| taker/taker | 0,1001 | 0,1004 | 0,1119 | 0,1338 |
+| taker/taker + BNB | 0,0901 | 0,0904 | 0,1019 | 0,1239 |
+| maker/taker | 0,0701 | 0,0702 | 0,0760 | 0,0869 |
+| maker/taker + BNB | 0,0631 | 0,0632 | 0,0690 | 0,0799 |
+| maker/maker | 0,0400 | 0,0400 | 0,0400 | 0,0400 |
+| maker/maker + BNB | 0,0360 | 0,0360 | 0,0360 | 0,0360 |
+
+### Sonuç: maliyet düştükçe geçen birleşim çıkıyor
+
+1200 birleşim (4 durum × 2 yön × 2 süre × 4 stop × 5 hedef × 4 zaman dilimi), her senaryoda ayrı:
+
+| Senaryo | Geçen | En iyi doğrulama net % |
+|---|---|---|
+| taker/taker | 0 | +0,478 |
+| maker/taker | **1** | +0,513 |
+| maker/taker + BNB | **1** | +0,520 |
+| maker/maker + BNB | **2** | +0,533 |
+
+Geçen birleşimler:
+
+| Senaryo | Hücre | n (doğrulama) | Keşif net % (CI alt) | Doğrulama net % (CI) |
+|---|---|---|---|---|
+| maker/taker | 30 dk · S3 long · stop 1,20 · hedef 1,00 · tut 60 | 130 | +0,095 (+0,0008) | +0,190 (+0,018 … +0,362) |
+| maker/taker + BNB | aynı hücre | 130 | +0,102 (+0,0078) | +0,197 (+0,025 … +0,369) |
+| maker/maker + BNB | aynı hücre | 130 | +0,119 (+0,0234) | +0,216 (+0,041 … +0,391) |
+| maker/maker + BNB | 5 dk · S4 long · stop 1,20 · hedef 1,60 · tut 60 | 623 | +0,075 (+0,0081) | +0,093 (+0,001 … +0,184) |
+
+### Permütasyon kontrolü
+
+Tek bir birleşimin 1200 denemede geçmesi çoklu test artefaktı olabilir. Kontrol: durum etiketleri
+sembol içinde rastgele karıştırılır. Sinyal yok olur, fiyat serisi ve sürüklenme aynı kalır.
+30 dakikalık dilim, maker/maker+BNB, 20 tekrar (`scripts/shuffle_control.py`):
+
+| | Geçen birleşim | En iyi doğrulama net % |
+|---|---|---|
+| Gerçek etiketler | **1 / 240** | **+0,533** |
+| Karışık etiketler (20 tekrar) | 0 (yirmisinde de) | min −0,023 · ort +0,082 · maks +0,269 |
+
+Yirmi karıştırmanın hiçbiri ne bir birleşim geçirdi ne de gerçeğin en iyi değerine yaklaştı.
+**p ≈ 0,048** (20 tekrarla ulaşılabilecek en küçük değer budur; daha küçüğü iddia edilemez).
+
+### Yorum: bu bir sinyal ipucu, strateji değil
+
+Lehte olanlar: karar kuralı ölçümden önce yazılmıştı ve gevşetilmedi; permütasyon kontrolü
+sonucu destekliyor; aynı hücre üç ayrı maliyet senaryosunda tutarlı biçimde çıkıyor.
+
+Aleyhte olanlar ve neden henüz `allowed_cells` doldurulmuyor:
+
+1. **Örneklem çok küçük.** 130 doğrulama işlemi, 32 günde, 10 sembolde. Günde 4 işlem.
+2. **Yalnızca long.** Önceki üç turun örüntüsü sürüyor. Aynı hücrenin short tarafı geçmiyor.
+   Dönem sürüklenmesinin katkısı ayrıştırılamadı.
+3. **Maker girişi iyimser.** Post-only emir hiç dolmayabilir; bariyer testi girişin her zaman
+   gerçekleştiğini varsayıyor. Kuyruk pozisyonu da modellenmiyor (ADR 0013). taker/taker'da
+   **hiçbir birleşim geçmiyor** — yani "geçti" sonucu tamamen maliyet varsayımına bağlı.
+4. **Komisyon kademesi doğrulanmadı.** VIP0 varsayımı; BNB indirimi de hesaba açık.
+5. **p = 0,048 sınırda.** Tek testte kabul edilebilir, ama bu dördüncü tur; kümülatif olarak
+   3960 birleşim denendi.
+
+**Karar: `allowed_cells` hâlâ doldurulmuyor.** Bu hücre, bir sonraki turda **önceden kayıtlı tek
+hipotez** olarak, görülmemiş veride test edilmeye değer. Yapılacaklar sırası:
+
+1. Daha uzun geçmiş (6–12 ay) indirip aynı hücreyi farklı rejimlerde test etmek.
+2. Maker dolum varsayımını gerçek veriyle sınamak: kullanıcı veri akışını bağlayıp testnette
+   post-only emirlerin dolum oranını ölçmek.
+3. Kesitsel (piyasa nötr) kurguyla sürüklenme katkısını ayrıştırmak.
