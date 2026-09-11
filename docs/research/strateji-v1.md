@@ -165,3 +165,58 @@ tablo çıkardı. Yani bu üç kaynak da, en azından bu kurgu ve bu dönemde, y
 - Defter dengesizliği dakikada bir örnekle ölçülüyor (arşiv çözünürlüğü), sürekli değil.
 - Konumlanma metrikleri 15 dakikada bir yayınlanıyor; 1 ve 5 dakikalık dilimlerde aynı değer
   tekrar ediliyor, bu da o dilimlerde sinyali zayıflatıyor.
+
+
+---
+
+## Üçüncü tur: likidasyon kaskadları (2026-09-11)
+
+### Veri
+
+Likidasyon verisi Binance arşivinde **yok**. S3 dizin listesiyle doğrulandı: `aggTrades`,
+`bookDepth`, `bookTicker`, `indexPriceKlines`, `klines`, `markPriceKlines`, `metrics`,
+`premiumIndexKlines`, `trades`. Likidasyon yalnızca canlı `forceOrder` akışında var, yani
+yalnızca kendi kaydımızda.
+
+`scripts/extract_liquidations.py` 234.937.455 satır tarayıp 13.222 likidasyon olayı çıkardı;
+4.721 dakikada en az bir olay var. Kapsam: 36 saat, 10 sembol.
+
+### Hipotezler (ölçümden önce yazıldı)
+
+- **H9 tükenme:** yoğun long likidasyonu (zorunlu satış) dip işaretidir → long.
+- **H10 devam:** kaskad fiyatı ittirir → likidasyon baskısının yönüne uyulur.
+
+İkisi kasten birbirinin zıddı. Sinyal yalnızca toplam likidasyon hacmi üst bantta olan barlarda
+üretilir; yön net baskının işaretinden gelir.
+
+### Ön bakış yanıltıcı çıktı
+
+Üç saatlik ham örnekte tablo umut vericiydi: long likidasyonu baskın dakikalardan sonra fiyat
+15 dakikada ortalama **+0,32 %**, short likidasyonu baskın dakikalardan sonra **−0,10 %**. Simetrik
+ve maliyet üstü görünüyordu. **Tam ölçüm bunu doğrulamadı.**
+
+### Sonuç: H9 ve H10 reddedildi
+
+| Hipotez | Birleşim | Geçen | En iyi long | En iyi short |
+|---|---|---|---|---|
+| H9 tükenme | 80 | **0** | +0,304 (keşif −0,250) | −0,175 |
+| H10 devam | 80 | **0** | +0,203 (keşif −0,148) | −0,130 |
+
+İki bağımsız gerekçeyle reddedildi:
+
+1. **Keşif ve doğrulama zıt işaretli.** En iyi satırda keşif −0,250 %, doğrulama +0,304 %. İki
+   yarının işareti değişiyorsa elde sinyal değil gürültü vardır. 36 saatlik veride keşif ilk
+   ~25 saat, doğrulama son ~11 saat; ikisinde piyasa yönü farklı.
+2. **Zıt iki hipotez aynı anda "kazanıyor".** H9 ve H10 tanım gereği birbirinin tersidir; biri
+   doğruysa diğeri kaybetmek zorundadır. İkisinin de doğrulamada pozitif long çıkması, kazandıran
+   şeyin kaskad yönü değil **dönemin yukarı gidişi** olduğunu gösterir. Nitekim her iki hipotezde
+   de short tarafı net zarar ediyor, ortalama doğrulama neti long +0,00/+0,04 %, short −0,27/−0,20 %.
+
+Bu, önceki iki turda görülen örüntünün aynısıdır.
+
+### Sınır: veri kısa
+
+36 saat bir hipotezi doğrulamak için yeterli değil. 5 ve 15 dakikalık dilimler ısınma penceresini
+dolduramadığı için hiç ölçülemedi. Likidasyon verisi arşivde olmadığından tek yol kaydın
+birikmesini beklemek: **her gün +24 saat**. Bu hipotez, kayıt en az iki haftaya ulaştığında
+tekrar test edilmeye değer; o zaman keşif/doğrulama ayrımı farklı rejimler içerebilir.
