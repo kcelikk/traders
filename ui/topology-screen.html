@@ -39,6 +39,92 @@
           </div>
         </div>
 
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:12px;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">KRİTİK EŞİKLER · bütçe ve ölçüm</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+              <thead><tr style="color:#6f849c; text-align:left;">
+                <th style="padding:4px 6px;">BÜYÜKLÜK</th><th style="padding:4px 6px;">BÜTÇE</th>
+                <th style="padding:4px 6px;">ÖLÇÜM</th><th style="padding:4px 6px;">DURUM</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ topoBudget }}" as="b" hint-placeholder-count="8">
+                  <tr style="border-top:1px solid #111a28;">
+                    <td style="padding:4px 6px; color:#dbe7f3;">{{ b.name }}<div style="font-size:9px; color:#6f849c;">{{ b.src }}</div></td>
+                    <td style="padding:4px 6px; color:#6f849c; font-variant-numeric:tabular-nums;">{{ b.budget }}</td>
+                    <td style="padding:4px 6px; font-variant-numeric:tabular-nums; color:{{ b.color }};">{{ b.value }}</td>
+                    <td style="padding:4px 6px;"><span style="{{ b.style }}">{{ b.state }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">HATA MODLARI · ne olur, nasıl görülür, ne yapılır</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+              <thead><tr style="color:#6f849c; text-align:left;">
+                <th style="padding:4px 6px;">SENARYO</th><th style="padding:4px 6px;">TESPİT</th><th style="padding:4px 6px;">TEPKİ</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ topoFailures }}" as="f" hint-placeholder-count="9">
+                  <tr style="border-top:1px solid #111a28;">
+                    <td style="padding:4px 6px; color:#dbe7f3;">{{ f.what }}</td>
+                    <td style="padding:4px 6px; color:#6f849c;">{{ f.detect }}</td>
+                    <td style="padding:4px 6px; color:{{ f.color }};">{{ f.act }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:12px;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">GARANTİLER VE BİLİNEN SINIRLAR</div>
+            <sc-for list="{{ topoGuarantees }}" as="g" hint-placeholder-count="8">
+              <div style="display:flex; gap:8px; font-size:11px; padding:4px 0; border-bottom:1px solid #111a28;">
+                <span style="{{ g.style }}">{{ g.tag }}</span>
+                <span style="color:#9fb0c3; line-height:1.5;">{{ g.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">YENİDEN BAŞLATMADA NE YAŞAR</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+              <thead><tr style="color:#6f849c; text-align:left;">
+                <th style="padding:4px 6px;">DURUM</th><th style="padding:4px 6px;">NEREDE</th><th style="padding:4px 6px;">YAŞAR MI</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ topoRestart }}" as="r" hint-placeholder-count="8">
+                  <tr style="border-top:1px solid #111a28;">
+                    <td style="padding:4px 6px; color:#dbe7f3;">{{ r.what }}</td>
+                    <td style="padding:4px 6px; color:#6f849c;">{{ r.where }}</td>
+                    <td style="padding:4px 6px;"><span style="{{ r.style }}">{{ r.survives }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">GÜVENLİK SINIRLARI · hangi süreç neyi görebilir</div>
+          <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:560px;">
+            <thead><tr style="color:#6f849c; text-align:left;">
+              <th style="padding:4px 6px;">SIR</th><th style="padding:4px 6px;">NEREDE</th>
+              <th style="padding:4px 6px;">GÖREBİLEN</th><th style="padding:4px 6px;">NOT</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ topoSecrets }}" as="s" hint-placeholder-count="4">
+                <tr style="border-top:1px solid #111a28;">
+                  <td style="padding:4px 6px; color:#dbe7f3;">{{ s.name }}</td>
+                  <td style="padding:4px 6px; color:#6f849c; font-family:inherit;">{{ s.where }}</td>
+                  <td style="padding:4px 6px;"><span style="{{ s.style }}">{{ s.who }}</span></td>
+                  <td style="padding:4px 6px; color:#6f849c;">{{ s.note }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+
         <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
           <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">İLİŞKİLER · kim neyi okur, kim neyi yazar</div>
           <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:640px;">

@@ -583,6 +583,92 @@
           </div>
         </div>
 
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:12px;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">KRİTİK EŞİKLER · bütçe ve ölçüm</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+              <thead><tr style="color:#6f849c; text-align:left;">
+                <th style="padding:4px 6px;">BÜYÜKLÜK</th><th style="padding:4px 6px;">BÜTÇE</th>
+                <th style="padding:4px 6px;">ÖLÇÜM</th><th style="padding:4px 6px;">DURUM</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ topoBudget }}" as="b" hint-placeholder-count="8">
+                  <tr style="border-top:1px solid #111a28;">
+                    <td style="padding:4px 6px; color:#dbe7f3;">{{ b.name }}<div style="font-size:9px; color:#6f849c;">{{ b.src }}</div></td>
+                    <td style="padding:4px 6px; color:#6f849c; font-variant-numeric:tabular-nums;">{{ b.budget }}</td>
+                    <td style="padding:4px 6px; font-variant-numeric:tabular-nums; color:{{ b.color }};">{{ b.value }}</td>
+                    <td style="padding:4px 6px;"><span style="{{ b.style }}">{{ b.state }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">HATA MODLARI · ne olur, nasıl görülür, ne yapılır</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+              <thead><tr style="color:#6f849c; text-align:left;">
+                <th style="padding:4px 6px;">SENARYO</th><th style="padding:4px 6px;">TESPİT</th><th style="padding:4px 6px;">TEPKİ</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ topoFailures }}" as="f" hint-placeholder-count="9">
+                  <tr style="border-top:1px solid #111a28;">
+                    <td style="padding:4px 6px; color:#dbe7f3;">{{ f.what }}</td>
+                    <td style="padding:4px 6px; color:#6f849c;">{{ f.detect }}</td>
+                    <td style="padding:4px 6px; color:{{ f.color }};">{{ f.act }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px,1fr)); gap:12px;">
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">GARANTİLER VE BİLİNEN SINIRLAR</div>
+            <sc-for list="{{ topoGuarantees }}" as="g" hint-placeholder-count="8">
+              <div style="display:flex; gap:8px; font-size:11px; padding:4px 0; border-bottom:1px solid #111a28;">
+                <span style="{{ g.style }}">{{ g.tag }}</span>
+                <span style="color:#9fb0c3; line-height:1.5;">{{ g.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">YENİDEN BAŞLATMADA NE YAŞAR</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+              <thead><tr style="color:#6f849c; text-align:left;">
+                <th style="padding:4px 6px;">DURUM</th><th style="padding:4px 6px;">NEREDE</th><th style="padding:4px 6px;">YAŞAR MI</th></tr></thead>
+              <tbody>
+                <sc-for list="{{ topoRestart }}" as="r" hint-placeholder-count="8">
+                  <tr style="border-top:1px solid #111a28;">
+                    <td style="padding:4px 6px; color:#dbe7f3;">{{ r.what }}</td>
+                    <td style="padding:4px 6px; color:#6f849c;">{{ r.where }}</td>
+                    <td style="padding:4px 6px;"><span style="{{ r.style }}">{{ r.survives }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">GÜVENLİK SINIRLARI · hangi süreç neyi görebilir</div>
+          <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:560px;">
+            <thead><tr style="color:#6f849c; text-align:left;">
+              <th style="padding:4px 6px;">SIR</th><th style="padding:4px 6px;">NEREDE</th>
+              <th style="padding:4px 6px;">GÖREBİLEN</th><th style="padding:4px 6px;">NOT</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ topoSecrets }}" as="s" hint-placeholder-count="4">
+                <tr style="border-top:1px solid #111a28;">
+                  <td style="padding:4px 6px; color:#dbe7f3;">{{ s.name }}</td>
+                  <td style="padding:4px 6px; color:#6f849c; font-family:inherit;">{{ s.where }}</td>
+                  <td style="padding:4px 6px;"><span style="{{ s.style }}">{{ s.who }}</span></td>
+                  <td style="padding:4px 6px; color:#6f849c;">{{ s.note }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+
         <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
           <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">İLİŞKİLER · kim neyi okur, kim neyi yazar</div>
           <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:640px;">
@@ -803,7 +889,7 @@ class Component extends DCLogic {
       h('text', { x: 4, y: 12, fontSize: 10, fill: col, fontFamily: 'JetBrains Mono' }, eq.length + ' işlem · kümülatif ' + this.sg(last, 2, '%')),
       h('text', { x: W - 4, y: HH - 4, fontSize: 10, textAnchor: 'end', fill: '#6f849c', fontFamily: 'JetBrains Mono' }, 'maliyet düşülmüş net'));
   }
-  topoDiagram(nodes) {
+  topoDiagram(nodes, edgeLabels) {
     const h = React.createElement, W = Math.max(860, this.state.tw || 860), H = 430;
     const box = (x, y, w, hh, n) => h('g', { key: n.id },
       h('rect', { x, y, width: w, height: hh, fill: 'rgba(12,19,32,.85)', stroke: n.color, strokeWidth: n.live ? 1.6 : 1,
@@ -835,22 +921,24 @@ class Component extends DCLogic {
     const rightOf = id => { const [x, y, w, hh] = at(id); return [x + w, y + hh / 2]; };
     const leftOf = id => { const [x, y, , hh] = at(id); return [x, y + hh / 2]; };
     const A = [];
+    const L = edgeLabels || {};
     ['recorder', 'paper', 'testnet'].forEach(id => {
       const [x1, y1] = rightOf('binance'), [x2, y2] = leftOf(id);
-      A.push(arrow(x1, y1, x2, y2, 'WS', '#35c8ff'));
+      A.push(arrow(x1, y1, x2, y2, L.ws || 'WS', '#35c8ff'));
     });
     A.push(arrow(...rightOf('arsiv'), ...leftOf('research'), 'zip', '#6f849c', '3 3'));
-    ['recorder', 'paper', 'testnet'].forEach(id => A.push(arrow(...rightOf(id), ...leftOf('disk'), 'yaz', '#ffb020')));
+    ['recorder', 'paper', 'testnet'].forEach(id => A.push(arrow(...rightOf(id), ...leftOf('disk'), L.write || 'yaz', '#ffb020')));
     A.push(arrow(...rightOf('research'), ...leftOf('disk'), 'rapor', '#6f849c', '3 3'));
     A.push(arrow(...leftOf('disk'), ...rightOf('research'), '', '#6f849c', '3 3'));
-    A.push(arrow(at('disk')[0] + at('disk')[2] / 2, at('disk')[1] + at('disk')[3], at('console')[0] + at('console')[2] / 2, at('console')[1], 'oku', '#00e5a0'));
+    A.push(arrow(at('disk')[0] + at('disk')[2] / 2, at('disk')[1] + at('disk')[3], at('console')[0] + at('console')[2] / 2, at('console')[1], L.read || 'oku', '#00e5a0'));
     A.push(arrow(at('console')[0] + at('console')[2] / 2, at('console')[1] + at('console')[3], at('browser')[0] + at('browser')[2] / 2, at('browser')[1], 'HTTPS', '#00e5a0'));
     const tn = at('testnet');
-    A.push(arrow(tn[0] + tn[2] / 2, tn[1] + tn[3], at('binance')[0] + at('binance')[2] / 2, at('binance')[1] + at('binance')[3], 'REST emir + mutabakat', '#ff5470'));
+    A.push(arrow(tn[0] + tn[2] / 2, tn[1] + tn[3], at('binance')[0] + at('binance')[2] / 2, at('binance')[1] + at('binance')[3], L.order || 'REST emir', '#ff5470'));
     return h('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%', style: { display: 'block', minWidth: 860 } },
       h('defs', null, h('marker', { id: 'tri', markerWidth: 8, markerHeight: 8, refX: 7, refY: 3, orient: 'auto' },
         h('path', { d: 'M0,0 L7,3 L0,6 Z', fill: '#6f849c' }))),
-      A, boxes.map(b => box(b[1], b[2], b[3], b[4], b[0])));
+      A, boxes.map(b => box(b[1], b[2], b[3], b[4], b[0])),
+      h('text', { x: 20, y: H - 6, fontSize: 9, fill: '#6f849c', fontFamily: 'JetBrains Mono' }, (edgeLabels || {}).footer || ''));
   }
   renderVals() {
     const S = this.state, A = S.api, go = s => () => this.setState({ screen: s }), chip = (c, bg) => `font-size:10px;letter-spacing:.06em;padding:2px 7px;border:1px solid ${c};color:${c};${bg ? 'background:' + bg + ';' : ''}white-space:nowrap;`;
@@ -1098,6 +1186,110 @@ class Component extends DCLogic {
       ['EXEC', 'Adapter', 'paper: simülatör · testnet: REST', '#00e5a0'],
       ['POS', 'Position Manager', 'SL+TP algo → R1–R5 → kapanış', '#00e5a0']
     ].map((p, i, arr) => ({ step: p[0], name: p[1], detail: p[2], color: p[3], arrow: i < arr.length - 1, style: pipeStyle }));
+    // ---- Kritik eşikler: bütçe config'den ya da kilitli karardan, ölçüm canlı veriden
+    const okChip = (bad, warn) => bad ? chip('#ff5470') : warn ? chip('#ffb020') : chip('#00e5a0');
+    const budget = (name, src, budgetTxt, value, bad, warn, txt) => ({
+      name, src, budget: budgetTxt, value: value == null ? '—' : value,
+      color: value == null ? '#6f849c' : bad ? '#ff5470' : warn ? '#ffb020' : '#00e5a0',
+      state: value == null ? 'ölçülmedi' : txt || (bad ? 'AŞILDI' : warn ? 'sınırda' : 'içinde'),
+      style: value == null ? chip('#6f849c') : okChip(bad, warn) });
+    const ll = rec.loop_lag_p99, llMax = rec.loop_lag_max, q = rec.queue, dr = rec.dropped;
+    const stThr = (A && A.staleness_s) || {};
+    const diskFree = A ? A.disk_free_gb : null, recGb = A ? A.recorder_bytes / 1e9 : null;
+    const topoBudget = [
+      budget('Sıcak yol döngü gecikmesi', 'ADR 0011 · p99 bütçesi 1 ms', '1 ms p99',
+             ll != null ? ll.toFixed(2) + ' ms' : null, ll != null && ll > 1, ll != null && ll > 0.6),
+      budget('Döngü gecikmesi tepe', '10 s pencere', 'bilgi',
+             llMax != null ? llMax.toFixed(1) + ' ms' : null, false, llMax != null && llMax > 50, llMax != null ? 'kayıt' : null),
+      budget('WS olay → alım', 'Faz 0 · 24 s ölçümü', 'bayatlık ' + (stThr.public || 30) + ' s',
+             lat.ws_public_lag ? Math.round(lat.ws_public_lag.p99) + ' ms p99' : null, false, false),
+      budget('Clock skew', 'Faz 0 · recvWindow 5000 ms', '< 1000 ms',
+             lat.skew ? lat.skew.p99 + ' ms p99' : null, lat.skew && lat.skew.p99 > 1000, lat.skew && lat.skew.p99 > 400),
+      budget('REST RTT (keep-alive)', 'Faz 0 ölçümü', 'bilgi',
+             lat.rest_rtt ? Math.round(lat.rest_rtt.p99) + ' ms p99' : null, false, false, 'kayıt'),
+      budget('Gateway kuyruğu', 'geri basınç göstergesi', 'düşme = 0',
+             q != null ? q + ' olay · düşen ' + (dr != null ? dr : '—') : null, !!dr, q != null && q > 500),
+      budget('Ayrıştırma hatası', 'kayıt bütünlüğü', '0',
+             rec.parse_errors != null ? String(rec.parse_errors) : null, !!rec.parse_errors, false),
+      budget('Bayatlık olayı', 'kategori başına eşik', 'bilgi',
+             rec.stale_events != null ? String(rec.stale_events) : null, false, (rec.stale_events || 0) > 20, 'kayıt'),
+      budget('Emir bütçesi rezervi', 'K17 · koruma emirleri için ayrılır', par('reserve_orders', RC.reserve_orders),
+             hasCfg ? 'config yüklü' : null, false, false, hasCfg ? 'tanımlı' : null),
+      budget('Disk', 'kayıt ' + (recGb != null ? this.fmt(recGb, 1) + ' GB' : '—'), 'boş > 5 GB',
+             diskFree != null ? this.fmt(diskFree, 1) + ' GB boş' : null, diskFree != null && diskFree < 5, diskFree != null && diskFree < 20)
+    ];
+
+    // ---- Hata modları: her satır kodda karşılığı olan bir yol
+    const fail = (what, detect, act, color) => ({ what, detect, act, color: color || '#9fb0c3' });
+    const topoFailures = [
+      fail('WS bağlantısı kopar', 'kategori bazlı bayatlık sayacı, eşik ' + (stThr.public || 30) + ' s',
+           'zorunlu yeniden bağlanma, üstel geri çekilme; eşik aşımında yeni pozisyon durur', '#ffb020'),
+      fail('Defter zinciri kırılır (pu ≠ önceki u)', 'yerel defter senkron kontrolü',
+           'snapshot hemen yeniden çekilir; senkron kurulana kadar defter kullanılmaz', '#ffb020'),
+      fail('Borsa 429 / 418 döner', 'rate limit başlıkları ve durum kodu',
+           'geri çekilme ' + par('backoff_ms', RC.backoff_ms) + '; 418 kalıcı ban → kill switch tetikleyicisi', '#ff5470'),
+      fail('Emir cevabı 503 "Unknown error"', 'adapter yürütme durumunu BİLİNMİYOR işaretler',
+           'başarısız sayılmaz; mutabakat gerekir, sonuç borsadan okunur', '#ff5470'),
+      fail('Borsa pozisyonu iç durumla uyuşmaz', 'mutabakat denetçisi, açılış + 10 s',
+           'K2 her girişi reddeder; çıkışlar serbest kalır', '#ff5470'),
+      fail('Koruma emri ACK gelmez', 'R1 · t_protect zaman aşımı',
+           'yedek stop gönderilir, gelmezse EMERGENCY ile reduceOnly kapanış', '#ff5470'),
+      fail('Kaçak emir üretimi', 'runaway dedektörü: pencerede emir ve ardışık ret sayısı',
+           'kill switch tetiklenir; dosyada kalıcı, elle sıfırlanır', '#ff5470'),
+      fail('Süreç çöker', 'canlılık damgası durur, konsolda "süreç sessiz"',
+           'container yeniden başlar; borsadaki SL/TP emirleri yerinde kalır', '#ffb020'),
+      fail('Anahtar geçersiz olur', 'silahlanma denetçisi bakiye sorgusuyla doğrular',
+           'silahsız kalır, emir göndermez; eski anahtara geri dönmez', '#ffb020'),
+      fail('Disk dolar', 'boş alan göstergesi', 'kayıt yazımı durur; izlenir, otomatik silme yok', '#ffb020')
+    ];
+
+    // ---- Garantiler ve bilinen sınırlar: ikisi de açıkça yazılır
+    const gTag = (ok, t) => ({ tag: t, style: chip(ok ? '#00e5a0' : '#ffb020'), ok });
+    const topoGuarantees = [
+      ['garanti', 'Tek sıralama noktası: tüm akışlar tek monoton diziye girer, replay bit-eşit sonuç verir.'],
+      ['garanti', 'Saf çekirdek: iş mantığı ağ, disk ve sistem saati okumaz; saat enjekte edilir.'],
+      ['garanti', 'Tek thread: deterministik çekirdek tek iş parçacığında koşar, eşzamanlılık yalnızca I/O kenarında.'],
+      ['garanti', 'Üç koruma katmanı bağımsız: borsa tarafı koşullu emir, uygulama tarafı akıllı çıkış, kalıcı kill switch.'],
+      ['garanti', 'Çıkış emirleri risk vetolarından muaf; yalnızca borsa filtreleri uygulanır.'],
+      ['garanti', 'Ortam izolasyonu: ayrı container, ayrı bağlantı, ayrı kayıt, ayrı veritabanı, ayrı kill switch.'],
+      ['sınır', 'Dolum simülasyonunda kuyruk pozisyonu modellenmez; maker dolum oranı iyimserdir (ADR 0013).'],
+      ['sınır', 'Kâr zarar rakamları iç hesaptır; Binance gelir kayıtlarıyla mutabakat henüz yazılmadı.'],
+      ['sınır', 'Komisyon kademesi doğrulanmadı; bütün maliyet hesapları VIP0 varsayımına dayanıyor.'],
+      ['sınır', 'Defter derinliği ve likidasyon akışı kaydediliyor ama canlı karar yolunda kullanılmıyor.'],
+      ['sınır', 'Kârlılık gösterilmedi: iki tur ölçümde maliyeti aşan hücre bulunamadı (ADR 0010).']
+    ].map(g => ({ tag: g[0], text: g[1], style: chip(g[0] === 'garanti' ? '#00e5a0' : '#ffb020') }));
+
+    // ---- Yeniden başlatmada ne yaşar
+    const surv = (yes) => ({ survives: yes ? 'yaşar' : 'kaybolur', style: chip(yes ? '#00e5a0' : '#ff5470') });
+    const topoRestart = [
+      ['Kill switch', 'data/state/<ortam>/kill_switch.json', true],
+      ['Borsadaki SL/TP emirleri', 'Binance · closePosition=true', true],
+      ['Ham kayıt ve manifest', 'data/recordings/<koşu>/', true],
+      ['Pozisyon ve karar geçmişi', 'paper.db (SQLite)', true],
+      ['Testnet anahtarı', 'data/state/testnet/credentials.env', true],
+      ['Konsol görünümü', 'data/state/console-cache/<koşu>/view.pkl', true],
+      ['Bellekteki pozisyon durumu', 'süreç belleği', false],
+      ['Isınma penceresi (2W bar)', 'süreç belleği', false],
+      ['Beta tahmini', 'süreç belleği', false]
+    ].map(r => ({ what: r[0], where: r[1], ...surv(r[2]) }));
+
+    // ---- Güvenlik sınırları
+    const topoSecrets = [
+      ['Testnet API anahtarı', 'data/state/testnet/credentials.env · 600, uid 10001', 'yalnızca testnet container', 'konsol yazar, geri okumaz; servis 10 s\'de bir okur'],
+      ['Mainnet API anahtarı', '.env · 600', 'hiçbir işlem container\'ı', 'hiçbir container\'a bağlanmaz; yazmak için sunucu kapısı gerekir'],
+      ['Konsol yazma token\'ı', '.env.ui · 600', 'yalnızca konsol servisi', 'kill switch ve anahtar yazma uçlarını korur'],
+      ['Temel kimlik doğrulama', 'nginx', 'dışarıdan gelen istek', 'token\'dan önceki ilk katman']
+    ].map(x => ({ name: x[0], where: x[1], who: x[2], note: x[3], style: chip(x[2].indexOf('hiçbir') === 0 ? '#00e5a0' : '#ffb020') }));
+
+    const topoEdgeLabels = {
+      ws: 'WS · olay→alım ' + (lat.ws_public_lag ? Math.round(lat.ws_public_lag.p50) + '/' + Math.round(lat.ws_public_lag.p99) + ' ms p50/p99' : 'ölçülmedi'),
+      write: 'gzip + SHA-256',
+      read: 'tail + önbellek',
+      order: 'REST · RTT ' + (lat.rest_rtt ? Math.round(lat.rest_rtt.p50) + ' ms p50' : '—') + ' · imzalı, her istek taze damga',
+      footer: 'ölçümler: Faz 0 · 24 saat (docs/latency-baseline.md) · döngü gecikmesi p99 '
+              + (ll != null ? ll.toFixed(2) + ' ms' : '—') + ' · kayıt ' + (rec.seq != null ? this.fmt(rec.seq / 1e6, 1) + ' M olay' : '—')
+              + ' · disk boş ' + (diskFree != null ? this.fmt(diskFree, 1) + ' GB' : '—')
+    };
     const ek = (k) => chip(k === 'yazar' ? '#ffb020' : k === 'okur' ? '#00e5a0' : k === 'emir' ? '#ff5470' : '#35c8ff');
     const topoEdges = [
       ['Binance WS', 'akış', 'recorder / paper / testnet', 'bookTicker, depth, aggTrade, markPrice, forceOrder — her süreç ayrı bağlanır'],
@@ -1152,7 +1344,8 @@ class Component extends DCLogic {
       recCards: [card('RUN', rec.run_id || '—', 'restart ' + (rec.restart_no ?? '—') + ' · git ' + (rec.git_sha || '—'), '#35c8ff'), card('OLAY', rec.seq != null ? this.fmt(rec.seq / 1e6, 2) + ' M' : '—', 'seq (tail) · parse hatası ' + (rec.parse_errors ?? '—'), '#dbe7f3'), card('LOOP LAG', rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) + ' ms p99' : '—', 'maks ' + (rec.loop_lag_max != null ? rec.loop_lag_max.toFixed(1) + ' ms' : '—') + ' (10 s pencere)', '#00e5a0'), card('KUYRUK', rec.queue != null ? String(rec.queue) : '—', 'dropped ' + (rec.dropped ?? '—')), card('BAĞLANTI', Object.entries(rec.connects || {}).map(e => e[0] + ' ' + e[1]).join(' · ') || '—', 'bayatlık olayı ' + (rec.stale_events ?? 0), '#00e5a0'), card('SNAPSHOT', String(rec.snapshots ?? '—'), 'depth 1000 · her 10 dk')],
       streams, files, diskUsed: A ? this.fmt(A.recorder_bytes / 1e9, 2) + ' GB · boş ' + A.disk_free_gb + ' GB' : '—',
       locked, posCfg, staleCfg,
-      topoNodes, topoPipe, topoEdges, topoRef: this.topoRef, topoDiagram: this.topoDiagram(topoNodes),
+      topoNodes, topoPipe, topoEdges, topoBudget, topoFailures, topoGuarantees, topoRestart, topoSecrets,
+      topoRef: this.topoRef, topoDiagram: this.topoDiagram(topoNodes, topoEdgeLabels),
       topoNote: 'kutu kenarı kesikse o bileşen şu an çalışmıyor · sağ üstteki nokta canlılık damgasından gelir',
       topoIsolation: 'İzolasyon: üç işlem süreci ayrı container, ayrı WS bağlantısı, ayrı kayıt dizini, ayrı SQLite. Paylaşılan tek şey kill switch dosyalarıdır ve onlar da ortam başına ayrıdır. Konsol hiçbir karar yoluna bağlı değildir; yalnızca okur ve token korumalı iki uçtan yazar.',
       // Sistemde var olup konsolda izlenmeyen parçalar: sessiz kalmak yerine durumunu yaz
