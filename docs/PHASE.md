@@ -269,3 +269,29 @@ Karar motoruna gözlemlenebilirlik eklenince (intent üretilmeme nedeni sayılı
 Düzeltme sonrası 3 saatlik gerçek kayıt üzerinde (demo config, strateji değil): **13 intent → 13 pozisyon → 22 dolum → 26 koruma emri**. Risk retleri artık anlamlı (`K6_max_positions`, `K8_gross_cap`, `K12_filters`), fail-closed bilinmezlik değil.
 
 **Kârlılık gösterilmedi (ADR 0010):** hücreler ve SL/TP değerleri ölçülmemiş demo değerleridir.
+
+
+## Kapanmış fazlarda açık kalan kalemler (denetim 2026-09-11)
+
+Fazlar kapatılırken atlanan ya da sonraki faza bırakılıp orada da yapılmayan kalemler. Kapatma
+kararlarını geri almıyor; ne olmadığını kayda geçiriyor.
+
+| Faz | Açık kalem | Neden açık | Engellediği |
+|---|---|---|---|
+| 0 | Unit economics üç girdi (tutma süresi, işlem sayısı, hedef hareket) | Proje sahibinden gelmedi; tablo tek satıra indirgenemedi | Başabaş kazanma oranı hedefi yok |
+| 0 | Komisyon kademesi doğrulanmadı | VIP0 üçüncü taraf kaynak; hesaptan teyit edilmedi | Tüm maliyet hesapları bu varsayıma dayanıyor |
+| 0 | Slippage dağılımı ölçülmedi | Üç sakin anlık görüntü volatil anı temsil etmiyor; kayıt depth akışı henüz bu amaçla işlenmedi | `slippage_max_bps` config'de kapalı (K15 "ölçülmedi") |
+| 3 | Canlı kayıt üzerinde ≥3 günlük nihai rapor | Karar 32 günlük arşiv verisiyle verildi (ADR 0009); kayıt henüz 27 saat | Kendi verimizle doğrulama yok |
+| 4 | `clientAlgoId`/`clientOrderId` uzunluğunun borsada doğrulanması | Kriter Faz 9'a bırakılmıştı; hiç emir gönderilmedi | Gerçek emirde reddedilme riski ölçülmedi |
+| 5 | Mutabakat süreçte çağrılmıyor | `fbot/core/reconcile.py` yazıldı ve test edildi, hiçbir süreç kullanmıyor; `state.reconciled` hep True | **CLAUDE.md mutlak kuralı:** açılışta mutabakat, uyuşmazlıkta trading kilitlenir |
+| — | Binance income kayıtlarıyla PnL mutabakatı | `TestnetClient.income()` yazıldı, hiç çağrılmıyor | **CLAUDE.md maliyet kuralı:** PnL gerçeği iç hesap değil income kayıtlarıdır |
+| 2 | README güncel değildi | Komut listesi ve test sayısı eskimişti | 2026-09-11'de düzeltildi |
+
+Açık fazlar ve bekledikleri:
+
+| Faz | Durum | Bekleyen |
+|---|---|---|
+| 7 | Kâğıt işlem servisi ayakta, karar üretmiyor | Ölçülmüş giriş kuralı (`allowed_cells` boş) |
+| 8 | Konsol var; metrik toplayıcı ve alarm kanalı yok | Prometheus/Grafana veya eşdeğeri; stratejiden bağımsız ilerleyebilir |
+| 9 | Testnet silahlı, borsa erişimi doğrulandı, emir göndermedi | Giriş kuralı; "2 hafta hatasız" saati başlamadı |
+| 10 | Bekliyor | Faz 9 sonucu ve proje sahibi onayı; `LiveExecutionAdapter` korumalı stub |

@@ -1,12 +1,13 @@
 # fbot
 
-Binance USDⓈ-M Futures üzerinde deterministik, event-driven işlem sistemi. Durum: **Faz 1** (ham veri kaydı). Ayrıntı: `CLAUDE.md`, `docs/PHASE.md`, `docs/decisions/`.
+Binance USDⓈ-M Futures üzerinde deterministik, event-driven işlem sistemi. Durum: **Faz 7/8/9 açık** (kâğıt işlem, gözlemlenebilirlik, testnet). Faz 0–6 kapandı. Ayrıntı: `CLAUDE.md`, `docs/PHASE.md`, `docs/decisions/`.
 
 ## Kurulum
 
 ```bash
 make setup          # venv + websockets + pytest
-make test           # 87 test
+make test           # 408 test
+make ui-build       # ui/index.html'i tasarım şablonundan üretir
 make test-determinism   # Rule Zero: iki process, aynı hash
 ```
 
@@ -30,7 +31,7 @@ make down
 Kayıt: `data/recordings/<run_id>/events-<UTC saat>-<ilk seq>.jsonl.gz`, `manifest.jsonl`, `runs.jsonl`.
 Satır formatı: `{"q":seq,"r":recv_ns,"m":mono_ns,"c":cat,"s":stream,"d":<ham çerçeve>}` (ADR 0005).
 
-Config: `config/recorder.toml`. Bayatlık eşikleri başlangıç değeridir; 72 saatlik kayıttan sonra ölçümle güncellenir.
+Config: `config/recorder.toml`. Bayatlık eşikleri 24 saatlik ölçümle sabitlendi (`docs/latency-baseline.md`).
 
 ## Faz 2 — deterministik çekirdek ve replay
 
@@ -38,6 +39,7 @@ Config: `config/recorder.toml`. Bayatlık eşikleri başlangıç değeridir; 72 
 
 ```bash
 make replay REC=rec-72h MAXF=1      # gerçek kayıt; hash, komut sayısı, olay/s
+make determinism-report REC=rec-72h   # gerçek kayıt, iki process, hash karşılaştırması
 ```
 
 Maliyet modeli `fbot/costs.py` (komisyon, funding, slippage; oranlar `CostConfig`). Execution: `fbot/execution/adapter.py`, Live adapter korumalı stub.
@@ -73,3 +75,30 @@ make unit-economics
 ## Güvenlik
 
 API anahtarı yok (Faz 1'de gerekmiyor). `.env` gitignore'da; yalnızca `.env.example` repoda.
+
+
+## Araştırma araçları (Faz 3 sonrası)
+
+Strateji arayışı için ölçüm araçları. Hiçbiri kârlılık iddiası taşımaz; sonuçlar
+`docs/research/strateji-v1.md` içinde.
+
+```bash
+make export-bars REC=rec-72h                  # kayıt → 1 dk barlar (artımlı, önbellekli)
+python -m scripts.enrich_bars <bars> <out>    # defter dengesizliği + konumlanma metrikleri ekler
+make barrier-scan REC=hist-30d                # hücre × stop × hedef × zaman dilimi taraması
+python -m scripts.barrier_scan <bars> --signal book_imb --tf 1,5,15,30
+```
+
+Zaman dilimleri 1 dk barlardan türetilir (`fbot/research/timeframe.py`): epoch'a hizalı,
+tamamlanmamış kova düşürülür. Bariyer değerlendirmesi funding dahil maliyet düşer
+(`fbot/research/barrier.py`).
+
+## Konsol
+
+```bash
+make ui REC=rec-72h        # 127.0.0.1:8787
+make ui-stop
+```
+
+Görünüm önbelleği `data/state/console-cache/<run_id>/view.pkl`: yeniden başlatmada geçmişi
+baştan oynatmaz (soğuk 38 dk → önbellekle 4 dk, ölçüldü).
