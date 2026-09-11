@@ -8,7 +8,9 @@ Bir girişin sonucu, ileri barların yüksek/düşük değerleriyle belirlenir:
 **Bilinen sınır:** 1 dk barı içinde iki bariyere de dokunulmuşsa sıra bilinemez. Stop önce varsayılır.
 Bu varsayım sonucu karamsar yönde yanlı yapar; kâr lehine yanlılık üretmez (ADR 0008 ruhu).
 
-Maliyet her sonuçtan düşülür; maliyetsiz sonuç raporlanmaz. Uzun tutmalarda **funding** ihmal
+Maliyet her sonuçtan düşülür; maliyetsiz sonuç raporlanmaz. Çıkış türü maliyeti değiştirir:
+koruma emri (stop) ve süre dolumu piyasa emridir, senaryo maker dese bile taker öder
+(`cost_by_reason`). Uzun tutmalarda **funding** ihmal
 edilemez: 8 saatte bir ödenir, 30 saatlik bir pozisyon üç ödeme görür. Funding, `next_funding_ms`
 alanının değiştiği barlarda o barın `funding_rate` değeriyle işlenir; long pozitif oranda öder,
 short alır.
@@ -25,6 +27,7 @@ class BarrierConfig:
     max_hold: int          # bar
     cost_pct: float        # gidiş-dönüş işlem maliyeti (komisyon + spread), yüzde
     funding: bool = False  # tutma süresi boyunca geçilen funding ödemeleri ayrıca hesaplanır
+    cost_by_reason: dict | None = None   # çıkış türüne göre maliyet; stop ve süre dolumu taker
 
 
 def evaluate(entry: float, side: str, future: list[dict], cfg: BarrierConfig) -> dict | None:
@@ -53,5 +56,6 @@ def evaluate(entry: float, side: str, future: list[dict], cfg: BarrierConfig) ->
 
 def _out(reason: str, entry: float, exit_px: float, long: bool, bars: int, cfg: BarrierConfig, fund: float = 0.0) -> dict:
     gross = (exit_px / entry - 1) * 100 * (1 if long else -1)
-    return {"reason": reason, "bars": bars, "exit": exit_px, "funding_pct": fund,
-            "gross_pct": gross, "net_pct": gross - cfg.cost_pct - fund}
+    cost = (cfg.cost_by_reason or {}).get(reason, cfg.cost_pct)
+    return {"reason": reason, "bars": bars, "exit": exit_px, "funding_pct": fund, "cost_pct": cost,
+            "gross_pct": gross, "net_pct": gross - cost - fund}

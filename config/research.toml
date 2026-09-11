@@ -17,9 +17,19 @@ p_hi = 0.8
 minutes = [1, 5, 15, 60]
 
 [costs]                       # % notional; VIP0 üçüncü taraf, doğrulanmadı (docs/unit-economics.md)
+# spread_crossings: kaç kez YARIM spread ödenir. Taker emir karşı tarafa geçer (1 geçiş = yarım
+# spread); gidiş-dönüş taker = 2 geçiş = bir tam spread. Maker emir geçmez.
+# taker_fee_pct: koruma emri (stop) ve süre dolumu her zaman piyasa emridir; senaryo maker dese
+# bile o çıkışlar bu ücreti öder.
+# UYARI: maker giriş post-only emirle yapılır ve hiç dolmayabilir; maker senaryoları dolum
+# olasılığı bakımından İYİMSERDİR, üst sınır olarak okunmalıdır.
 scenarios = [
-  { name = "taker/taker", fee_in_pct = 0.05, fee_out_pct = 0.05 },
-  { name = "maker/taker", fee_in_pct = 0.02, fee_out_pct = 0.05 },
+  { name = "taker/taker",         fee_in_pct = 0.05, fee_out_pct = 0.05, spread_crossings = 2.0 },
+  { name = "taker/taker+bnb",     fee_in_pct = 0.05, fee_out_pct = 0.05, spread_crossings = 2.0, bnb_discount = true },
+  { name = "maker/taker",         fee_in_pct = 0.02, fee_out_pct = 0.05, spread_crossings = 1.0 },
+  { name = "maker/taker+bnb",     fee_in_pct = 0.02, fee_out_pct = 0.05, spread_crossings = 1.0, bnb_discount = true },
+  { name = "maker/maker",         fee_in_pct = 0.02, fee_out_pct = 0.02, spread_crossings = 0.0, taker_fee_pct = 0.05 },
+  { name = "maker/maker+bnb",     fee_in_pct = 0.02, fee_out_pct = 0.02, spread_crossings = 0.0, taker_fee_pct = 0.05, bnb_discount = true },
 ]
 
 [sampling]

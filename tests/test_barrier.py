@@ -57,12 +57,13 @@ def test_cost_is_always_subtracted():
 
 def test_scan_reports_a_pass_only_when_both_halves_clear_zero(monkeypatch):
     """Keşif geçip doğrulama geçmezse "geçti" yazılmaz: eşiği gevşetmek sonuç aramaktır."""
+    from fbot.research.costs import CostScenario
     from scripts.barrier_scan import scan
     # hiçbir bariyere dokunmayan düz fiyat: her giriş süre dolunca kapanışta çıkar, net sıfır
     rows = [{"symbol": "X", "start_ms": i * 60000, "open": 100, "high": 100.1, "low": 99.9,
              "close": 100.0, "spread_bps": 0.0} for i in range(400)]
     labels = {"X": ["S1"] * 400}
-    out = scan({"X": rows}, labels, fee_in=0.0, fee_out=0.0, disc_frac=0.7,
+    out = scan({"X": rows}, labels, CostScenario("ücretsiz", 0.0, 0.0, 2.0), disc_frac=0.7,
                n_boot=50, seed=1, alpha=0.05, min_n=10)
     assert out, "birleşim üretilmedi"
     assert all(r["gecti"] is False for r in out)          # net sıfır: CI'nin alt sınırı sıfırın üstünde değil
@@ -71,18 +72,21 @@ def test_scan_reports_a_pass_only_when_both_halves_clear_zero(monkeypatch):
 
 
 def test_stride_reduces_sample_without_changing_the_shape():
+    from fbot.research.costs import CostScenario
     from scripts.barrier_scan import scan
     rows = [{"symbol": "X", "start_ms": i * 60000, "open": 100, "high": 101, "low": 99,
              "close": 100.0, "spread_bps": 0.0} for i in range(600)]
     labels = {"X": ["S2"] * 600}
-    a = scan({"X": rows}, labels, 0.0, 0.0, 0.7, 20, 1, 0.05, 10, stride=1)[0]
-    b = scan({"X": rows}, labels, 0.0, 0.0, 0.7, 20, 1, 0.05, 10, stride=3)[0]
+    free = CostScenario("ücretsiz", 0.0, 0.0, 2.0)
+    a = scan({"X": rows}, labels, free, 0.7, 20, 1, 0.05, 10, stride=1)[0]
+    b = scan({"X": rows}, labels, free, 0.7, 20, 1, 0.05, 10, stride=3)[0]
     assert b["n_val"] < a["n_val"] and b["state"] == a["state"]
 
 
 def test_finalists_are_remeasured_with_the_full_bootstrap():
     """Eleme ucuz bootstrap'la yapılır; kararı veren ölçüm tam sayıyla tekrarlanır."""
     import random
+    from fbot.research.costs import CostScenario
     from scripts.barrier_scan import scan
     rng = random.Random(5)
     rows, px = [], 100.0
@@ -90,7 +94,7 @@ def test_finalists_are_remeasured_with_the_full_bootstrap():
         px *= 1 + rng.gauss(0, 0.001)
         rows.append({"symbol": "X", "start_ms": i * 60000, "open": px, "high": px * 1.002,
                      "low": px * 0.998, "close": px, "spread_bps": 0.0})
-    out = scan({"X": rows}, {"X": ["S1"] * 900}, 0.0, 0.0, 0.7, n_boot=400, seed=1,
+    out = scan({"X": rows}, {"X": ["S1"] * 900}, CostScenario('ücretsiz', 0.0, 0.0, 2.0), 0.7, n_boot=400, seed=1,
                alpha=0.05, min_n=10, screen_boot=50)
     assert out[0]["boot"] == 400                      # en iyi birleşim tam ölçüldü
     assert all("_val" not in r for r in out)          # ham örnekler raporda taşınmaz
@@ -144,11 +148,12 @@ def test_funding_only_counts_bars_actually_held():
 
 def test_neutral_state_is_never_traded():
     """S0 "durum yok" demektir; giriş üretilmemeli. Etiket listesine sızarsa yön olarak yorumlanıyordu."""
+    from fbot.research.costs import CostScenario
     from scripts.barrier_scan import scan
     rows = [{"symbol": "X", "start_ms": i * 60000, "open": 100, "high": 100.6, "low": 99.4,
              "close": 100.0, "spread_bps": 0.0} for i in range(600)]
     labels = {"X": ["S0" if i % 2 else "S1" for i in range(600)]}
-    out = scan({"X": rows}, labels, 0.0, 0.0, 0.7, 30, 1, 0.05, 10)
+    out = scan({"X": rows}, labels, CostScenario("ücretsiz", 0.0, 0.0, 2.0), 0.7, 30, 1, 0.05, 10)
     assert out, "hiç birleşim üretilmedi"
     assert all(r["state"] != "S0" for r in out)
     assert all(r["dir"] in ("long", "short") for r in out)

@@ -21,6 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from fbot.research.barrier import BarrierConfig, evaluate
+from fbot.research.costs import CostScenario, pick, scenarios_from_config
 from fbot.research.features import FeatureConfig, compute_features
 from fbot.research.states import StateConfig, label_state
 from fbot.research.stats import bootstrap_ci_fast as bootstrap_ci
@@ -59,25 +60,26 @@ def signal_all(by_symbol: dict, name: str, fcfg: FeatureConfig, scfg: StateConfi
     return {sym: signal_series(name, rows, fcfg.W, scfg.p_lo, scfg.p_hi) for sym, rows in by_symbol.items()}
 
 
-def spread_cost(rows: list, default_bps: float = 1.0) -> float:
-    """Gidiş-dönüş spread maliyeti (%): barlardaki ölçülmüş spread medyanı; yoksa varsayılan."""
+def median_spread_bps(rows: list, default_bps: float = 1.0) -> float:
+    """Sembolün ölçülmüş spread medyanı (bps). Ölçüm yoksa varsayılan."""
     vals = sorted(r["spread_bps"] for r in rows if r.get("spread_bps") is not None)
-    bps = vals[len(vals) // 2] if vals else default_bps
-    return bps / 100.0          # tek yön; giriş taker, çıkış taker → iki kez sayılır aşağıda
+    return vals[len(vals) // 2] if vals else default_bps
 
 
-def scan(by_symbol: dict, labels: dict, fee_in: float, fee_out: float, disc_frac: float,
+def scan(by_symbol: dict, labels: dict, cost: CostScenario, disc_frac: float,
          n_boot: int, seed: int, alpha: float, min_n: int, stride: int = 1, screen_boot: int = 300) -> list[dict]:
     """İki aşamalı: tüm birleşimler ucuz bootstrap ile elenir (`screen_boot`), ayakta kalanlar ve
     en iyi 10 birleşim config'deki tam `n_boot` ile yeniden ölçülür. Eşik gevşetilmez; kararı
     her zaman tam ölçüm verir, ucuz aşama yalnızca hangi birleşimlere bakılacağını seçer."""
     # Sembol başına sabitler bir kez hesaplanır (maliyet, kesim noktası, giriş indeksleri)
-    costs, cuts, entries = {}, {}, {}
+    costs, reason_costs, cuts, entries = {}, {}, {}, {}
     # `labels` ya durum etiketi (S1…S4) ya da doğrudan yön (long/short) taşır; ikisi de aynı boru hattı
     # Yalnızca işlem üreten etiketler: S0 "durum yok" demektir, giriş üretmez
     tags = sorted({t for lab in labels.values() for t in lab if t in STATES or t in DIRS})
     for sym, rows in by_symbol.items():
-        costs[sym] = fee_in + fee_out + 2 * spread_cost(rows)
+        sp = median_spread_bps(rows)
+        costs[sym] = cost.entry_exit_pct(sp)
+        reason_costs[sym] = {r: cost.cost_for(r, sp) for r in ("tp", "sl", "timeout")}
         cuts[sym] = int(len(rows) * disc_frac)
         for state in tags:
             idx = [i for i, st in enumerate(labels[sym]) if st == state and i + 1 < len(rows)]
@@ -91,7 +93,8 @@ def scan(by_symbol: dict, labels: dict, fee_in: float, fee_out: float, disc_frac
                         disc, val = [], []
                         for sym, rows in by_symbol.items():
                             cut = cuts[sym]
-                            cfg = BarrierConfig(sl_pct=sl, tp_pct=tp, max_hold=hold, cost_pct=costs[sym], funding=True)
+                            cfg = BarrierConfig(sl_pct=sl, tp_pct=tp, max_hold=hold, cost_pct=costs[sym],
+                                                funding=True, cost_by_reason=reason_costs[sym])
                             for i in entries.get((sym, state), ()):
                                 r = evaluate(rows[i]["close"], direction, rows[i + 1: i + 1 + hold], cfg)
                                 if r is None:
@@ -136,7 +139,7 @@ def main(argv):
     a = ap.parse_args(argv)
     cfg = tomllib.loads(Path(a.config).read_text())
     f, st, bs, sm = cfg["features"], cfg["states"], cfg["bootstrap"], cfg["sampling"]
-    sc = next(x for x in cfg["costs"]["scenarios"] if x["name"] == a.scenario)
+    sc = pick(scenarios_from_config(cfg), a.scenario)
 
     base = load_bars(Path(a.bars))
     fcfg = FeatureConfig(W=f["W"], N_short=f["N_short"], N_long=f["N_long"])
@@ -150,7 +153,7 @@ def main(argv):
             per_tf[tf] = {"bars": 0, "combinations": 0, "passed": 0, "note": "yetersiz bar"}
             continue
         labels = label_all(by, fcfg, scfg) if a.signal == "states" else signal_all(by, a.signal, fcfg, scfg)
-        rs = scan(by, labels, sc["fee_in_pct"], sc["fee_out_pct"], sm["discovery_frac"],
+        rs = scan(by, labels, sc, sm["discovery_frac"],
                   bs["n_boot"], bs["seed"], bs["alpha"], sm["min_n"], stride=a.stride, screen_boot=a.screen_boot)
         for r in rs:
             r["tf"] = tf
