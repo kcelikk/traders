@@ -2,7 +2,7 @@
 
 | Faz | Konu | Durum | Kapı |
 |---|---|---|---|
-| 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **KAPANDI** 2026-09-10 (ölçüm ≥1 saat, ADR 0001/0003/0004 onaylı; 24 s ölçüm arka planda sürüyor) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
+| 0 | Ölçüm, build-vs-buy, unit economics, API doğrulama | **KAPANDI** 2026-09-10; **24 saatlik ölçüm tamamlandı 2026-09-11** (`docs/latency-baseline.md`: bayatlık 30 s, recvWindow 5000, ufuk ≥10 s) | Ölçüm raporu + ADR'ler onaylı, unit economics tutuyor |
 | 1 | Temel + ham veri kaydı | **KAPANDI** 2026-09-10 (kapı raporu `docs/recording-gate-report.md`; kayıt sürüyor) | ≥1 saat kesintisiz kayıt (ADR 0006) |
 | 2 | Deterministik çekirdek + replay | **KAPANDI** 2026-09-10 (proje sahibi onayı) | bit-eşit replay testi (`make test-determinism`) |
 | 3 | Offline araştırma (bilgilendirici) | **KAPANDI** 2026-09-10: 0/48 hücrede maliyet üstü beklenti; kapı kaldırıldı (ADR 0010); araştırma paralelde sürer | — |

@@ -1,58 +1,41 @@
-# Gecikme temel ölçümü — ARA RAPOR (ilk 1 saat)
+# Gecikme temel ölçümü — NİHAİ (24 saat)
 
-Run: `baseline-24h-20260910`, başlangıç 2026-09-10 07:39 UTC, süre 24 saat (sürüyor). Bu rapor ilk ~1 saati kapsar; **nihai rapor 24 saat sonunda bu dosyanın üzerine yazılır.** Tam tablolar: `docs/latency-baseline.generated.md` (`make summarize-latency`).
+Run `baseline-24h-20260910`, 2026-09-10 07:39 → 2026-09-11 07:45 UTC, **24.11 saat**. Ham veri `data/latency/`, tam tablolar `docs/latency-baseline.generated.md` (`make summarize-latency`).
 
-Yöntem: kategori başına ayrı process (yerel kuyruklanma ölçüme karışmasın diye; tek process'te p95 943 ms görülmüştü, ayrı process'te 163 ms). Sunucu: `srv`, Ubuntu 24.04, NTP senkron. Semboller BTCUSDT, ETHUSDT. WS örnekleme 1/10, hız sayaçları tam.
+Yöntem: kategori başına ayrı process (tek process'te yerel kuyruklanma ölçüme karışıyordu). Semboller BTCUSDT, ETHUSDT. WS örnekleme 1/10, hız sayaçları tam. Kopma: 1 public disconnect, 1 REST bağlantı hatası; 24 saatte toplam 2 yeniden bağlanma.
 
 ## Sonuçlar (ms)
 
 | Ölçüm | n | p50 | p95 | p99 | maks |
 |---|---|---|---|---|---|
-| REST `GET /fapi/v1/time`, keep-alive RTT | 1816 | 263 | 447 | 718 | 1526 |
-| TCP+TLS bağlantı kurma | 138 | 157 | 216 | 684 | 892 |
-| Yeni bağlantı toplam (connect + istek) | 138 | 417 | 498 | 963 | 1233 |
-| Clock skew (server − yerel orta nokta) | 1816 | 0.5 | 63.5 | 191 | 486 |
-| `/public` bookTicker BTC, recv − E | 120761 | 142 | 325 | 431 | 7142 |
-| `/public` bookTicker ETH, recv − E | 88344 | 143 | 327 | 436 | 7151 |
-| `/market` aggTrade BTC, recv − E | 3866 | 140 | 265 | 427 | 468 |
-| `/market` aggTrade BTC, recv − T (işlem zamanı) | 3866 | 211 | 432 | 566 | 917 |
-| `/market` markPrice@1s, recv − E | 414 | 181 | 199 | 212 | 2751 |
-| WS API `depth` limit=5, istek → cevap | 790 | 277 | 283 | 286 | 767 |
-| WS API cevap alımı − E | 790 | 150 | 160 | 163 | 634 |
+| REST `GET /fapi/v1/time`, keep-alive RTT | 38.028 | 264 | 355 | 680 | 7.930 |
+| TCP+TLS bağlantı kurma | 2.850 | 151 | 216 | 701 | 10.125 |
+| Yeni bağlantı toplam | 2.850 | 414 | 523 | 1.010 | 10.383 |
+| Clock skew (server − yerel) | 38.028 | 2.0 | 27.5 | 164.5 | 793 |
+| `/public` bookTicker, recv − E | 3.149.529 | 150 | 324 | 606 | 22.376 |
+| WS API `depth`, istek → cevap | 16.430 | 276 | 287 | 298 | 797 |
+| WS API cevap alımı − E | 16.430 | 151 | 163 | 170 | 660 |
+| `json.loads` (µs) | 5.975.237 | 4.9 | 15.3 | 26.9 | 17.646 |
 
-Mesaj hızı (2 sembol): bookTicker ort. 290 + 212 msg/s, **tepe 6615 msg/s**; aggTrade 9.4 + 7.8 msg/s, tepe 809. `json.loads` p99 29 µs (bookTicker), 43 µs (aggTrade). Yeniden bağlanma: 0. Hata: 0.
+## 1 saatlik ara raporla fark
 
-Saat bazında `/public` recv − E: 07:xx p95 195 / p99 403; 08:xx p95 380 / p99 445, maks 7.1 s. 08:00'de aynı makinede recorder container'ı başladı; kuyruk tepesinin makine yükünden mi ağdan mı geldiği 24 saatlik seriden ayrıştırılacak.
+p50'ler değişmedi (142 → 150 ms). Kuyruk uçları kötüleşti: public p99 431 → 606 ms, maksimum 7.1 s → 22.4 s. Yani **gün içinde nadir ama çok uzun duraklamalar var** ve bir saatlik ölçüm bunları göremiyor.
 
-## Yorum
+En kötü saatler (public recv − E): 12:00 UTC p99 4.091 ms, 16:00 UTC p99 3.426 ms. İkisi de ABD/Avrupa yoğun saatleri. Sakin saatlerde p99 550 ms civarı.
 
-1. **Tek yön ağ gecikmesi ≈ 75–80 ms.** TCP bağlantı kurma (1 RTT) p50 157 ms. bookTicker recv − E p50 142 ms = tek yön + Binance yayın gecikmesi (+ skew ≈ 0).
-2. **aggTrade'de E − T ≈ 70 ms.** Eşleşme anından yayına Binance içi gecikme. Fiyat tetikleyicileri için `T` değil `E` ve alım zamanı esas alınmalı; feature hesaplarında hangi zaman damgasının kullanıldığı açıkça yazılır.
-3. **Tepki döngüsü (veri alımı → karar → emir ACK):** p50 ≈ 142 + 277 ≈ **420 ms**, p99 ≈ 431 + 286 + kuyruk ≈ **0.9–1 s**; tek kötü saniyede 7 s.
-4. **Clock skew** p99 191 ms, maks 486 ms. `recvWindow` varsayılanı 5000 ms bu ölçümde yeterli; ölçüm bitmeden config'e yazılmaz.
-5. **Mesaj yükü:** 2 sembolde 6.6k msg/s tepe. 10 sembolde tepeler 10k+ olabilir; recorder'ın loop lag'i 72 saatlik kayıttan okunacak. Hot path'te bookTicker'ı her mesajda işlemek yerine "son değer" semantiğiyle çökertme (conflation) Faz 2 tasarım konusu.
+## Sabitlenen parametreler
 
-## Faz 0 çıktıları için ön değerler (24 saat sonunda kesinleşir)
-
-| Parametre | Ön değer | Gerekçe |
+| Parametre | Değer | Gerekçe |
 |---|---|---|
-| Uçtan uca gecikme (planlama) | p50 0.42 s, p99 ~1 s | tepki döngüsü |
-| Minimum sinyal ufku (≥ 10 × gecikme) | **≥ 10 s** (p99 esas) | saniye altı sinyaller elenir |
-| Minimum anlamlı feature penceresi | ≥ 10 s; bar bazlı feature'lar için ≥ 1 dk | ufuk kuralı |
-| Uygulama tarafı çıkış vs borsa tarafı | 1 s içinde %0.1'den hızlı hareketlerde borsa tarafı stop tek güvenilir koruma; uygulama çıkışı yalnızca yavaş bozulma için | tepki döngüsü p99 |
-| `recvWindow` | 5000 (varsayılan) | skew maks 486 ms |
-| Bayatlık eşiği (public/market) | henüz sabitlenmedi | 24 saatlik en uzun sessizlik ölçülecek |
+| Tek yön ağ gecikmesi | ≈ 75 ms | TCP kurulum p50 151 ms |
+| Tepki döngüsü (veri → karar → ACK) | p50 ≈ 0.43 s · p99 ≈ 0.9 s · tepe > 20 s | recv−E + WS API RTT |
+| Minimum sinyal ufku | **≥ 10 s** (p99 × 10) | saniye altı sinyaller elenir |
+| `recvWindow` | **5000 ms** | skew p99 165 ms, maks 793 ms; 6 kat pay |
+| Bayatlık eşiği, public/market | **30 s** | en uzun olaysız aralık 22.4 s; eşik bunun üstünde, 60 s gereksiz geç |
+| Koruma emri gerekliliği | değişmedi | 20 s'lik duraklamada uygulama tarafı çıkış yetişmez; borsa tarafı stop zorunlu |
 
 ## Yapılmayanlar
 
-- 24 saat tamamlanmadı; gün içi ve funding saatleri kapsanmadı.
-- Kimlikli WS API (`session.logon` sonrası `order.place`) gecikmesi ölçülmedi (anahtar gerekir, Faz 9).
-- 08:xx'teki kuyruk tepesinin kaynağı ayrıştırılmadı.
-
-## Ek: 08:xx tepesi ve iki modlu gecikme (ayrıştırma, 10:50 UTC)
-
-Dakika bazında `/public` recv − E incelendi (`ws_public.jsonl`) ve recorder'ın aynı dakikalardaki `ctrl/stats` loop lag'i ile karşılaştırıldı.
-
-- **Gecikme iki modlu:** dakikaların bir kısmında p95 ≈ 145–160 ms, diğerlerinde p95 ≈ 350–420 ms (yaklaşık +280 ms ikinci mod). Bu desen recorder başlamadan **önce de** var (07:41–07:43, 07:52–07:53, 07:56–07:57). p50 her iki modda da ≈ 141 ms; yani tüm mesajlar değil, dakika içindeki bir alt küme gecikiyor.
-- **08:05 tepesi (p99 6.9 s, maks 7.15 s):** aynı dakikada recorder loop lag maks 25 ms, kuyruk 0. Tepe yerel süreçten kaynaklanmıyor; ağ yolu ya da Binance yayın tarafı. 10:56'da benzer bir tepe (p99 1.0 s) tekrarlandı.
-- **Sonuç:** hot path tasarımı 0.4 s p99'u olağan, çok saniyelik tepeleri seyrek-ama-gerçek kabul etmeli. Bayatlık eşiği için 24 saatlik en uzun sessizlik ölçümü beklenecek; 30 s başlangıç değeri bu tepelerin üstünde. İkinci modun kaynağı (TCP alım penceresi mi, Binance batch yayını mı) Faz 1 kaydındaki `E − T` ve alım aralıklarıyla ayrıca incelenecek.
+- Kimlikli WS API (`session.logon` sonrası `order.place`) gecikmesi ölçülmedi; anahtar gerektiriyor, Faz 9'da testnet ile ölçülecek.
+- 22 s'lik tepenin kaynağı ayrıştırılmadı (ağ, Binance yayın tarafı ya da yerel GC). Kayıt tarafındaki `loop_lag` aynı anda düşük olduğu için yerel kuyruklanma değil.
+- Ölçüm tek gün; funding saatleri ve haftasonu davranışı kapsanmadı.
