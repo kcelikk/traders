@@ -94,3 +94,49 @@ def test_finalists_are_remeasured_with_the_full_bootstrap():
                alpha=0.05, min_n=10, screen_boot=50)
     assert out[0]["boot"] == 400                      # en iyi birleşim tam ölçüldü
     assert all("_val" not in r for r in out)          # ham örnekler raporda taşınmaz
+
+
+def fbars(*rows):
+    """(o,h,l,c,funding_rate,next_funding_ms) — funding sınırı geçildiğinde ödeme yapılır."""
+    return [{"open": o, "high": h, "low": lo, "close": c, "funding_rate": fr, "next_funding_ms": nf}
+            for o, h, lo, c, fr, nf in rows]
+
+
+FCFG = BarrierConfig(sl_pct=5.0, tp_pct=5.0, max_hold=4, cost_pct=0.0, funding=True)
+
+
+def test_funding_is_charged_when_a_settlement_is_crossed():
+    """Uzun tutmada funding maliyeti yok sayılamaz: 8 saatte bir ödenir."""
+    b = fbars((100, 100.5, 99.5, 100, 0.0001, 1000), (100, 100.5, 99.5, 100, 0.0001, 1000),
+              (100, 100.5, 99.5, 100, 0.0001, 9000), (100, 100.5, 99.5, 101, 0.0001, 9000))
+    r = evaluate(entry=100.0, side="long", future=b, cfg=FCFG)
+    assert r["reason"] == "timeout"
+    assert round(r["funding_pct"], 6) == 0.01          # tek ödeme, %0,01
+    assert round(r["net_pct"], 6) == round(1.0 - 0.01, 6)
+
+
+def test_short_receives_funding_when_the_rate_is_positive():
+    b = fbars((100, 100.5, 99.5, 100, 0.0001, 1000), (100, 100.5, 99.5, 100, 0.0001, 9000))
+    r = evaluate(entry=100.0, side="short", future=b, cfg=BarrierConfig(5.0, 5.0, 2, 0.0, funding=True))
+    assert round(r["funding_pct"], 6) == -0.01
+    assert r["net_pct"] > r["gross_pct"]
+
+
+def test_no_settlement_crossed_means_no_funding():
+    b = fbars((100, 100.5, 99.5, 100, 0.0001, 9000), (100, 100.5, 99.5, 100, 0.0001, 9000))
+    r = evaluate(entry=100.0, side="long", future=b, cfg=BarrierConfig(5.0, 5.0, 2, 0.0, funding=True))
+    assert r["funding_pct"] == 0.0
+
+
+def test_funding_disabled_keeps_the_old_behaviour():
+    b = fbars((100, 100.5, 99.5, 100, 0.01, 1000), (100, 100.5, 99.5, 100, 0.01, 9000))
+    r = evaluate(entry=100.0, side="long", future=b, cfg=BarrierConfig(5.0, 5.0, 2, 0.1))
+    assert r["funding_pct"] == 0.0 and round(r["net_pct"], 6) == -0.1
+
+
+def test_funding_only_counts_bars_actually_held():
+    """Bariyer 1. barda vurulduysa sonraki barların funding'i yazılmaz."""
+    b = fbars((100, 106, 99.5, 105, 0.001, 1000), (100, 100.5, 99.5, 100, 0.001, 9000),
+              (100, 100.5, 99.5, 100, 0.001, 20000))
+    r = evaluate(entry=100.0, side="long", future=b, cfg=BarrierConfig(5.0, 5.0, 3, 0.0, funding=True))
+    assert r["reason"] == "tp" and r["bars"] == 1 and r["funding_pct"] == 0.0

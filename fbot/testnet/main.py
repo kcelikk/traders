@@ -167,7 +167,12 @@ class TestnetRecorder(PaperRecorder):
                              detail={"kill_switch": kill, "positions": len(st.positions), "stats": dict(self.trader.stats),
                                      "open": sum(1 for p in st.positions.values() if p.state.value != "CLOSED"),
                                      "armed": self.trader.adapter.armed,
-                                     "arming_reason": getattr(self, "_arming_reason", None)})
+                                     "arming_reason": getattr(self, "_arming_reason", None),
+                                     # Konsolun "sistem bağlantı durumu" tablosu bunları okur
+                                     "orders": len(self.trader.orders.orders),
+                                     "fills": self.trader.orders._stats["fills"],
+                                     "rejected": self.trader.errors["rejected"],
+                                     "reconciled": None})
 
 
 def parse(argv):

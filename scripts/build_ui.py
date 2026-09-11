@@ -63,6 +63,14 @@ OVERRIDES = [
     ("güvenlik rozetleri doğrulanmadan yeşil gösteriliyordu (F03)",
      '<div style="display:flex; gap:6px; flex-wrap:wrap; font-size:11px;"><span style="border:1px solid #00e5a0; color:#00e5a0; padding:2px 8px;">çekim yetkisi kapalı</span><span style="border:1px solid #00e5a0; color:#00e5a0; padding:2px 8px;">IP whitelist</span><span style="border:1px solid #1a2536; color:#6f849c; padding:2px 8px;">Ed25519 session.logon · Faz 9</span><span style="border:1px solid #1a2536; color:#6f849c; padding:2px 8px;">.env gitignore</span></div>',
      '<div style="display:flex; gap:6px; flex-wrap:wrap; font-size:11px;"><sc-for list="{{ securityChips }}" as="s" hint-placeholder-count="4"><span style="{{ s.style }}">{{ s.text }}</span></sc-for></div>'),
+    ("sistemde var olup konsolda izlenmeyen parçalar açıkça listelenir",
+     '<div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-top:10px;">GÜVENLİK</div>',
+     '<div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-top:10px;">SİSTEM BAĞLANTI DURUMU</div>'
+     '<sc-for list="{{ wiring }}" as="w" hint-placeholder-count="5">'
+     '<div style="display:flex; gap:10px; font-size:11px; padding:3px 0; border-bottom:1px solid #111a28;">'
+     '<span style="color:#9fb0c3; min-width:170px;">{{ w.k }}</span><span style="{{ w.style }}">{{ w.v }}</span></div>'
+     '</sc-for>'
+     '<div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-top:10px;">GÜVENLİK</div>'),
     ("eşik notu artık koşunun kendi config'inden okunuyor (F02)",
      '<div style="font-size:10px; color:#6f849c;">Eşikler başlangıç değeri; 72 saatlik kayıttan sonra ölçümle güncellenir.</div>',
      '<div style="font-size:10px; color:#6f849c;">{{ cfgSource }}</div>'),

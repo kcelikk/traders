@@ -1,6 +1,7 @@
 """data.binance.vision günlük dosyalarını indirir ve SHA-256 checksum ile doğrular (stdlib).
 Kullanım: python -m scripts.fetch_history --symbols BTCUSDT,ETHUSDT --start 2026-08-09 --end 2026-09-08 [--out data/history]
-Veri tipleri: aggTrades, markPriceKlines/1m, premiumIndexKlines/1m. Var olan ve doğrulanmış dosya atlanır; 404 raporlanır."""
+Veri tipleri: aggTrades, markPriceKlines/1m, premiumIndexKlines/1m, bookDepth, metrics.
+`bookDepth` ve `metrics` günlük tek dosyadır (zaman dilimi yok). Var olan ve doğrulanmış dosya atlanır; 404 raporlanır."""
 from __future__ import annotations
 
 import argparse
@@ -15,9 +16,13 @@ from pathlib import Path
 BASE = "https://data.binance.vision/data/futures/um/daily"
 
 
+# Zaman dilimi klasörü olmayan türler: dosya adı doğrudan <SEM>-<tür>-<gün>.zip
+FLAT = {"aggTrades", "bookDepth", "metrics", "bookTicker"}
+
+
 def url_for(kind: str, sym: str, d: str) -> str:
-    if kind == "aggTrades":
-        return f"{BASE}/aggTrades/{sym}/{sym}-aggTrades-{d}.zip"
+    if kind in FLAT:
+        return f"{BASE}/{kind}/{sym}/{sym}-{kind}-{d}.zip"
     return f"{BASE}/{kind}/{sym}/1m/{sym}-1m-{d}.zip"
 
 

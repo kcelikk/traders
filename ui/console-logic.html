@@ -120,11 +120,12 @@ class Component extends DCLogic {
     const screens = [['status', 'Durum', frLabel, '/status'], ['positions', 'Pozisyonlar', '0/5', 'Faz 4 · durum makinesi, R1–R5'], ['risk', 'Risk Engine', 'K18', 'Faz 5 · veto, kill switch, mutabakat'], ['algo', 'Algoritma & sinyal', 'D1–D3', 'Faz 3/6 · feature → durum → karar → risk → pozisyon'], ['states', 'Piyasa durumu', 'S0–S4', 'Faz 3/6 · durum etiketi ve karar hücreleri'], ['replay', 'Replay & araştırma', res ? res.passed + '/' + (res.cells ? res.cells.length / 2 : '?') : '', 'Faz 2/3 · Rule Zero, hücre tablosu'], ['recorder', 'Kayıt', rec.run_id || '', 'Faz 1 · bütünlük ve dosyalar'], ['history', 'Geçmiş & performans', '', 'kapanmış işlemler, kümülatif net, kırılım'], ['config', 'Config', '', 'kilitli kararlar ve parametreler']];
     const cur = screens.find(s => s[0] === S.screen);
     const navItems = screens.map((s, i) => ({ label: s[1], badge: s[2], badgeColor: S.screen === s[0] ? '#35c8ff' : '#6f849c', num: String(i + 1).padStart(2, '0'), go: go(s[0]), style: `display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0;border-left:2px solid ${S.screen === s[0] ? '#00e5a0' : 'transparent'};background:${S.screen === s[0] ? 'rgba(0,229,160,.07)' : 'transparent'};color:${S.screen === s[0] ? '#dbe7f3' : '#9fb0c3'};cursor:pointer;font-size:13px;white-space:nowrap;` }));
-    const phStatus = {}; ((A && A.phases) || []).forEach(p => { phStatus[p.n] = p.status; });
-    const phases = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => { const st = phStatus[n] || 'pending', done = st === 'done', act = st === 'active'; return { n, title: ['Ölçüm', 'Kayıt', 'Çekirdek', 'Araştırma', 'Pozisyon', 'Risk', 'Giriş', 'Paper', 'Gözlem', 'Testnet', 'Canlı'][n], style: `width:20px;height:20px;display:grid;place-items:center;font-size:10px;border:1px solid ${done ? '#00e5a0' : act ? '#35c8ff' : '#1a2536'};color:${done ? '#00e5a0' : act ? '#070b12' : '#6f849c'};background:${act ? '#35c8ff' : done ? 'rgba(0,229,160,.1)' : 'transparent'};${act ? 'animation:pulse 1.8s ease-out infinite;box-shadow:0 0 0 0 rgba(53,200,255,.6);' : ''}` }; });
+    const phRow = {}; ((A && A.phases) || []).forEach(p => { phRow[p.n] = p; });
+    const phases = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => { const row = phRow[n] || {}, st = row.status || 'pending', done = st === 'done', act = st === 'active'; return { n, title: row.title || '—', style: `width:20px;height:20px;display:grid;place-items:center;font-size:10px;border:1px solid ${done ? '#00e5a0' : act ? '#35c8ff' : '#1a2536'};color:${done ? '#00e5a0' : act ? '#070b12' : '#6f849c'};background:${act ? '#35c8ff' : done ? 'rgba(0,229,160,.1)' : 'transparent'};${act ? 'animation:pulse 1.8s ease-out infinite;box-shadow:0 0 0 0 rgba(53,200,255,.6);' : ''}` }; });
     const dot = (c, on) => `width:7px;height:7px;border-radius:50%;background:${c};display:inline-block;${on ? 'animation:pulse 1.6s ease-out infinite;' : ''}`;
     const P0 = (A && A.paper) || {}, PM = P0.metrics || {};
     const envs = (A && A.environments) || [], envKind = P0.env || 'paper', hasTestnet = envs.some(e => e.env === 'testnet');
+    const SVC = ((P0.heartbeat || {}).detail) || {};
     const HB = P0.heartbeat, hbAge = HB && HB.ts_ns ? (Date.now() - HB.ts_ns / 1e6) / 1000 : null;
     const hbStale = hbAge == null || hbAge > 60;   // süreç 10 s'de bir damga basar
     const hbTxt = hbAge == null ? 'canlılık damgası yok' : hbStale ? 'süreç SESSİZ · ' + ageTxt(hbAge) : 'süreç canlı · ' + ageTxt(hbAge);
@@ -184,6 +185,8 @@ class Component extends DCLogic {
     const RC = cfg.risk || {}, num = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
     const betaNow = num((A && A.beta_net_usdt)), grossCap = num(RC.gross_cap_usdt), betaCap = num(RC.beta_cap_usdt);
     const par = (k, v) => k + ' = ' + (v == null || v === '' ? 'yok' : v);
+    const filtersN = (A && A.filters_loaded) || 0;
+    const rl429 = ((A && A.recorder) || {}).rate_limit_events || 0;
     const hasCfg = Object.keys(RC).length > 0;
     const rejCount = (PM && PM['ret_nedenleri']) || {};
     const kHit = k => { const n = Object.entries(rejCount).filter(e => e[0].indexOf(k + '_') === 0).reduce((a, b) => a + b[1], 0); return n ? n + ' ret' : null; };
@@ -200,13 +203,13 @@ class Component extends DCLogic {
       kchk('K9', 'BTC-beta net', par('beta_cap_usdt', RC.beta_cap_usdt), betaNow == null ? (betaCap == null ? 'kapalı' : 'beta yok') : this.fmt(betaNow, 1) + ' USDT', betaCap == null ? 'na' : 'ok'),
       kchk('K10', 'Kaldıraç', 'BTC/ETH 10x, diğer 5x', envKind === 'paper' ? 'simülasyon' : 'borsa doğrulaması yok', 'na'),
       kchk('K11', 'Teminat', par('margin_buffer', RC.margin_buffer), envKind === 'paper' ? 'simülasyon' : 'anahtar yok', 'na'),
-      kchk('K12', 'Filtreler', 'exchangeInfo · aşağı yuvarla', 'ok', 'ok'),
+      kchk('K12', 'Filtreler', 'exchangeInfo · aşağı yuvarla', filtersN ? filtersN + ' sembol yüklü' : 'ölçülmedi', filtersN ? 'ok' : 'na'),
       kchk('K13', 'Spread', par('spread_max_bps', RC.spread_max_bps), u.spread_bps != null ? sym + ' ' + u.spread_bps.toFixed(2) + ' bp' : '—', 'ok'),
-      kchk('K14', 'Likidite / katılım', par('participation_max', RC.participation_max), 'depth · ' + envKind, 'na'),
-      kchk('K15', 'Slippage tahmini', par('slippage_max_bps', RC.slippage_max_bps), 'L2 defter yürüyüşü (ADR 0013)', 'ok'),
+      kchk('K14', 'Likidite / katılım', par('participation_max', RC.participation_max), 'ölçülmedi · defter derinliği karar yolunda değil', 'na'),
+      kchk('K15', 'Slippage tahmini', par('slippage_max_bps', RC.slippage_max_bps), envKind === 'paper' ? 'L2 defter yürüyüşü (simülasyon)' : 'ölçülmedi', envKind === 'paper' ? 'ok' : 'na'),
       kchk('K16', 'Cooldown', par('cooldown_loss_ms', RC.cooldown_loss_ms), RC.cooldown_loss_ms == null ? 'kapalı' : 'aktif', RC.cooldown_loss_ms == null ? 'na' : 'ok'),
       kchk('K17', 'Emir bütçesi', par('reserve_orders', RC.reserve_orders), hasCfg ? 'ok' : 'config yok', hasCfg ? 'ok' : 'na'),
-      kchk('K18', '429 / 418', 'backoff_ms', 'ok', 'ok')];
+      kchk('K18', '429 / 418', par('backoff_ms', RC.backoff_ms), rl429 ? rl429 + ' olay' : 'olay yok', rl429 ? 'warn' : 'ok')];
     if (envKind === 'testnet') checks.push(chk('TN', 'Testnet emir yolu', 'REST + HMAC · yalnızca testnet', P0.run_id ? 'aktif' : '—', 'warn'));
     const vsrc = (A && A.verdicts) || [];
     const verdicts = vsrc.length ? vsrc.map(v => ({ t: v.t_ms ? new Date(v.t_ms).toISOString().slice(11, 19) : '—', kind: v.kind,
@@ -335,6 +338,14 @@ class Component extends DCLogic {
       recCards: [card('RUN', rec.run_id || '—', 'restart ' + (rec.restart_no ?? '—') + ' · git ' + (rec.git_sha || '—'), '#35c8ff'), card('OLAY', rec.seq != null ? this.fmt(rec.seq / 1e6, 2) + ' M' : '—', 'seq (tail) · parse hatası ' + (rec.parse_errors ?? '—'), '#dbe7f3'), card('LOOP LAG', rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) + ' ms p99' : '—', 'maks ' + (rec.loop_lag_max != null ? rec.loop_lag_max.toFixed(1) + ' ms' : '—') + ' (10 s pencere)', '#00e5a0'), card('KUYRUK', rec.queue != null ? String(rec.queue) : '—', 'dropped ' + (rec.dropped ?? '—')), card('BAĞLANTI', Object.entries(rec.connects || {}).map(e => e[0] + ' ' + e[1]).join(' · ') || '—', 'bayatlık olayı ' + (rec.stale_events ?? 0), '#00e5a0'), card('SNAPSHOT', String(rec.snapshots ?? '—'), 'depth 1000 · her 10 dk')],
       streams, files, diskUsed: A ? this.fmt(A.recorder_bytes / 1e9, 2) + ' GB · boş ' + A.disk_free_gb + ' GB' : '—',
       locked, posCfg, staleCfg,
+      // Sistemde var olup konsolda izlenmeyen parçalar: sessiz kalmak yerine durumunu yaz
+      wiring: [
+        ['Emir durum makinesi', SVC.orders == null ? 'testnet koşusu bildirmiyor' : SVC.orders + ' emir · dolum ' + (SVC.fills || 0) + ' · ret ' + (SVC.rejected || 0), SVC.orders == null ? '#6f849c' : '#00e5a0'],
+        ['Açılışta mutabakat', SVC.reconciled == null ? 'bağlanmadı · fbot/core/reconcile.py yazıldı, süreçte çağrılmıyor' : (SVC.reconciled ? 'tamam' : 'UYUŞMAZLIK'), SVC.reconciled == null ? '#ffb020' : SVC.reconciled ? '#00e5a0' : '#ff5470'],
+        ['Defter senkronu', 'konsol görünümünde izlenmiyor · depthUpdate çekirdek görünümüne dahil değil (Faz 2)', '#6f849c'],
+        ['Kill switch → pozisyon', kill ? 'aktif · yeni giriş yok, açıklar FROZEN' : 'kapalı', kill ? '#ff5470' : '#6f849c'],
+        ['Silahlanma (testnet)', SVC.armed == null ? 'bilinmiyor' : (SVC.armed ? 'silahlı · ' + (SVC.arming_reason || '') : 'silahsız · ' + (SVC.arming_reason || '')), SVC.armed ? '#ffb020' : '#6f849c']
+      ].map(w => ({ k: w[0], v: w[1], style: `color:${w[2]};` })),
       // ---- Geçmiş & performans ekranı
       histEqRef: this.histEqRef, histEquity: this.histEquity(),
       histRunLabel: HH ? (HH.env || '') + ' · ' + (HH.run_id || '—') + ' · ' + HH.total + ' kapanmış işlem' : (S.histErr ? 'hata' : 'yükleniyor…'),

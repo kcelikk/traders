@@ -44,6 +44,7 @@ class LiveView:
         self.stats: dict = {}
         self.connects: Counter = Counter()
         self.stale_events = 0
+        self.rate_limit_events = 0
         self.snapshots = 0
         self.stale_flags: dict[str, bool] = {}
         self.alarms: list = []
@@ -74,6 +75,9 @@ class LiveView:
                 self.snapshots += 1
             elif ev.stream == "stats":
                 self.stats = info
+            elif ev.stream in ("rate_limit", "backoff", "banned"):
+                self.rate_limit_events += 1
+                self._push(ev.recv_ns, "ALARM", f"{ev.stream} {str(info)[:80]}")
             elif ev.stream == "alarm":
                 self.alarms.insert(0, {"t_ns": ev.recv_ns, **info})
                 del self.alarms[20:]
@@ -149,7 +153,8 @@ class LiveView:
             "recorder": {**self.run, "events": self.state.events, "seq": self.state.last_seq, "loop_lag_p50": self.stats.get("loop_lag_ms", {}).get("p50"),
                          "loop_lag_p99": self.stats.get("loop_lag_ms", {}).get("p99"), "loop_lag_max": self.stats.get("loop_lag_ms", {}).get("max"),
                          "queue": self.stats.get("queue"), "dropped": self.stats.get("dropped"), "connects": dict(self.connects), "stale_events": self.stale_events,
-                         "snapshots": self.snapshots, "parse_errors": self.state.parse_errors},
+                         "snapshots": self.snapshots, "parse_errors": self.state.parse_errors,
+                         "rate_limit_events": self.rate_limit_events},
             "stale": stale_age, "stale_flags": dict(self.stale_flags), "last_event_ns": self.last_event_ns,
             "betas": {s: self.state.beta.beta(s) for s in self.symbols} if self.state.beta is not None else {},
             "feed": list(self.log), "alarms": list(self.alarms),

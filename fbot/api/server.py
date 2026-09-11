@@ -272,6 +272,7 @@ class Api:
             "latency": parse_latency_md(lat_md),
             **paper, "cost_drift": self._drift(run_id),
             "beta_net_usdt": beta_net_usdt(paper.get("open_positions") or [], snap.get("betas") or {}),
+            "filters_loaded": len(((paper.get("run_config") or {}).get("core") or {}).get("filters") or {}),
             "config": assemble_config(ROOT / "config", paper.get("run_config")),
         }
         if run_id is None:

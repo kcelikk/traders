@@ -60,3 +60,10 @@ def test_assemble_config_uses_run_config_when_given(tmp_path):
     c = assemble_config(tmp_path, {"core": {"risk": {"beta_cap_usdt": "750"}, "position": {"t_protect_ms": 3000}}, "git_sha": "abc"})
     assert c["risk"]["beta_cap_usdt"] == "750" and c["position"]["t_protect_ms"] == 3000
     assert c["run"]["git_sha"] == "abc" and c["source"] == "koşu kaydı"
+
+
+def test_state_reports_loaded_filters_and_rate_limit_events(tmp_path):
+    api = _api(tmp_path)
+    st = api.state()
+    assert isinstance(st["filters_loaded"], int)
+    assert isinstance(st["recorder"].get("rate_limit_events"), int)

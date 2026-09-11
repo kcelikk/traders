@@ -114,3 +114,16 @@ def test_supervisor_accepts_a_list_of_paths(tmp_path):
     sup = ArmingSupervisor(env_path=testnet_paths(tmp_path), make_client=lambda c: object(), probe=lambda c: 1.0,
                            adapter=FakeAdapter(), open_positions=lambda: 0, environ={})
     assert sup.check()["armed"] is True
+
+
+def test_testnet_heartbeat_carries_order_and_reconcile_state(tmp_path):
+    """Konsol "sistem bağlantı durumu" satırlarını süreç damgasından okur; uydurmaz."""
+    from fbot.paper.store import PaperStore
+    from fbot.api.paper_view import service_arming
+    d = tmp_path / "testnet-x"; d.mkdir()
+    s = PaperStore(d / "paper.db", run_id="testnet-x", env="testnet")
+    s.heartbeat(now_ns=10**18, detail={"armed": False, "arming_reason": "anahtar yok",
+                                       "orders": 3, "fills": 2, "rejected": 1, "reconciled": None})
+    s.flush(); s.close()
+    out = service_arming(tmp_path, "testnet")
+    assert out["armed"] is False and out["reason"] == "anahtar yok"
