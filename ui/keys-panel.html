@@ -39,7 +39,7 @@
     <div class="row">
       <button class="save" data-env="testnet" data-arm="1">Kaydet ve etkinleştir</button>
       <button class="ghost" data-env="testnet" data-arm="0">Etkinliği kaldır</button>
-      <span class="stat">değişiklik sonrası: <code>make testnet-down &amp;&amp; make testnet-up</code></span>
+      <span class="stat" id="svc-testnet">servis durumu okunuyor…</span>
     </div>
   </section>
   <section id="k-live">
@@ -69,13 +69,42 @@
       var k = x.key_set ? ('anahtar ' + x.masked) : '<span class="bad">anahtar yok</span>';
       return k + ' · ' + (x.secret_set ? 'gizli anahtar var' : '<span class="bad">gizli anahtar yok</span>') + ' · ' + a;
     }
-    document.getElementById('st-testnet').innerHTML = line(s.testnet);
+    document.getElementById('st-testnet').innerHTML = line(s.testnet)
+      + (s.testnet && s.testnet.file ? '<br><span class="stat">dosya: ' + s.testnet.file + (s.testnet.hot_reload ? ' · servis çalışırken okur' : '') + '</span>' : '');
     document.getElementById('st-live').innerHTML = line(s.live);
     document.getElementById('live-gate').innerHTML = s.live && s.live.gate_open
       ? 'Sunucu kapısı <b>açık</b>. Canlı emir yolu yine de yazılmadı (LiveExecutionAdapter korumalı stub): anahtar saklanır, kullanılmaz.'
       : 'Sunucu kapısı <b>kapalı</b>: mainnet anahtarı yazılamaz. Açmak için sunucuda <code>FBOT_LIVE_KEYS_ALLOWED=1</code> tanımlayın. Canlı emir yolu zaten yazılmadı.';
   }
-  function load() { fetch('/api/keys', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { if (d.status) paint(d.status); }); }
+  function svcLine(x) {
+    if (!x || !x.run_id) return 'servis koşusu yok';
+    if (x.age_s == null) return x.reason || 'servis damga basmadı';
+    var fresh = x.age_s < 60;
+    var state = x.armed === true ? '<span class="ok">silahlı</span>' : x.armed === false ? '<span class="off">silahsız</span>' : 'bilinmiyor';
+    return 'servis (' + x.run_id + '): ' + state + ' · ' + (fresh ? 'damga ' + x.age_s.toFixed(0) + ' s önce' : '<span class="bad">damga ' + Math.round(x.age_s / 60) + ' dk önce · süreç sessiz</span>') + (x.reason ? ' · ' + x.reason : '');
+  }
+  function paintSvc(svc) {
+    var el = document.getElementById('svc-testnet');
+    if (el) el.innerHTML = svcLine(svc && svc.testnet);
+  }
+  function load() {
+    return fetch('/api/keys', { cache: 'no-store', headers: { 'X-Fbot-Token': token() } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.status) paint(d.status); paintSvc(d.services); return d; })
+      .catch(function (e) { msg.textContent = 'durum okunamadı: ' + e; });
+  }
+  // Anahtar kaydedildikten sonra servisin gerçekten aldığını damgadan doğrular (yeniden başlatma gerekmez)
+  function confirmPickup(n) {
+    if (n <= 0) return;
+    setTimeout(function () {
+      load().then(function (d) {
+        var x = d && d.services && d.services.testnet;
+        if (x && x.armed === true && x.age_s != null && x.age_s < 60) { msg.textContent = 'servis yeni anahtarı aldı · ' + (x.reason || ''); return; }
+        if (x && x.armed === false && x.age_s != null && x.age_s < 60 && x.reason) { msg.textContent = 'servis reddetti: ' + x.reason; return; }
+        confirmPickup(n - 1);
+      });
+    }, 5000);
+  }
   document.getElementById('fbot-keys-btn').onclick = function () { box.classList.add('open'); load(); };
   document.getElementById('k-close').onclick = function () { box.classList.remove('open'); };
   box.onclick = function (e) { if (e.target === box) box.classList.remove('open'); };
@@ -96,6 +125,7 @@
           document.getElementById(kf).value = ''; document.getElementById(sf).value = '';
           msg.textContent = 'kaydedildi: ' + (r.d.updated || []).join(', ') + ' · ' + (r.d.note || '');
           if (r.d.status) paint(r.d.status);
+          if (env === 'testnet') { msg.textContent += ' · servis damgası bekleniyor…'; confirmPickup(5); }
         }).catch(function (e) { msg.textContent = 'ağ hatası: ' + e; });
     };
   });

@@ -8,3 +8,6 @@ data/
 data/ui.log
 data/ui.pid
 .env.ui
+
+# anahtar dosyaları (data/ zaten yok sayılıyor; açık kayıt için)
+*credentials.env

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -63,6 +64,28 @@ def _meta(con) -> tuple[dict, str | None, dict | None]:
     except (sqlite3.Error, ValueError):
         pass
     return cfg, cfg_hash, hb
+
+
+def service_arming(recordings: Path, env: str) -> dict:
+    """Bir ortamın süreci en son ne bildirdi: silahlı mı, ne zaman? Konsol anahtar panelinde gösterir."""
+    runs = [r for r in find_paper_runs(recordings) if r["env"] == env]
+    if not runs:
+        return {"run_id": None, "armed": None, "age_s": None, "reason": "koşu yok"}
+    run = runs[0]
+    try:
+        con = sqlite3.connect(f"file:{run['db']}?mode=ro", uri=True)
+        try:
+            _, _, hb = _meta(con)
+        finally:
+            con.close()
+    except sqlite3.Error:
+        hb = None
+    if not hb:
+        return {"run_id": run["run_id"], "armed": None, "age_s": None, "reason": "canlılık damgası yok"}
+    d = hb.get("detail") or {}
+    return {"run_id": run["run_id"], "armed": d.get("armed"),
+            "age_s": round(max(0.0, time.time() - hb["ts_ns"] / 1e9), 1),
+            "reason": d.get("arming_reason") or ""}
 
 
 def _rows(con, sql, n=None):

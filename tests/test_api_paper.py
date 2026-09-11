@@ -152,3 +152,16 @@ def test_zero_quantity_reports_unknown_notional_not_zero(tmp_path):
     assert _notional({"qty": "0", "entry_price": "100"}) is None
     assert _notional({"qty": "0", "filled_qty": "0.5", "entry_price": "100"}) == 50.0
     assert _notional({"qty": "0.5", "entry_price": None}) is None
+
+
+def test_service_arming_reports_what_the_testnet_process_last_wrote(tmp_path):
+    """Konsol, anahtarın servise ulaşıp ulaşmadığını süreç damgasından okur."""
+    from fbot.api.paper_view import service_arming
+    assert service_arming(tmp_path, "testnet") == {"run_id": None, "armed": None, "age_s": None, "reason": "koşu yok"}
+    d = tmp_path / "testnet-x"; d.mkdir()
+    s = PaperStore(d / "paper.db", run_id="testnet-x", env="testnet")
+    s.heartbeat(now_ns=10**18, detail={"armed": True, "arming_reason": "anahtar …abcd"})
+    s.flush(); s.close()
+    out = service_arming(tmp_path, "testnet")
+    assert out["armed"] is True and out["run_id"] == "testnet-x" and out["reason"] == "anahtar …abcd"
+    assert out["age_s"] is not None

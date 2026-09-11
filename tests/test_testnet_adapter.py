@@ -92,3 +92,14 @@ def test_unexpected_error_raises():
     a = adapter([(400, {}, b'{"code":-1121,"msg":"Invalid symbol."}')])
     with pytest.raises(TestnetError):
         a.submit(PlaceOrder("BTCUSDT", "BUY", "MARKET", D("0.001"), None, False, "e1", None), now_ms=0)
+
+
+def test_rearm_swaps_client_and_disarm_blocks_orders():
+    a = TestnetAdapter(client=object(), armed=False, symbols={})
+    new_client = object()
+    a.rearm(new_client, True)
+    assert a.client is new_client and a.armed is True
+    a.rearm(None, False)
+    assert a.armed is False and a.client is None
+    with pytest.raises(TestnetDisarmed):
+        a.submit(PlaceOrder("BTCUSDT", "BUY", "MARKET", D("1"), None, False, "x", None), 0)

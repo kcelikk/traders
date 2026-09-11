@@ -28,6 +28,12 @@ class TestnetAdapter:
         self.armed = armed
         self.symbols = symbols or {}
 
+    def rearm(self, client, armed: bool) -> None:
+        """Anahtar değişince çalışırken silahlanma/silahsızlanma (ArmingSupervisor çağırır).
+        Silahsızlanınca istemci de düşürülür: eski anahtarla istek gönderilemez."""
+        self.client = client
+        self.armed = bool(armed and client is not None)
+
     def _prec(self, symbol: str, key: str) -> int | None:
         return (self.symbols.get(symbol) or {}).get(key)
 

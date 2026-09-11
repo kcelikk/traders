@@ -1,7 +1,11 @@
 """API anahtarı yönetimi (konsol). **Yalnızca yazma**: hiçbir uç gizli anahtarı geri döndürmez.
 
+Ortam başına ayrı dosya: **testnet** anahtarı `data/state/testnet/credentials.env`, **mainnet** `.env`.
+Böylece testnet container'ı yalnızca kendi anahtar dosyasını bağlar, mainnet anahtarını hiç görmez.
+Testnet servisi bu dosyayı çalışırken okur (10 s), yeniden başlatma gerekmez.
+
 Güvenlik kuralları (CLAUDE.md):
-  · Anahtar yalnızca `.env` içinde durur, izin 600, atomik yazım, diğer satırlar korunur.
+  · Anahtar yalnızca bu dosyalarda durur, izin 600, atomik yazım, diğer satırlar korunur.
   · Yanıtlarda yalnızca maskeli anahtar ve "tanımlı mı" bilgisi bulunur; gizli anahtar asla dönmez.
   · Değerler tek satır olmak zorunda (enjeksiyon koruması).
   · Mainnet anahtarı için ek kapı: `FBOT_LIVE_KEYS_ALLOWED` sunucuda tanımlı olmalı.
@@ -17,8 +21,23 @@ VARS = {
 }
 
 
+# Ortam → anahtar dosyası. docker-compose bağlama noktalarıyla uyumlu (testnet container'ı yalnızca kendi ağacını görür).
+ENV_FILE = {"testnet": ("data", "state", "testnet", "credentials.env"), "live": (".env",)}
+HOT_RELOAD = {"testnet"}          # servis dosyayı çalışırken okur
+
+# Container kök olmayan kullanıcıyla koşar (docker/Dockerfile: uid 10001). Dosya 600 olduğu için
+# sahibi o kullanıcı olmazsa servis anahtarı okuyamaz ve hata sessiz kalır.
+SERVICE_UID = 10001
+
+
 class KeyError_(ValueError):
     pass
+
+
+def env_path_for(env_name: str, root: Path | str) -> Path:
+    if env_name not in ENV_FILE:
+        raise KeyError_(f"bilinmeyen ortam: {env_name}")
+    return Path(root).joinpath(*ENV_FILE[env_name])
 
 
 def _read(path: Path) -> dict:
@@ -35,17 +54,20 @@ def _mask(v: str) -> str:
     return ("…" + v[-4:]) if v and len(v) > 4 else ("…" if v else "")
 
 
-def key_status(path: Path) -> dict:
-    env = _read(path)
+def key_status(root: Path) -> dict:
+    """Her ortamın kendi dosyasından durum. `.env` testnet için de okunur (eski kurulumlarla uyum)."""
     out = {}
     for name, keys in VARS.items():
+        env = _read(Path(root) / ".env")
+        env.update(_read(env_path_for(name, root)))
         k, s, a = env.get(keys["key"], ""), env.get(keys["secret"], ""), env.get(keys["armed"], "")
-        out[name] = {"key_set": bool(k), "secret_set": bool(s), "armed": bool(a), "masked": _mask(k), "armed_value": a[:32]}
+        out[name] = {"key_set": bool(k), "secret_set": bool(s), "armed": bool(a), "masked": _mask(k), "armed_value": a[:32],
+                     "file": str(env_path_for(name, root)), "hot_reload": name in HOT_RELOAD}
     out["live"]["gate_open"] = bool(os.environ.get("FBOT_LIVE_KEYS_ALLOWED"))
     return out
 
 
-def write_keys(path: Path, env_name: str, values: dict, require_gate: bool = False) -> dict:
+def write_keys(root: Path, env_name: str, values: dict, require_gate: bool = False) -> dict:
     if env_name not in VARS:
         raise KeyError_(f"bilinmeyen ortam: {env_name}")
     if env_name == "live" and require_gate and not os.environ.get("FBOT_LIVE_KEYS_ALLOWED"):
@@ -59,7 +81,8 @@ def write_keys(path: Path, env_name: str, values: dict, require_gate: bool = Fal
             raise KeyError_("değerde satır sonu olamaz")
         if field in ("key", "secret") and v and len(str(v)) < 16:
             raise KeyError_(f"{field} çok kısa (en az 16 karakter)")
-    path = Path(path)
+    path = env_path_for(env_name, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
     env_lines = path.read_text().splitlines() if path.exists() else []
     updates = {VARS[env_name][f]: str(values[f]) for f in values if values[f] is not None}
     seen, out = set(), []
@@ -78,4 +101,19 @@ def write_keys(path: Path, env_name: str, values: dict, require_gate: bool = Fal
     os.chmod(tmp, 0o600)
     tmp.replace(path)
     os.chmod(path, 0o600)
-    return {"env": env_name, "updated": sorted(updates), "note": "servisin görmesi için yeniden başlatılması gerekir"}
+    hot = env_name in HOT_RELOAD
+    owner, warning = None, None
+    if hot:
+        raw = os.environ.get("FBOT_SERVICE_UID") or SERVICE_UID
+        try:
+            uid = int(raw)
+            os.chown(path, uid, -1)
+            os.chown(path.parent, uid, -1)
+            owner = uid
+        except (OSError, OverflowError, ValueError) as e:
+            warning = f"uyarı: dosya sahibi servis kullanıcısına ({raw}) verilemedi: {e}; servis anahtarı okuyamayabilir"
+    return {"env": env_name, "updated": sorted(updates), "file": str(path), "restart_required": not hot,
+            "owner_uid": owner, "warning": warning,
+            "note": ("servis anahtar dosyasını 10 saniyede bir okur; yeniden başlatma gerekmez. "
+                     "Açık pozisyon varsa değişiklik pozisyon kapanınca uygulanır.")
+                    if hot else "servisin görmesi için yeniden başlatılması gerekir"}

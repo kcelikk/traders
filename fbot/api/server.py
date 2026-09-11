@@ -21,7 +21,7 @@ from fbot.api.freshness import assess as assess_freshness
 from fbot.api.history import history as trade_history
 from fbot.api.keys import KeyError_, key_status, write_keys
 from fbot.api.live_view import LiveView, parse_phase_table
-from fbot.api.paper_view import environments, paper_snapshot
+from fbot.api.paper_view import environments, paper_snapshot, service_arming
 from fbot.api.tail import GrowingGzipReader
 from fbot.events import decode
 from fbot.gateway.killswitch import KillSwitch
@@ -320,7 +320,11 @@ def make_handler(api: Api):
                 return self._json(trade_history(Path(api.run_dir).parent, run_id=(q.get("run") or [None])[0],
                                                 limit=_int("limit", 100), offset=_int("offset", 0)))
             if self.path.startswith("/api/keys"):
-                return self._json({"status": key_status(ROOT / ".env"),
+                try:
+                    svc = {e: service_arming(Path(api.run_dir).parent, e) for e in ("testnet", "live")}
+                except Exception as e:  # noqa: BLE001
+                    svc = {"error": repr(e)}
+                return self._json({"status": key_status(ROOT), "services": svc,
                                    "note": "gizli anahtar hiçbir zaman döndürülmez; yazma tek yönlüdür"})
             if self.path.startswith("/api/health"):
                 return self._json({"ok": True, "loading": api.tailer.loading, "lines": api.tailer.lines})
@@ -351,10 +355,10 @@ def make_handler(api: Api):
                 env_name = body.get("env")
                 vals = {k: body[k] for k in ("key", "secret", "armed") if k in body}
                 try:
-                    res = write_keys(ROOT / ".env", env_name, vals, require_gate=True)
+                    res = write_keys(ROOT, env_name, vals, require_gate=True)
                 except KeyError_ as e:
                     return self._json({"error": str(e)}, 400)
-                return self._json({**res, "status": key_status(ROOT / ".env")})
+                return self._json({**res, "status": key_status(ROOT)})
             return self._json({"error": "not found"}, 404)
     return H
 

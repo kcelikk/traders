@@ -166,7 +166,10 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 ## GÜVENLİK
 
 - API anahtarı asla kod, repo, log veya image içinde bulunmaz.
-- `.env` gitignore'da; repoda yalnızca `.env.example`.
+- Ortam başına ayrı dosya: testnet `data/state/testnet/credentials.env`, mainnet `.env`. Testnet container'ı yalnızca kendi dosyasını görür, mainnet anahtarına erişemez.
+- Anahtar dosyası 600 ve sahibi servis kullanıcısı (docker/Dockerfile uid 10001); okunamayan dosya = silahsız (fail-closed), sessizce yok sayılmaz.
+- Testnet anahtarı konsoldan değiştirilir ve servis 10 s içinde uygular; yeniden başlatma gerekmez. Açık pozisyon varsa değişiklik pozisyon kapanınca uygulanır.
+- `.env` ve `*credentials.env` gitignore'da; repoda yalnızca `.env.example`.
 - Binance anahtarında çekim yetkisi **kapalı**, IP whitelist **açık**. Doğrulanmadan canlı moda geçilmez.
 
 ---

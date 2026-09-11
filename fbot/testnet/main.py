@@ -23,8 +23,9 @@ from fbot.core.engine import Engine
 from fbot.core.order_state import OrderBook as OrderTracker
 from fbot.execution.testnet_adapter import TestnetAdapter, TestnetDisarmed
 from fbot.gateway.killswitch import KillSwitch
-from fbot.gateway.signing import load_testnet_credentials
 from fbot.gateway.testnet import TestnetClient, TestnetError
+from fbot.gateway.credfile import testnet_paths
+from fbot.testnet.arming import ArmingSupervisor
 from fbot.paper.config import load_paper_config
 from fbot.paper.main import PaperRecorder, filters_from_exchange_info
 from fbot.paper.config_view import effective_config
@@ -117,10 +118,20 @@ class TestnetRecorder(PaperRecorder):
         core = type(core)(**{**core.__dict__, "filters": filters_from_exchange_info(ex, set(syms))})
         prec = {s["symbol"]: {"pricePrecision": s["pricePrecision"], "quantityPrecision": s["quantityPrecision"]}
                 for s in ex["symbols"] if s["symbol"] in set(syms)}
-        armed, why, client = self._arm(prec)
-        self.trader = TestnetTrader(Engine(core), TestnetAdapter(client, armed=armed, symbols=prec) if client else _Disarmed(),
+        # Adapter silahsız doğar; anahtar dosyasını denetçi okur ve gerekirse çalışırken silahlandırır
+        adapter = TestnetAdapter(None, armed=False, symbols=prec)
+        self.trader = TestnetTrader(Engine(core), adapter,
                                     lambda cat, stream, raw, recv_ns=None, mono_ns=None: self.emit(cat, stream, raw, recv_ns, mono_ns, notify=False),
                                     store=self.store)
+        self.arming = ArmingSupervisor(
+            env_path=testnet_paths(ROOT), adapter=adapter,
+            make_client=lambda creds: TestnetClient(creds, reserve_orders=self.pcfg.core.risk.reserve_orders),
+            probe=self._probe_balance,
+            open_positions=lambda: sum(1 for p in self.trader.engine_state.positions.values() if p.state.value != "CLOSED"))
+        ev = self.arming.check()
+        armed, why = adapter.armed, (ev or {}).get("reason", "—")
+        if ev:
+            self._emit_arming(ev)
         if self.pcfg.cost_drift is not None:
             from fbot.core.cost_drift import CostDriftMonitor
             self.trader.drift = CostDriftMonitor(self.pcfg.cost_drift)
@@ -130,26 +141,33 @@ class TestnetRecorder(PaperRecorder):
                                     "note": "testnet tesisat doğrulama ortamıdır; kârlılık kanıtı değildir (ADR 0015)"}, notify=False)
         return syms
 
-    def _arm(self, prec):
-        if os.environ.get("FBOT_TESTNET_ARMED") is None:
-            return False, "FBOT_TESTNET_ARMED yok", None
-        try:
-            creds = load_testnet_credentials()
-        except RuntimeError as e:
-            return False, str(e), None
-        client = TestnetClient(creds, reserve_orders=self.pcfg.core.risk.reserve_orders)
-        try:
-            bal = client.balance(int(time.time() * 1000))
-            usdt = next((float(b["balance"]) for b in bal if b.get("asset") == "USDT"), 0.0)
-            self.pcfg.core.account["available_balance"] = str(usdt)
-            return True, f"bakiye {usdt:.2f} USDT · anahtar {creds.masked_key}", client
-        except TestnetError as e:
-            return False, f"testnet erişimi başarısız: {e}", None
+    def _probe_balance(self, client) -> float:
+        """Silahlanma kanıtı: yeni anahtarla bakiye okunabiliyor mu? Hesap görünümünü de günceller."""
+        bal = client.balance(int(time.time() * 1000))
+        usdt = next((float(b["balance"]) for b in bal if b.get("asset") == "USDT"), 0.0)
+        self.pcfg.core.account["available_balance"] = str(usdt)
+        return usdt
 
+    def _emit_arming(self, ev: dict) -> None:
+        """Silahlanma değişikliğini kayda ve konsola yazar. Gizli anahtar yazılmaz (yalnızca maske)."""
+        self._arming_reason = ev.get("reason")
+        self.ctrl(ev["kind"], ev, notify=False)
+        print(json.dumps({"msg": ev["kind"], **ev}, ensure_ascii=False), flush=True)
 
-class _Disarmed:
-    def submit(self, *a, **k):
-        raise TestnetDisarmed("testnet silahlanmadı")
+    def _beat(self, kill: bool) -> None:
+        """Periyodik durum görevi: önce anahtar dosyasını denetle, sonra canlılık damgasını bas."""
+        try:
+            ev = self.arming.check()
+            if ev:
+                self._emit_arming(ev)
+        except Exception as e:  # noqa: BLE001 — denetçi hatası kaydı durdurmaz
+            print(json.dumps({"msg": "arming_error", "err": repr(e)}), flush=True)
+        st = self.trader.engine_state
+        self.store.heartbeat(now_ns=time.time_ns(),
+                             detail={"kill_switch": kill, "positions": len(st.positions), "stats": dict(self.trader.stats),
+                                     "open": sum(1 for p in st.positions.values() if p.state.value != "CLOSED"),
+                                     "armed": self.trader.adapter.armed,
+                                     "arming_reason": getattr(self, "_arming_reason", None)})
 
 
 def parse(argv):
@@ -172,6 +190,7 @@ def main(argv):
     store.set_config({"config_path": a.config, "git_sha": git_sha(), **effective_config(cfg)}, config_hash=h)
     print(json.dumps({"msg": "testnet start", "run_id": run_id, "config_hash": h, "git_sha": git_sha(),
                       "armed_env": bool(os.environ.get("FBOT_TESTNET_ARMED")),
+                      "hot_reload": "anahtar .env'den 10 s'de bir okunur; yeniden başlatma gerekmez",
                       "note": "yalnızca testnet.binancefuture.com; kârlılık kanıtı değildir"}), flush=True)
     asyncio.run(TestnetRecorder(cfg, h, run_id, a.duration, store).main())
     print(json.dumps({"msg": "testnet stop", "summary": store.summary()}, default=str), flush=True)
