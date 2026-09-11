@@ -264,3 +264,24 @@ def test_top_levels_are_correct_without_full_sort():
     trader._push_book("xusdt", 0)
     assert [str(p) for p, _ in got["bids"]] == ["100.0", "99.9", "99.8"]
     assert [str(p) for p, _ in got["asks"]] == ["101.0", "101.1", "101.2"]
+
+
+def test_cost_drift_alarm_reaches_stream():
+    from decimal import Decimal as D
+    from fbot.core.cost_drift import CostDriftConfig, CostDriftMonitor
+    cells = discovered_cells()
+    host = Host()
+    trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit)
+    trader.drift = CostDriftMonitor(CostDriftConfig(window_ms=10**9, capital_usdt=D("1000"),
+                                                    net_per_trade_min=D("0"), min_trades=3))
+    snapshot_event(host, trader)
+    for cat, s, d in market_events():
+        host.now += 200_000_000
+        trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
+        host.now += 100_000_000
+        trader.on_tick(host.now)
+    alarms = [e for e in host.stream if e.cat == "ctrl" and e.stream == "alarm"]
+    assert alarms, "maliyet sürüklenmesi alarmı akışa yazılmadı"
+    a = json.loads(alarms[0].raw)
+    assert a["kind"].startswith("cost_drift:") and "eşik" in a["detail"]
+    assert trader.stats.get("alarms", 0) >= 1

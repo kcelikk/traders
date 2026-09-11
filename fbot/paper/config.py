@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fbot.config import RecorderConfig, load_recorder_config
+from fbot.core.cost_drift import CostDriftConfig
 from fbot.core.decision import Cell, DecisionConfig
 from fbot.core.engine import CoreConfig
 from fbot.core.position import PositionConfig
@@ -29,6 +30,7 @@ class PaperConfig:
     sim_partial_timeout_ms: int | None = None
     sim_prob_fill_on_touch: float = 0.0
     sim_book_levels: int = 20
+    cost_drift: CostDriftConfig | None = None
 
 
 def _dec(v):
@@ -84,8 +86,14 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
     core = CoreConfig(bar_ms=int(t["core"]["bar_ms"]), staleness_ms={k: int(v * 1000) for k, v in rec.staleness_s.items()},
                       position=pcfg, filters={}, tick_ms=rec.tick_ms, state_engine=se, decision=dcfg, risk=rcfg,
                       account=dict(t["account"]))
+    cd = t.get("cost_drift")
+    drift = CostDriftConfig(window_ms=int(cd["window_ms"]), capital_usdt=Decimal(str(cd["capital_usdt"])),
+                            commission_to_gross_max=_dec(cd.get("commission_to_gross_max")),
+                            cost_to_capital_max=_dec(cd.get("cost_to_capital_max")),
+                            net_per_trade_min=_dec(cd.get("net_per_trade_min")),
+                            min_trades=int(cd.get("min_trades", 10))) if cd else None
     sim = t["sim"]
     return PaperConfig(recorder=rec, core=core, sim_latency_ms=int(sim["latency_ms"]), sim_seed=int(sim["seed"]),
                        sim_jitter_ms=int(sim.get("jitter_ms", 0)), sim_partial_timeout_ms=sim.get("partial_timeout_ms"),
                        sim_prob_fill_on_touch=float(sim.get("prob_fill_on_touch", 0.0)),
-                       sim_book_levels=int(sim.get("book_levels", 20))), h
+                       sim_book_levels=int(sim.get("book_levels", 20)), cost_drift=drift), h

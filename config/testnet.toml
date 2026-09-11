@@ -90,3 +90,11 @@ book_levels = 20
 [account]
 paper = false                   # kaldıraç görünümü borsadan okunur
 available_balance = "0"         # açılışta REST ile güncellenir
+
+[cost_drift]                   # BÖLÜM 6.4 — alarm üretir, işlem ENGELLEMEZ
+window_ms = 86400000           # 24 saat
+capital_usdt = "1000"
+commission_to_gross_max = "0.30"   # komisyon / brüt kâr
+cost_to_capital_max = "0.02"       # toplam maliyet / sermaye
+net_per_trade_min = "-0.05"        # işlem başına ortalama net (%)
+min_trades = 20

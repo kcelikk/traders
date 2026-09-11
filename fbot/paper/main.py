@@ -60,6 +60,9 @@ class PaperRecorder(Recorder):
                                   lambda cat, stream, raw, recv_ns=None, mono_ns=None: self.emit(cat, stream, raw, recv_ns, mono_ns, notify=False),
                                   store=self.store)
         self.trader.book_levels = self.pcfg.sim_book_levels
+        if self.pcfg.cost_drift is not None:
+            from fbot.core.cost_drift import CostDriftMonitor
+            self.trader.drift = CostDriftMonitor(self.pcfg.cost_drift)
         self.trader.engine_state.kill_switch = self.kill.active
         self.ctrl("paper_start", {"cells": [c.key() for c in core.decision.allowed_cells], "notional": str(core.decision.notional_usdt),
                                   "kill_switch": self.kill.active, "sim_latency_ms": self.pcfg.sim_latency_ms,

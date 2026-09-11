@@ -42,3 +42,9 @@ def test_testnet_config_loads_and_is_narrow():
     assert str(cfg.core.risk.beta_cap_usdt) == "750"
     assert cfg.core.decision.allowed_cells == ()       # strateji yok → emir yok
     assert cfg.core.account.get("paper") is False      # kaldıraç borsadan
+
+
+def test_cost_drift_config_loaded():
+    cfg, _ = load_paper_config("config/paper.toml")
+    assert cfg.cost_drift is not None and cfg.cost_drift.window_ms == 86_400_000
+    assert str(cfg.cost_drift.net_per_trade_min) == "-0.05" and cfg.cost_drift.min_trades == 20

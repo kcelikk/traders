@@ -12,6 +12,7 @@ import json
 from decimal import Decimal
 
 from fbot.core.commands import CancelAlgo, CancelOrder, PlaceAlgo, PlaceOrder, StateChanged, canonical
+from fbot.core.cost_drift import CostDriftMonitor
 from fbot.core.engine import CoreState
 from fbot.core.position import PosState as PosStateEnum
 from fbot.events import RawEvent
@@ -42,6 +43,8 @@ class PaperTrader:
         self._verdicts_seen = 0
         self.exit_price: dict = {}          # pos_id → gerçekleşen çıkış fiyatı (net PnL için)
         self.closed_ns: dict = {}
+        self.drift: CostDriftMonitor | None = None   # maliyet sürüklenmesi (BÖLÜM 6.4); dışarıdan verilir
+        self._drift_seen: set = set()
         self.books: dict[str, LocalOrderBook] = {}   # sembol → L2 defter (dolum simülasyonu, ADR 0013)
         self.book_levels = 20
 
@@ -192,9 +195,25 @@ class PaperTrader:
             self.store.record_decision(v)
             self._verdicts_seen = v["n"]
 
-    def _record_positions(self) -> None:
-        if self.store is None:
+    def _feed_drift(self, pid: str, pos, net_pct, now_ns: int) -> None:
+        """Kapanan pozisyonu maliyet izleyicisine ver ve alarmı akışa yaz (işlem engellenmez)."""
+        if self.drift is None or pid in self._drift_seen or net_pct is None:
             return
+        self._drift_seen.add(pid)
+        pm = self.engine.pm
+        notional = (pos.entry_price or Decimal(0)) * Decimal(str(pos.qty or 0))
+        if notional == 0 and pos.entry_price is not None:
+            notional = pos.entry_price * Decimal(str(getattr(pos, "initial_qty", 0) or 0))
+        fee = (pm.cfg.taker_fee_pct + pm.cfg.taker_fee_pct) / 100 * notional if pm else Decimal(0)
+        for a in self.drift.on_trade({"net_pct": net_pct, "commission_usdt": fee,
+                                      "funding_usdt": pos.funding_accrued_pct / 100 * notional,
+                                      "slippage_usdt": Decimal(0), "notional": notional}, now_ms=now_ns // 1_000_000):
+            self.emit("ctrl", "alarm", json.dumps({"kind": a.kind, "detail": a.detail}, separators=(",", ":")).encode(), now_ns, now_ns)
+            self.stats["alarms"] = self.stats.get("alarms", 0) + 1
+
+    def _record_positions(self) -> None:
+        """Pozisyon durumunu işler: net PnL hesaplanır, kapananlar maliyet izleyicisine gider, varsa SQLite'a yazılır.
+        Maliyet izleme store'dan bağımsızdır (BÖLÜM 6.4 alarmı kayıt olmadan da çalışır)."""
         pm = self.engine.pm
         for pid, p in self.engine_state.positions.items():
             mark = None
@@ -206,6 +225,10 @@ class PaperTrader:
                 ref = self.exit_price.get(pid) if p.state == PosStateEnum.CLOSED else mark
                 if ref is not None:
                     net = str(pm.net_unrealized_pct(p, ref))   # kapanmışta çıkış fiyatı, açıkta mark
+            if p.state == PosStateEnum.CLOSED and net is not None:
+                self._feed_drift(pid, p, Decimal(net), self.closed_ns.get(pid) or 0)
+            if self.store is None:
+                continue
             self.store.record_position({"pos_id": pid, "symbol": p.symbol, "side": p.side, "state": p.state.value,
                                         "qty": str(p.qty), "entry_price": str(p.entry_price) if p.entry_price is not None else None,
                                         "sl": str(p.sl_price) if p.sl_price is not None else None,

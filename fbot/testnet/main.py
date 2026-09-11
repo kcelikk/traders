@@ -120,6 +120,9 @@ class TestnetRecorder(PaperRecorder):
         self.trader = TestnetTrader(Engine(core), TestnetAdapter(client, armed=armed, symbols=prec) if client else _Disarmed(),
                                     lambda cat, stream, raw, recv_ns=None, mono_ns=None: self.emit(cat, stream, raw, recv_ns, mono_ns, notify=False),
                                     store=self.store)
+        if self.pcfg.cost_drift is not None:
+            from fbot.core.cost_drift import CostDriftMonitor
+            self.trader.drift = CostDriftMonitor(self.pcfg.cost_drift)
         self.trader.engine_state.kill_switch = self.kill.active
         self.ctrl("testnet_start", {"armed": armed, "why": why, "symbols": syms,
                                     "cells": [c.key() for c in core.decision.allowed_cells],
