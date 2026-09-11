@@ -95,3 +95,45 @@ def test_scan_accepts_a_signal_source_instead_of_states(tmp_path):
     assert d["signal"] == "book_imb"
     assert {r["dir"] for r in d["rows"]} <= {"long", "short"}
     assert d["rows"], "sinyalden hiç giriş üretilmedi"
+
+
+def liq_bars(vals, key="liq_long_usdt", n=300):
+    out = []
+    for i, v in enumerate(vals):
+        b = {"symbol": "X", "start_ms": i * M, "end_ms": (i + 1) * M, "open": 100, "high": 101,
+             "low": 99, "close": 100 + (i % 3), "volume": 1.0, "buy_volume": 0.5, "trades": 3,
+             "spread_bps": 1.0, "liq_long_usdt": 0.0, "liq_short_usdt": 0.0, "liq_count": 0}
+        b[key] = v
+        out.append(b)
+    return out
+
+
+def test_cascade_exhaustion_buys_after_heavy_long_liquidation():
+    """H9: yoğun long likidasyonu (zorunlu satış) dip işaretidir → long."""
+    vals = [0.0] * 200 + [5_000_000.0]
+    s = signal_series("liq_exhaust", liq_bars(vals, "liq_long_usdt"), W=100, p_lo=0.2, p_hi=0.8)
+    assert s[-1] == "long"
+    s2 = signal_series("liq_exhaust", liq_bars(vals, "liq_short_usdt"), W=100, p_lo=0.2, p_hi=0.8)
+    assert s2[-1] == "short"
+
+
+def test_cascade_continuation_is_the_opposite_of_exhaustion():
+    """H10: kaskad fiyatı ittirir → likidasyon yönünü takip et. H9 ile zıt olmalı."""
+    vals = [0.0] * 200 + [5_000_000.0]
+    rows = liq_bars(vals, "liq_long_usdt")
+    assert signal_series("liq_follow", rows, W=100, p_lo=0.2, p_hi=0.8)[-1] == "short"
+    assert signal_series("liq_exhaust", rows, W=100, p_lo=0.2, p_hi=0.8)[-1] == "long"
+
+
+def test_balanced_liquidation_gives_no_signal():
+    rows = liq_bars([0.0] * 300)
+    for i, b in enumerate(rows):
+        b["liq_long_usdt"] = b["liq_short_usdt"] = 1000.0 if i > 200 else 0.0
+    assert signal_series("liq_exhaust", rows, W=100, p_lo=0.2, p_hi=0.8)[-1] is None
+
+
+def test_no_liquidation_data_means_no_signal():
+    rows = liq_bars([0.0] * 300)
+    for b in rows:
+        b["liq_long_usdt"] = b["liq_short_usdt"] = None
+    assert all(x is None for x in signal_series("liq_exhaust", rows, W=50, p_lo=0.2, p_hi=0.8))

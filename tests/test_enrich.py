@@ -73,3 +73,29 @@ def test_original_bar_fields_are_preserved(tmp_path):
     enrich(src, out, hist, band_pct=1.0)
     a, b = rows_of(src)[0], rows_of(out)[0]
     assert all(b[k] == v for k, v in a.items())
+
+
+def test_liquidation_rows_are_merged_into_bars(tmp_path):
+    """Likidasyon dosyası varsa barlara eklenir; olaysız dakika sıfırdır, null değil.
+
+    Burada sıfır doğru: likidasyon olayı yoksa gerçekten sıfır likidasyon olmuştur. Defter ve
+    metrik verisinde durum farklıydı, orada örnek yokluğu "bilinmiyor" demekti.
+    """
+    hist, src = setup(tmp_path, depth=False, metrics=False)
+    liq = tmp_path / "liq.jsonl"
+    liq.write_text(json.dumps({"symbol": "X", "start_ms": T0, "liq_long_usdt": 500.0,
+                               "liq_short_usdt": 0.0, "liq_count": 2}) + "\n")
+    out = tmp_path / "out.jsonl"
+    rep = enrich(src, out, hist, band_pct=1.0, liquidations=liq)
+    r = rows_of(out)
+    assert r[0]["liq_long_usdt"] == 500.0 and r[0]["liq_count"] == 2
+    assert r[1]["liq_long_usdt"] == 0.0 and r[1]["liq_count"] == 0
+    assert rep["with_liquidations"] == 1
+
+
+def test_without_a_liquidation_file_the_fields_are_null(tmp_path):
+    """Dosya yoksa "sıfır likidasyon" diyemeyiz; bilinmiyor demeliyiz."""
+    hist, src = setup(tmp_path, depth=False, metrics=False)
+    out = tmp_path / "out.jsonl"
+    enrich(src, out, hist, band_pct=1.0)
+    assert rows_of(out)[0]["liq_long_usdt"] is None
