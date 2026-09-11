@@ -25,6 +25,9 @@ ui:                      # konsol: http://127.0.0.1:8787 (SSH tüneli: ssh -L 87
 	@set -a; [ -f .env.ui ] && . ./.env.ui; set +a; nohup $(PY) -m fbot.api.server --run-dir data/recordings/$(REC) --history-files $(or $(HIST_FILES),24) > data/ui.log 2>&1 & echo $$! > data/ui.pid
 	@sleep 2; curl -s http://127.0.0.1:8787/api/health; echo
 
+ui-build:                 # ui/index.html'i tasarım şablonundan üretir (tasarım kaynağı değişmez)
+	$(PY) -m scripts.build_ui
+
 ui-stop:                 # pidfile ile (pkill -f pattern'i kendi shell'ini de öldürebiliyor)
 	@if [ -f data/ui.pid ]; then kill $$(cat data/ui.pid) 2>/dev/null; rm -f data/ui.pid; echo "durduruldu"; else echo "pidfile yok"; fi
 
@@ -33,6 +36,9 @@ test:
 
 test-determinism:        # Rule Zero: fixture iki ayrı process'te, hash eşit; mutasyonda farklı
 	$(PYTEST) -q tests/test_replay_determinism.py tests/test_purity.py
+
+determinism-report:      # gerçek kayıtla iki process; konsolun determinizm kutusunu besler (MAXF=dosya)
+	$(PY) -m scripts.determinism_report data/recordings/$(REC) --max-files $(or $(MAXF),1)
 
 # ---- Faz 2
 replay:                  # gerçek kayıt; MAXF=dosya sayısı

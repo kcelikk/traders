@@ -65,3 +65,41 @@ def test_env_is_recorded_in_meta(tmp_path):
     assert con.execute("select value from meta where key='env'").fetchone()[0] == "testnet"
     assert con.execute("select value from meta where key='run_id'").fetchone()[0] == "r"
     assert PaperStore(tmp_path / "m.db", run_id="r").env == "testnet"
+
+
+def test_exit_price_and_effective_config_are_stored(tmp_path):
+    s = PaperStore(tmp_path / "c.db", run_id="r", env="paper")
+    s.set_config({"risk": {"beta_cap_usdt": "750"}, "position": {"lock_trigger_pct": "0.30"}}, config_hash="abc123")
+    s.record_position({"pos_id": "p1", "symbol": "X", "side": "long", "state": "CLOSED", "qty": "0", "entry_price": "100",
+                       "sl": None, "tp": None, "net_pct": "0.4", "exit_reason": "tp", "opened_ns": 1, "closed_ns": 2,
+                       "entry_state": "S1", "exit_price": "100.5", "filled_qty": "0.5"})
+    s.heartbeat(now_ns=12345, detail={"open": 1})
+    s.flush()
+    cfg, h = s.get_config()
+    assert cfg["risk"]["beta_cap_usdt"] == "750" and h == "abc123"
+    row = s.con.execute("select exit_price, filled_qty from positions where pos_id='p1'").fetchone()
+    assert row == ("100.5", "0.5")
+    hb = s.get_heartbeat()
+    assert hb["ts_ns"] == 12345 and hb["detail"]["open"] == 1
+
+
+def test_heartbeat_age_marks_stale(tmp_path):
+    s = PaperStore(tmp_path / "h.db", run_id="r")
+    s.heartbeat(now_ns=1_000_000_000_000, detail={})
+    s.flush()
+    assert s.get_heartbeat()["ts_ns"] == 1_000_000_000_000
+
+
+def test_old_db_without_new_columns_still_opens(tmp_path):
+    import sqlite3
+    db = tmp_path / "old.db"
+    con = sqlite3.connect(db)
+    con.executescript("CREATE TABLE positions (pos_id TEXT PRIMARY KEY, run_id TEXT, symbol TEXT, side TEXT, state TEXT, qty TEXT,"
+                      " entry_price TEXT, sl TEXT, tp TEXT, net_pct TEXT, exit_reason TEXT, opened_ns INTEGER, closed_ns INTEGER, entry_state TEXT);")
+    con.commit(); con.close()
+    s = PaperStore(db, run_id="r")          # şema göçü çalışmalı
+    s.record_position({"pos_id": "p", "symbol": "X", "side": "long", "state": "CLOSED", "qty": "0", "entry_price": "1",
+                       "sl": None, "tp": None, "net_pct": "0", "exit_reason": "tp", "opened_ns": 1, "closed_ns": 2,
+                       "entry_state": "S1", "exit_price": "1.1"})
+    s.flush()
+    assert s.con.execute("select exit_price from positions").fetchone()[0] == "1.1"

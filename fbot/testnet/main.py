@@ -27,6 +27,7 @@ from fbot.gateway.signing import load_testnet_credentials
 from fbot.gateway.testnet import TestnetClient, TestnetError
 from fbot.paper.config import load_paper_config
 from fbot.paper.main import PaperRecorder, filters_from_exchange_info
+from fbot.paper.config_view import effective_config
 from fbot.paper.store import PaperStore
 from fbot.paper.trader import ORDER_CMDS, PaperTrader, _cmd_payload
 from fbot.recorder.main import git_sha
@@ -168,6 +169,7 @@ def main(argv):
     run_id = a.run_id or time.strftime("testnet-%Y%m%dT%H%M%SZ", time.gmtime())
     db = Path(cfg.recorder.out_dir) / run_id / "paper.db"
     store = PaperStore(db, run_id=run_id, env="testnet")
+    store.set_config({"config_path": a.config, "git_sha": git_sha(), **effective_config(cfg)}, config_hash=h)
     print(json.dumps({"msg": "testnet start", "run_id": run_id, "config_hash": h, "git_sha": git_sha(),
                       "armed_env": bool(os.environ.get("FBOT_TESTNET_ARMED")),
                       "note": "yalnızca testnet.binancefuture.com; kârlılık kanıtı değildir"}), flush=True)

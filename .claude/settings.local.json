@@ -8,7 +8,13 @@
       "Bash(nginx -v)",
       "Bash(set *)",
       "Bash(.venv/bin/python -m scripts.paper_summary data/recordings/paper-demo-20260910/paper.db)",
-      "Bash(.venv/bin/python -)"
+      "Bash(.venv/bin/python -)",
+      "Bash(curl -s localhost:8787/api/health)",
+      "Bash(curl -s localhost:8787/api/state)",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(curl -s \"localhost:8787/api/history?limit=3\")",
+      "Bash(.venv/bin/python -m scripts.build_ui)",
+      "Bash(systemctl restart *)"
     ]
   }
 }

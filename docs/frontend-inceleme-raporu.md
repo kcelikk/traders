@@ -190,3 +190,27 @@ Config ekranının salt okunur olması tek başına hata değildir; düzenleme t
 ## Teslim sınırı
 
 13 bulgu kaydedildi. Uygulama düzeltmesi, canlı işlem, anahtar değişikliği veya sistem müdahalesi yapılmadı. Bulguların giderilmesi sonrası aynı senaryolarla yeniden doğrulama gerekir.
+
+
+---
+
+## Uygulanan düzeltmeler (2026-09-11)
+
+Kullanıcı onayıyla altı başlık uygulandı. Her biri önce testle yazıldı; 312 test geçiyor.
+
+| # | Konu | Bulgu | Ne yapıldı |
+|---|---|---|---|
+| 1 | Tazelik ve yükleme | F05 | `fbot/api/freshness.py`: yükleme, son olay yaşı, kategori bayatlığı tek blokta. Konsolda mod etiketi, ekran alt yazısı ve yeni **VERİ** kartı bayat veriyi işaretler. Koşu süreci artık SQLite'a canlılık damgası basar; **ORTAM** kartı sürecin sessiz kaldığını gösterir. |
+| 2 | Ortama bağlı kill switch | F01 | `fbot/api/envmap.py` ortam → dosya eşlemesi (paper / testnet / live ayrı). `POST /api/kill` ve `/api/kill/reset` artık `env` alanı olmadan reddediyor; onay kutusu hedef ortamı ve dosya yolunu yazıyor. |
+| 3 | Gerçek config ve risk verisi | F02, F03, F09 | Koşu, etkin yapılandırmasını ve config hash'ini veritabanına yazıyor; konsol `POSITION_DEFAULTS`/`RISK_DEFAULTS` yerine bunu gösteriyor, yoksa "config yok" diyor. K1–K18 satırları gerçek eşik ve sayımlardan besleniyor. Sabit replay hash'i ve hızı kaldırıldı: `make determinism-report` gerçek ölçümü üretiyor. Doğrulanmamış yeşil güvenlik rozetleri "borsada doğrulanmadı" olarak işaretlendi. |
+| 4 | Finansal doğruluk | F06, F07, F08 | Açık pozisyonlar ayrı sorgulanıyor, 50 satırlık kesme artık onları gizleyemiyor. Kapanmış pozisyonun referansı çıkış fiyatı; maruziyet gerçek miktardan hesaplanıyor (sabit 80 USDT varsayımı kaldırıldı), miktar bilinmiyorsa 0 değil "—". Drawdown kapanış zamanına göre sıralı diziden hesaplanıyor. BTC-beta net maruziyeti gerçek beta ile. |
+| 5 | Geçmiş ve performans ekranı | — | Yeni `/api/history` ucu (sayfalama, sembol/neden/durum/yön kırılımı, kümülatif net eğrisi) ve yeni **Geçmiş & performans** ekranı. |
+| 6 | Token, hata, mobil, erişilebilirlik | F11, F12, F13 | Tek API istemcisi token'ı okuma isteklerinde de gönderiyor ve HTTP durumunu kontrol ediyor; hata ekranda görünüyor. Yazma sırasında düğmeler kilitleniyor. Dar ekran için media query; modalde `role="dialog"`, etiket ve Escape. |
+
+Tasarım kaynağı `ui/design/fbot Console.dc.html` değişmedi (sha256 testle sabitlendi). `ui/index.html` artık `scripts/build_ui.py` ile üretiliyor; şablondaki her düzeltme gerekçesiyle listede duruyor ve uygulanmazsa yapı hata veriyor.
+
+### Kapsam dışı kalanlar
+
+- F04 ve F10'un faz metinleri: faz başlıkları hâlâ konsolda sabit; `docs/PHASE.md` tablosundan gelen durum ise dinamik.
+- Açık emir / kısmi dolum ayrıntısı ve karar geçmişinde sayfalama yazılmadı.
+- Tarayıcıda görsel doğrulama yapılmadı: bu oturumda tarayıcı aracı bağlı değil. Uçlar ve üretilen HTML komut satırından doğrulandı.

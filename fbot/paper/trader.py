@@ -203,7 +203,7 @@ class PaperTrader:
         pm = self.engine.pm
         notional = (pos.entry_price or Decimal(0)) * Decimal(str(pos.qty or 0))
         if notional == 0 and pos.entry_price is not None:
-            notional = pos.entry_price * Decimal(str(getattr(pos, "initial_qty", 0) or 0))
+            notional = pos.entry_price * Decimal(str(pos.entry_qty or 0))
         fee = (pm.cfg.taker_fee_pct + pm.cfg.taker_fee_pct) / 100 * notional if pm else Decimal(0)
         for a in self.drift.on_trade({"net_pct": net_pct, "commission_usdt": fee,
                                       "funding_usdt": pos.funding_accrued_pct / 100 * notional,
@@ -235,4 +235,6 @@ class PaperTrader:
                                         "tp": str(p.tp_price) if p.tp_price is not None else None,
                                         "net_pct": net, "exit_reason": p.exit_reason, "opened_ns": p.entry_time_ns,
                                         "closed_ns": self.closed_ns.get(pid),
-                                        "entry_state": p.entry_state})
+                                        "entry_state": p.entry_state,
+                                        "exit_price": str(self.exit_price[pid]) if pid in self.exit_price else None,
+                                        "filled_qty": str(p.entry_qty or p.qty)})

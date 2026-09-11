@@ -16,6 +16,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from fbot.api.auth import AuthConfig, check as auth_check
+from fbot.api.envmap import UnknownEnv, kill_path_for, known_envs
+from fbot.api.freshness import assess as assess_freshness
+from fbot.api.history import history as trade_history
 from fbot.api.keys import KeyError_, key_status, write_keys
 from fbot.api.live_view import LiveView, parse_phase_table
 from fbot.api.paper_view import environments, paper_snapshot
@@ -47,27 +50,44 @@ def parse_latency_md(md: str) -> dict:
     return out
 
 
+def beta_net_usdt(open_positions: list, betas: dict) -> float | None:
+    """K9 göstergesi: Σ ±notional × beta. Beta bilinmeyen sembol atlanır, 1 varsayılmaz.
+    Hiçbir açık pozisyonun betası yoksa `None` — "bilinmiyor" ile "sıfır" ayrı şeylerdir."""
+    total, known = 0.0, 0
+    for p in open_positions:
+        b = betas.get(p.get("symbol"))
+        n = p.get("notional_usdt")
+        if b is None or n is None:
+            continue
+        known += 1
+        total += float(n) * float(b) * (1 if p.get("side") == "long" else -1)
+    if not open_positions:
+        return 0.0
+    return round(total, 2) if known else None
+
+
 def recorder_files(run_dir: Path) -> list[dict]:
     files = sorted(run_dir.glob("events-*.jsonl.gz"), key=lambda p: p.name, reverse=True)
     return [{"name": p.name, "size": p.stat().st_size} for p in files]
 
 
-POSITION_DEFAULTS = {"t_protect_ms": 3000, "t_backup_ms": 1500, "working_type": "MARK_PRICE", "price_protect": True, "min_replace_interval_ms": 5000,
-                     "taker_fee_pct": "0.05 (VIP0, doğrulanmadı)", "maker_fee_pct": "0.02", "max_hold_ms": None, "lock_trigger_pct": None, "lock_offset_pct": None,
-                     "trail_step_pct": None, "trail_gap_pct": None, "tp1_pct": None, "tp1_frac": None, "degrade_map": "{S1:[S2], S2:[S1]}"}
-RISK_DEFAULTS = {"max_positions": 5, "gross_cap_usdt": 400, "beta_cap_usdt": None, "daily_loss_limit_pct": None, "cooldown_loss_ms": None, "reserve_orders": 3}
 LOCKED = [["Piyasa", "Binance USDⓈ-M Futures · spot yok"], ["Pozisyon modu", "One-way"], ["Sembol evreni", "TOP 10 (maks 20) · 24 s quoteVolume · stablecoin hariç · 00:00 UTC"],
           ["Eşzamanlı pozisyon", "en fazla 5 · Risk Engine sert limit"], ["Kaldıraç", "BTCUSDT/ETHUSDT 10x · diğerleri 5x"], ["İşlem büyüklüğü", "80 USDT notional · step'e aşağı · filtre altı REJECT"],
           ["Emir yolu", "WebSocket API + Ed25519 · REST fallback"], ["Kimlik", "session.logon · userDataStream.start + listenKey (ADR 0003)"],
           ["Açılışta koruma", "SL + TP algo · closePosition=true · deterministik clientAlgoId"], ["Varsayılan mod", "Paper"], ["Hot path", "tek process, tek thread · 1 ms bütçe (ADR 0011)"]]
 
 
-def assemble_config(cfg_dir: Path) -> dict:
+def assemble_config(cfg_dir: Path, run_config: dict | None = None) -> dict:
+    """Statik kısım TOML'lardan; pozisyon/risk eşikleri **koşunun kendi kaydından** gelir (F02).
+    Koşu config yazmamışsa alan boş bırakılır — sabit varsayılan gösterilmez."""
     rec = tomllib.loads((cfg_dir / "recorder.toml").read_text()) if (cfg_dir / "recorder.toml").exists() else {}
     res = tomllib.loads((cfg_dir / "research.toml").read_text()) if (cfg_dir / "research.toml").exists() else {}
+    core = ((run_config or {}).get("core") or {})
     return {"staleness_s": rec.get("staleness_s", {}), "recorder_run": rec.get("run", {}), "universe": rec.get("universe", {}), "streams": rec.get("streams", {}),
             "research": {**res.get("features", {}), **res.get("states", {}), "horizons": res.get("horizons", {}).get("minutes"), "seed": res.get("bootstrap", {}).get("seed")},
-            "position": POSITION_DEFAULTS, "risk": RISK_DEFAULTS, "locked": LOCKED}
+            "position": core.get("position") or {}, "risk": core.get("risk") or {}, "decision": core.get("decision") or {},
+            "run": {k: v for k, v in (run_config or {}).items() if k in ("config_path", "git_sha", "sim_latency_ms", "sim_seed", "sim_jitter_ms")},
+            "source": "koşu kaydı" if core else "yok (koşu config yazmamış)", "locked": LOCKED}
 
 
 class Tailer(threading.Thread):
@@ -147,7 +167,7 @@ class Api:
         self.view = LiveView(symbols, W=f["W"], N_short=f["N_short"], N_long=f["N_long"], p_lo=st["p_lo"], p_hi=st["p_hi"])
         self.lock = threading.Lock()
         self.tailer = Tailer(run_dir, self.view, self.lock, history_files)
-        self.kill = KillSwitch(ROOT / "data" / "state" / "kill_switch.json")
+        self.kills = {e: KillSwitch(kill_path_for(e, ROOT)) for e in known_envs()}
         self.staleness_s = rec_cfg.get("staleness_s", {})
         self._cache = (0.0, None)
 
@@ -207,12 +227,17 @@ class Api:
             snap = paper_snapshot(base, run_id=run_id)
             envs = environments(base)
         except Exception as e:  # noqa: BLE001 — konsol paper olmadan da çalışır
-            return {"paper": {"error": repr(e)}, "environments": [], "positions": [], "verdicts": [], "fsm": {}, "exit_reasons": {}, "paper_running": False}
+            return {"paper": {"error": repr(e)}, "environments": [], "positions": [], "open_positions": [], "verdicts": [],
+                    "fsm": {}, "exit_reasons": {}, "paper_running": False, "run_config": {}}
         return {"environments": envs,
                 "paper": {"run_id": snap["run_id"], "env": snap["env"], "runs": snap["runs"],
-                          "metrics": snap["metrics"], "open_count": snap["open_count"]},
-                "positions": snap["positions"], "verdicts": snap["verdicts"], "fsm": snap["fsm"],
-                "exit_reasons": snap["exit_reasons"], "paper_running": snap["run_id"] is not None}
+                          "metrics": snap["metrics"], "open_count": snap["open_count"],
+                          "gross_exposure_usdt": snap["gross_exposure_usdt"], "config_hash": snap["config_hash"],
+                          "heartbeat": snap["heartbeat"], "requested_run_id": snap["requested_run_id"],
+                          "run_missing": snap["run_missing"]},
+                "positions": snap["positions"], "open_positions": snap["open_positions"], "verdicts": snap["verdicts"],
+                "fsm": snap["fsm"], "exit_reasons": snap["exit_reasons"], "paper_running": snap["run_id"] is not None,
+                "run_config": snap["config"]}
 
     def state(self, run_id: str | None = None) -> dict:
         now = time.time()
@@ -222,23 +247,32 @@ class Api:
             snap = self.view.snapshot(time.time_ns())
         run = self._last_run()
         snap["recorder"].update({k: run.get(k) for k in ("run_id", "restart_no", "git_sha", "config_hash", "start_ns")})
-        self.kill = KillSwitch(self.kill.path)   # dosyadan taze oku (elle sıfırlama görünsün)
+        self.kills = {e: KillSwitch(kill_path_for(e, ROOT)) for e in known_envs()}   # dosyadan taze oku (elle sıfırlama görünsün)
         phases_md = (ROOT / "docs" / "PHASE.md").read_text() if (ROOT / "docs" / "PHASE.md").exists() else ""
         lat_md = (ROOT / "docs" / "latency-baseline.generated.md").read_text() if (ROOT / "docs" / "latency-baseline.generated.md").exists() else ""
+        pk = self.kills["paper"]
+        paper = self._paper(run_id)
         du = shutil.disk_usage(str(self.run_dir))
         rec_size = sum(f["size"] for f in recorder_files(self.run_dir))
         out = {
             "t_ms": int(now * 1000), "mode": "paper", "loading": self.tailer.loading, "tail_lines": self.tailer.lines,
-            "kill": {"active": self.kill.active, **{k: v for k, v in self.kill.state.items() if k != "active"}},
+            "kill": {"active": pk.active, **{k: v for k, v in pk.state.items() if k != "active"}, "env": "paper", "path": str(pk.path)},
+            "kills": {e: {"active": k.active, "env": e, "path": str(k.path),
+                          **{x: v for x, v in k.state.items() if x != "active"}} for e, k in self.kills.items()},
+            "freshness": assess_freshness(loading=self.tailer.loading, tail_lines=self.tailer.lines,
+                                          last_event_ns=snap.get("last_event_ns"), now_ns=time.time_ns(),
+                                          stale_age_s=snap.get("stale", {}), thresholds_s=self.staleness_s),
             "phases": parse_phase_table(phases_md)[:11],
             "staleness_s": self.staleness_s,
             **snap,
             "recorder_files": recorder_files(self.run_dir)[:8], "recorder_bytes": rec_size, "disk_free_gb": round(du.free / 1e9, 1),
             "research": self._read_json(ROOT / "data" / "research" / "hist-30d" / "report.json"),
             "replay_cmp": self._read_json(ROOT / "data" / "research" / "replay-positions.json"),
+            "determinism": self._read_json(ROOT / "data" / "research" / "determinism.json"),
             "latency": parse_latency_md(lat_md),
-            "config": assemble_config(ROOT / "config"),
-            **self._paper(run_id), "cost_drift": self._drift(run_id),
+            **paper, "cost_drift": self._drift(run_id),
+            "beta_net_usdt": beta_net_usdt(paper.get("open_positions") or [], snap.get("betas") or {}),
+            "config": assemble_config(ROOT / "config", paper.get("run_config")),
         }
         if run_id is None:
             self._cache = (now, out)
@@ -275,6 +309,16 @@ def make_handler(api: Api):
                 from urllib.parse import parse_qs, urlparse
                 run = (parse_qs(urlparse(self.path).query).get("run") or [None])[0]
                 return self._json(api.state(run))
+            if self.path.startswith("/api/history"):
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                def _int(name, default):
+                    try:
+                        return int((q.get(name) or [default])[0])
+                    except ValueError:
+                        return default
+                return self._json(trade_history(Path(api.run_dir).parent, run_id=(q.get("run") or [None])[0],
+                                                limit=_int("limit", 100), offset=_int("offset", 0)))
             if self.path.startswith("/api/keys"):
                 return self._json({"status": key_status(ROOT / ".env"),
                                    "note": "gizli anahtar hiçbir zaman döndürülmez; yazma tek yönlüdür"})
@@ -289,11 +333,20 @@ def make_handler(api: Api):
                 return
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(n) or b"{}") if n else {}
-            if self.path == "/api/kill":
-                api.kill = KillSwitch(api.kill.path)
-                api.kill.trigger(body.get("reason") or "manual (konsol)", time.time_ns(), git_sha())
+            if self.path in ("/api/kill", "/api/kill/reset"):
+                # Ortam zorunludur: hangi ortamın durdurulduğu istekte açıkça yazar (F01)
+                try:
+                    ks = KillSwitch(kill_path_for(body.get("env"), ROOT))
+                except UnknownEnv as e:
+                    return self._json({"error": str(e), "envs": known_envs()}, 400)
+                env = body["env"]
+                if self.path == "/api/kill":
+                    ks.trigger(f"{body.get('reason') or 'manual (konsol)'} [env={env}]", time.time_ns(), git_sha())
+                else:
+                    ks.reset(f"{body.get('note') or 'manual reset (konsol)'} [env={env}]", time.time_ns())
+                api.kills[env] = ks
                 api._cache = (0.0, None)
-                return self._json({"active": api.kill.active, **api.kill.state})
+                return self._json({"env": env, "path": str(ks.path), "active": ks.active, **ks.state})
             if self.path == "/api/keys":
                 env_name = body.get("env")
                 vals = {k: body[k] for k in ("key", "secret", "armed") if k in body}
@@ -302,11 +355,6 @@ def make_handler(api: Api):
                 except KeyError_ as e:
                     return self._json({"error": str(e)}, 400)
                 return self._json({**res, "status": key_status(ROOT / ".env")})
-            if self.path == "/api/kill/reset":
-                api.kill = KillSwitch(api.kill.path)
-                api.kill.reset(body.get("note") or "manual reset (konsol)", time.time_ns())
-                api._cache = (0.0, None)
-                return self._json({"active": api.kill.active, **api.kill.state})
             return self._json({"error": "not found"}, 404)
     return H
 

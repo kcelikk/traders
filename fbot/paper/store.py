@@ -17,7 +17,11 @@ CREATE TABLE IF NOT EXISTS positions (pos_id TEXT PRIMARY KEY, run_id TEXT, symb
 CREATE INDEX IF NOT EXISTS ix_dec_t ON decisions(t_ms);
 CREATE INDEX IF NOT EXISTS ix_pos_state ON positions(state);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS heartbeat (id INTEGER PRIMARY KEY CHECK (id=1), ts_ns INTEGER, detail TEXT);
 """
+
+# Sonradan eklenen sütunlar (eski veritabanları için göç)
+MIGRATIONS = [("positions", "exit_price", "TEXT"), ("positions", "filled_qty", "TEXT")]
 
 
 class PaperStore:
@@ -28,6 +32,10 @@ class PaperStore:
         self.flush_every = flush_every
         self.con = sqlite3.connect(str(self.path), check_same_thread=False)
         self.con.executescript(SCHEMA)
+        for table, col, typ in MIGRATIONS:
+            cols = {r[1] for r in self.con.execute(f"PRAGMA table_info({table})")}
+            if col not in cols:
+                self.con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
         cur = self.con.execute("SELECT value FROM meta WHERE key='env'").fetchone()
         self.env = cur[0] if cur else env
         self.con.executemany("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -54,13 +62,43 @@ class PaperStore:
         self._maybe_flush()
 
     def record_position(self, p: dict) -> None:
-        self.con.execute("""INSERT INTO positions(pos_id,run_id,symbol,side,state,qty,entry_price,sl,tp,net_pct,exit_reason,opened_ns,closed_ns,entry_state)
-                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        self.con.execute("""INSERT INTO positions(pos_id,run_id,symbol,side,state,qty,entry_price,sl,tp,net_pct,exit_reason,opened_ns,closed_ns,entry_state,exit_price,filled_qty)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                             ON CONFLICT(pos_id) DO UPDATE SET state=excluded.state, qty=excluded.qty, sl=excluded.sl, tp=excluded.tp,
-                            net_pct=excluded.net_pct, exit_reason=excluded.exit_reason, closed_ns=excluded.closed_ns""",
+                            net_pct=excluded.net_pct, exit_reason=excluded.exit_reason, closed_ns=excluded.closed_ns,
+                            exit_price=COALESCE(excluded.exit_price, positions.exit_price),
+                            filled_qty=COALESCE(excluded.filled_qty, positions.filled_qty)""",
                          (p["pos_id"], self.run_id, p.get("symbol"), p.get("side"), p.get("state"), p.get("qty"), p.get("entry_price"),
-                          p.get("sl"), p.get("tp"), p.get("net_pct"), p.get("exit_reason"), p.get("opened_ns"), p.get("closed_ns"), p.get("entry_state")))
+                          p.get("sl"), p.get("tp"), p.get("net_pct"), p.get("exit_reason"), p.get("opened_ns"), p.get("closed_ns"),
+                          p.get("entry_state"), p.get("exit_price"), p.get("filled_qty")))
         self._maybe_flush()
+
+    # ---- etkin yapılandırma ve canlılık (konsol bunları okur)
+    def set_config(self, cfg: dict, config_hash: str) -> None:
+        self.con.executemany("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                             [("config", json.dumps(cfg, default=str)), ("config_hash", config_hash)])
+        self.flush()
+
+    def get_config(self) -> tuple[dict, str | None]:
+        rows = dict(self.con.execute("SELECT key, value FROM meta WHERE key IN ('config','config_hash')").fetchall())
+        try:
+            return json.loads(rows.get("config") or "{}"), rows.get("config_hash")
+        except ValueError:
+            return {}, rows.get("config_hash")
+
+    def heartbeat(self, now_ns: int, detail: dict) -> None:
+        self.con.execute("INSERT INTO heartbeat(id,ts_ns,detail) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET ts_ns=excluded.ts_ns, detail=excluded.detail",
+                         (now_ns, json.dumps(detail, default=str)))
+        self.flush()
+
+    def get_heartbeat(self) -> dict | None:
+        r = self.con.execute("SELECT ts_ns, detail FROM heartbeat WHERE id=1").fetchone()
+        if not r:
+            return None
+        try:
+            return {"ts_ns": r[0], "detail": json.loads(r[1] or "{}")}
+        except ValueError:
+            return {"ts_ns": r[0], "detail": {}}
 
     def _maybe_flush(self) -> None:
         self.pending += 1

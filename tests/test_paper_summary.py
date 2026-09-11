@@ -32,3 +32,19 @@ def test_empty_db_does_not_crash(tmp_path):
     s = PaperStore(tmp_path / "e.db", run_id="r"); s.flush()
     m = metrics(tmp_path / "e.db")
     assert m["işlem"] == 0 and m["net_ortalama_pct"] is None
+
+
+def test_drawdown_follows_time_order_not_insertion_order(tmp_path):
+    """Sıralamasız sorgu drawdown'ı rastgele bir diziden hesaplıyordu (F08)."""
+    db = tmp_path / "dd.db"
+    s = PaperStore(db, run_id="r")
+    # kapanış sırası: +1.0, -2.0, +0.5 → maks drawdown 2.0
+    rows = [("a", "0.5", 3), ("b", "1.0", 1), ("c", "-2.0", 2)]
+    for pid, net, k in rows:
+        s.record_position({"pos_id": pid, "symbol": "X", "side": "long", "state": "CLOSED", "qty": "0", "entry_price": "100",
+                           "sl": None, "tp": None, "net_pct": net, "exit_reason": "tp", "opened_ns": k, "closed_ns": k * 10,
+                           "entry_state": "S1", "exit_price": "101"})
+    s.flush(); s.close()
+    m = metrics(db)
+    assert m["maks_drawdown_pct"] == 2.0
+    assert m["net_toplam_pct"] == -0.5

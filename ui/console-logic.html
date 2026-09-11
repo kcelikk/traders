@@ -1,26 +1,66 @@
 <script type="text/x-dc" data-dc-script data-props="{}">
 class Component extends DCLogic {
-  state = { screen: 'status', sym: null, cost: 'taker/taker', killDialog: false, api: null, err: null, tickN: 0 };
-  chartRef = React.createRef(); equityRef = React.createRef();
+  state = { screen: 'status', sym: null, cost: 'taker/taker', killDialog: false, api: null, err: null, tickN: 0,
+            hist: null, histOffset: 0, histErr: null, busy: false, notice: null };
+  chartRef = React.createRef(); equityRef = React.createRef(); histEqRef = React.createRef();
+  HIST_PAGE = 25;
   SC = { S0: '#6f849c', S1: '#00e5a0', S2: '#ff5470', S3: '#35c8ff', S4: '#ffb020' };
   SNAME = { S0: 'nötr', S1: 'trend yukarı', S2: 'trend aşağı', S3: 'sıkışma', S4: 'aşırı genişleme' };
   componentDidMount() {
     this.poll(); this.t = setInterval(() => this.poll(), 2000);
     this.ro = new ResizeObserver(() => this.measure()); this.observe();
+    this.onKey = e => { if (e.key === 'Escape' && this.state.killDialog) this.setState({ killDialog: false }); };
+    document.addEventListener('keydown', this.onKey);
   }
-  componentDidUpdate() { this.observe(); }
-  componentWillUnmount() { clearInterval(this.t); if (this.ro) this.ro.disconnect(); }
+  componentDidUpdate(pp, ps) {
+    this.observe();
+    if (this.state.screen === 'history' && (ps.screen !== 'history' || ps.histOffset !== this.state.histOffset)) this.loadHistory();
+  }
+  componentWillUnmount() { clearInterval(this.t); if (this.ro) this.ro.disconnect(); document.removeEventListener('keydown', this.onKey); }
   runParam() { try { return new URLSearchParams(location.search).get('run') || ''; } catch (e) { return ''; } }
   goRun(id) { location.search = id ? '?run=' + encodeURIComponent(id) : ''; }
-  poll() { const r = this.runParam(); fetch('/api/state' + (r ? '?run=' + encodeURIComponent(r) : ''), { cache: 'no-store' }).then(r => r.json()).then(api => this.setState(s => ({ api, err: null, tickN: s.tickN + 1, sym: s.sym || (api.universe[0] && api.universe[0].sym) || 'BTCUSDT' }))).catch(e => this.setState({ err: String(e) })); }
   token() { try { return localStorage.getItem('fbot_token') || ''; } catch (e) { return ''; } }
+  clearToken() { try { localStorage.removeItem('fbot_token'); } catch (e) {} }
+  askToken() { const t = window.prompt('Konsol yazma token\'ı (FBOT_UI_TOKEN):') || ''; if (t) { try { localStorage.setItem('fbot_token', t); } catch (e) {} } return t; }
+  // Tek API istemcisi: token okumada da gönderilir, HTTP durumu her zaman kontrol edilir (F11)
+  req(path, opts) {
+    const o = opts || {}, h = { 'X-Fbot-Token': o.token !== undefined ? o.token : this.token() };
+    if (o.body !== undefined) h['Content-Type'] = 'application/json';
+    return fetch(path, { method: o.method || 'GET', cache: 'no-store', headers: h,
+                         body: o.body === undefined ? undefined : JSON.stringify(o.body) })
+      .then(r => r.text().then(txt => {
+        let data = null; try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
+        if (!r.ok) { const e = new Error((data && data.error) || ('HTTP ' + r.status)); e.status = r.status; e.data = data; throw e; }
+        if (data === null) throw new Error('cevap JSON değil (HTTP ' + r.status + ')');
+        return data;
+      }));
+  }
+  poll() {
+    const r = this.runParam();
+    return this.req('/api/state' + (r ? '?run=' + encodeURIComponent(r) : ''))
+      .then(api => this.setState(s => ({ api, err: null, tickN: s.tickN + 1, sym: s.sym || (api.universe[0] && api.universe[0].sym) || 'BTCUSDT' })))
+      .catch(e => this.setState({ err: e.status ? e.status + ' · ' + e.message : String(e.message || e) }));
+  }
+  loadHistory() {
+    const r = this.runParam(), q = ['limit=' + this.HIST_PAGE, 'offset=' + this.state.histOffset].concat(r ? ['run=' + encodeURIComponent(r)] : []);
+    return this.req('/api/history?' + q.join('&'))
+      .then(hist => this.setState({ hist, histErr: null }))
+      .catch(e => this.setState({ histErr: e.status ? e.status + ' · ' + e.message : String(e.message || e) }));
+  }
   post(path, body) {
+    if (this.state.busy) return Promise.resolve();
     let t = this.token();
-    if (!t) { t = window.prompt('Konsol yazma token\'ı (FBOT_UI_TOKEN):') || ''; if (t) { try { localStorage.setItem('fbot_token', t); } catch (e) {} } }
-    return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Fbot-Token': t }, body: JSON.stringify(body || {}) })
-      .then(r => { if (r.status === 401) { try { localStorage.removeItem('fbot_token'); } catch (e) {} alert('Token geçersiz ya da yazma uçları kapalı.'); } return this.poll(); }); }
-  observe() { [this.chartRef.current, this.equityRef.current].forEach(el => { if (el && !el.__obs) { el.__obs = true; this.ro.observe(el); } }); this.measure(); }
-  measure() { const c = this.chartRef.current ? Math.round(this.chartRef.current.getBoundingClientRect().width) : 0, e = this.equityRef.current ? Math.round(this.equityRef.current.getBoundingClientRect().width) : 0; if ((c && c !== this.state.cw) || (e && e !== this.state.ew)) this.setState({ cw: c || this.state.cw, ew: e || this.state.ew }); }
+    if (!t) { t = this.askToken(); }
+    this.setState({ busy: true, notice: null });
+    return this.req(path, { method: 'POST', body: body || {}, token: t })
+      .then(res => { this.setState({ busy: false, notice: null }); return this.poll().then(() => res); })
+      .catch(e => {
+        if (e.status === 401) { this.clearToken(); this.setState({ busy: false, notice: 'Token geçersiz ya da yazma uçları kapalı.' }); }
+        else { this.setState({ busy: false, notice: 'İstek başarısız: ' + (e.message || e) }); }
+      });
+  }
+  observe() { [this.chartRef.current, this.equityRef.current, this.histEqRef.current].forEach(el => { if (el && !el.__obs) { el.__obs = true; this.ro.observe(el); } }); this.measure(); }
+  measure() { const w = r => r.current ? Math.round(r.current.getBoundingClientRect().width) : 0, c = w(this.chartRef), e = w(this.equityRef), g = w(this.histEqRef); if ((c && c !== this.state.cw) || (e && e !== this.state.ew) || (g && g !== this.state.gw)) this.setState({ cw: c || this.state.cw, ew: e || this.state.ew, gw: g || this.state.gw }); }
   fmt(n, d) { if (n == null || isNaN(n)) return '—'; n = Number(n); if (d === undefined) d = Math.abs(n) < 0.01 ? 5 : Math.abs(n) < 1 ? 4 : Math.abs(n) < 100 ? 2 : Math.abs(n) < 10000 ? 1 : 0; return n.toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
   sg(n, d = 2, suf = '') { if (n == null || isNaN(n)) return '—'; return (n >= 0 ? '+' : '−') + this.fmt(Math.abs(n), d) + suf; }
   tms(ns) { return ns ? new Date(Number(ns) / 1e6).toISOString().slice(11, 19) : '—'; }
@@ -51,12 +91,33 @@ class Component extends DCLogic {
     const all = Aa.concat(Bb, [0]), hi = Math.max(...all), lo = Math.min(...all), y = v => 6 + (hi - v) / ((hi - lo) || 1) * (H - 12), pts = arr => arr.map((v, i) => `${i * W / Math.max(1, arr.length - 1)},${y(v)}`).join(' ');
     return h('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%', style: { display: 'block' } }, h('line', { x1: 0, x2: W, y1: y(0), y2: y(0), stroke: '#1a2536', strokeDasharray: '3 3' }), h('polyline', { points: pts(Aa), fill: 'none', stroke: '#6f849c', strokeWidth: 1.2 }), h('polyline', { points: pts(Bb), fill: 'none', stroke: '#35c8ff', strokeWidth: 1.5 }), h('text', { x: 4, y: 12, fontSize: 10, fill: '#6f849c', fontFamily: 'JetBrains Mono' }, '(a) ' + keys[0] + ' ' + this.sg(Aa[Aa.length - 1], 2, '%')), h('text', { x: 4, y: 24, fontSize: 10, fill: '#35c8ff', fontFamily: 'JetBrains Mono' }, '(b) ' + keys[1] + ' ' + this.sg(Bb[Bb.length - 1], 2, '%')));
   }
+  histEquity() {
+    const h = React.createElement, H = this.state.hist, W = this.state.gw || 600, HH = 150;
+    if (this.state.histErr) return h('div', { style: { padding: 12, color: '#ff5470', fontSize: 11 } }, 'geçmiş yüklenemedi: ' + this.state.histErr);
+    if (!H) return h('div', { style: { padding: 12, color: '#6f849c', fontSize: 11 } }, 'yükleniyor…');
+    const eq = (H.performance && H.performance.equity) || [];
+    if (eq.length < 2) return h('div', { style: { padding: 12, color: '#6f849c', fontSize: 11 } }, 'kapanmış işlem yok (en az 2 gerekir)');
+    const vals = eq.map(e => e.cum_net_pct), hi = Math.max(0, ...vals), lo = Math.min(0, ...vals);
+    const y = v => 8 + (hi - v) / ((hi - lo) || 1) * (HH - 22), x = i => i * W / Math.max(1, eq.length - 1);
+    const pts = vals.map((v, i) => x(i) + ',' + y(v)).join(' ');
+    const last = vals[vals.length - 1], col = last >= 0 ? '#00e5a0' : '#ff5470';
+    return h('svg', { viewBox: `0 0 ${W} ${HH}`, width: '100%', height: '100%', style: { display: 'block' } },
+      h('line', { x1: 0, x2: W, y1: y(0), y2: y(0), stroke: '#1a2536', strokeDasharray: '3 3' }),
+      h('polyline', { points: pts, fill: 'none', stroke: col, strokeWidth: 1.5 }),
+      h('text', { x: 4, y: 12, fontSize: 10, fill: col, fontFamily: 'JetBrains Mono' }, eq.length + ' işlem · kümülatif ' + this.sg(last, 2, '%')),
+      h('text', { x: W - 4, y: HH - 4, fontSize: 10, textAnchor: 'end', fill: '#6f849c', fontFamily: 'JetBrains Mono' }, 'maliyet düşülmüş net'));
+  }
   renderVals() {
     const S = this.state, A = S.api, go = s => () => this.setState({ screen: s }), chip = (c, bg) => `font-size:10px;letter-spacing:.06em;padding:2px 7px;border:1px solid ${c};color:${c};${bg ? 'background:' + bg + ';' : ''}white-space:nowrap;`;
-    const uni = A ? A.universe : [], sym = S.sym || 'BTCUSDT', u = uni.find(x => x.sym === sym) || {}, kill = !!(A && A.kill && A.kill.active);
+    const uni = A ? A.universe : [], sym = S.sym || 'BTCUSDT', u = uni.find(x => x.sym === sym) || {};
     const rec = (A && A.recorder) || {}, lat = (A && A.latency) || {}, cfg = (A && A.config) || {}, res = A && A.research, cmp = A && A.replay_cmp && A.replay_cmp.results;
     const nSym = uni.length || 10;
-    const screens = [['status', 'Durum', A ? (A.loading ? 'yükleniyor' : 'canlı') : '…', '/status'], ['positions', 'Pozisyonlar', '0/5', 'Faz 4 · durum makinesi, R1–R5'], ['risk', 'Risk Engine', 'K18', 'Faz 5 · veto, kill switch, mutabakat'], ['algo', 'Algoritma & sinyal', 'D1–D3', 'Faz 3/6 · feature → durum → karar → risk → pozisyon'], ['states', 'Piyasa durumu', 'S0–S4', 'Faz 3/6 · durum etiketi ve karar hücreleri'], ['replay', 'Replay & araştırma', res ? res.passed + '/' + (res.cells ? res.cells.length / 2 : '?') : '', 'Faz 2/3 · Rule Zero, hücre tablosu'], ['recorder', 'Kayıt', rec.run_id || '', 'Faz 1 · bütünlük ve dosyalar'], ['config', 'Config', '', 'kilitli kararlar ve parametreler']];
+    const FR = (A && A.freshness) || { status: A ? 'no_data' : 'loading', live: false, reason: A ? '' : 'API bekleniyor' };
+    const frColor = { live: '#00e5a0', loading: '#ffb020', stale: '#ff5470', no_data: '#6f849c' }[FR.status] || '#6f849c';
+    const frLabel = { live: 'canlı', loading: 'yükleniyor', stale: 'BAYAT', no_data: 'veri yok' }[FR.status] || FR.status;
+    const ageTxt = n => n == null ? '—' : n < 90 ? n.toFixed(1) + ' s' : n < 5400 ? (n / 60).toFixed(1) + ' dk' : (n / 3600).toFixed(1) + ' sa';
+    const frAge = ageTxt(FR.data_age_s);
+    const screens = [['status', 'Durum', frLabel, '/status'], ['positions', 'Pozisyonlar', '0/5', 'Faz 4 · durum makinesi, R1–R5'], ['risk', 'Risk Engine', 'K18', 'Faz 5 · veto, kill switch, mutabakat'], ['algo', 'Algoritma & sinyal', 'D1–D3', 'Faz 3/6 · feature → durum → karar → risk → pozisyon'], ['states', 'Piyasa durumu', 'S0–S4', 'Faz 3/6 · durum etiketi ve karar hücreleri'], ['replay', 'Replay & araştırma', res ? res.passed + '/' + (res.cells ? res.cells.length / 2 : '?') : '', 'Faz 2/3 · Rule Zero, hücre tablosu'], ['recorder', 'Kayıt', rec.run_id || '', 'Faz 1 · bütünlük ve dosyalar'], ['history', 'Geçmiş & performans', '', 'kapanmış işlemler, kümülatif net, kırılım'], ['config', 'Config', '', 'kilitli kararlar ve parametreler']];
     const cur = screens.find(s => s[0] === S.screen);
     const navItems = screens.map((s, i) => ({ label: s[1], badge: s[2], badgeColor: S.screen === s[0] ? '#35c8ff' : '#6f849c', num: String(i + 1).padStart(2, '0'), go: go(s[0]), style: `display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0;border-left:2px solid ${S.screen === s[0] ? '#00e5a0' : 'transparent'};background:${S.screen === s[0] ? 'rgba(0,229,160,.07)' : 'transparent'};color:${S.screen === s[0] ? '#dbe7f3' : '#9fb0c3'};cursor:pointer;font-size:13px;white-space:nowrap;` }));
     const phStatus = {}; ((A && A.phases) || []).forEach(p => { phStatus[p.n] = p.status; });
@@ -64,29 +125,44 @@ class Component extends DCLogic {
     const dot = (c, on) => `width:7px;height:7px;border-radius:50%;background:${c};display:inline-block;${on ? 'animation:pulse 1.6s ease-out infinite;' : ''}`;
     const P0 = (A && A.paper) || {}, PM = P0.metrics || {};
     const envs = (A && A.environments) || [], envKind = P0.env || 'paper', hasTestnet = envs.some(e => e.env === 'testnet');
+    const HB = P0.heartbeat, hbAge = HB && HB.ts_ns ? (Date.now() - HB.ts_ns / 1e6) / 1000 : null;
+    const hbStale = hbAge == null || hbAge > 60;   // süreç 10 s'de bir damga basar
+    const hbTxt = hbAge == null ? 'canlılık damgası yok' : hbStale ? 'süreç SESSİZ · ' + ageTxt(hbAge) : 'süreç canlı · ' + ageTxt(hbAge);
+    const KS = (A && A.kills) || {}, killEnv = KS[envKind] ? envKind : 'paper', killState = KS[killEnv] || (A && A.kill) || {};
+    const kill = !!killState.active;
     const envColor = envKind === 'testnet' ? '#ffb020' : envKind === 'live' ? '#ff5470' : '#00e5a0';
     const envLabel = !P0.run_id ? 'KOŞU YOK · canlı yol korumalı stub'
       : envKind === 'testnet' ? 'TESTNET · ' + P0.run_id + ' · GERÇEK testnet emirleri · kârlılık kanıtı değil'
       : envKind === 'live' ? 'CANLI · ' + P0.run_id
       : 'PAPER · ' + P0.run_id + ' · simüle execution (L2 defter)';
     const stStyle = { MANAGED: chip('#00e5a0'), PROTECTING: chip('#ffb020'), CLOSING: chip('#35c8ff'), FROZEN: chip('#ffb020'), EMERGENCY: chip('#ff5470'), ENTRY_SENT: chip('#6f849c'), CLOSED: chip('#6f849c') };
-    const positions = ((A && A.positions) || []).map(p => {
+    const openPos = (A && A.open_positions) || [];
+    const seen = {}; openPos.forEach(p => { seen[p.pos_id] = true; });
+    const posSrc = openPos.concat(((A && A.positions) || []).filter(p => !seen[p.pos_id]));
+    const positions = posSrc.map(p => {
+      const closed = p.state === 'CLOSED';
       const mk = (uni.find(x => x.sym === p.symbol) || {}).mark, mark = mk != null ? Number(mk) : null;
       const entry = p.entry_price != null ? Number(p.entry_price) : null;
-      const gross = (entry && mark) ? (mark / entry - 1) * 100 * (p.side === 'long' ? 1 : -1) : null;
+      // Kapanmış pozisyonun referansı çıkış fiyatıdır; güncel mark ile göstermek yanlış PnL üretir (F06)
+      const ref = closed ? (p.exit_price != null ? Number(p.exit_price) : null) : mark;
+      const gross = (entry && ref) ? (ref / entry - 1) * 100 * (p.side === 'long' ? 1 : -1) : null;
       const lev = (p.symbol === 'BTCUSDT' || p.symbol === 'ETHUSDT') ? 10 : 5;
       const hold = p.closed_ns && p.opened_ns ? ((p.closed_ns - p.opened_ns) / 6e10).toFixed(1) + ' dk' : (p.opened_ns ? ((Date.now() * 1e6 - p.opened_ns) / 6e10).toFixed(1) + ' dk' : '—');
+      const costPct = (gross != null && p.net_pct != null) ? gross - p.net_pct : null;
       return { id: p.pos_id.slice(0, 18), sym: p.symbol, side: (p.side || '').toUpperCase(), lev: lev + 'x',
                sideStyle: chip(p.side === 'long' ? '#00e5a0' : '#ff5470'), state: p.state, stateStyle: stStyle[p.state] || chip('#6f849c'),
-               entryState: p.entry_state || '—', qty: p.qty, entry: this.fmt(entry), mark: this.fmt(mark),
+               entryState: p.entry_state || '—', qty: p.filled_qty || p.qty, entry: this.fmt(entry),
+               mark: (closed ? 'çıkış ' : '') + this.fmt(ref),
                sl: this.fmt(p.sl == null ? null : Number(p.sl)), slv: '—', tp: this.fmt(p.tp == null ? null : Number(p.tp)),
-               gross: gross == null ? '—' : this.sg(gross, 3, '%'), cost: '0.10%',
+               gross: gross == null ? '—' : this.sg(gross, 3, '%'),
+               cost: costPct == null ? '—' : this.fmt(costPct, 3) + '%',
                net: p.net_pct == null ? '—' : this.sg(p.net_pct, 3, '%'),
                roe: p.net_pct == null ? '—' : this.sg(p.net_pct * lev, 2, '% ROE'),
                color: (p.net_pct || 0) >= 0 ? '#00e5a0' : '#ff5470', hold,
                lock: p.exit_reason ? p.exit_reason : '—', lockStyle: p.exit_reason ? chip('#35c8ff') : 'color:#6f849c;font-size:11px;' };
     });
     const posCount = P0.open_count || 0;
+    const grossNow = P0.gross_exposure_usdt != null ? P0.gross_exposure_usdt : 0;   // gerçek miktardan (F07)
     const card = (label, value, sub, color, spark) => ({ label, value, sub, color: color || '#dbe7f3', spark: spark || '' });
     const warmDone = uni.filter(x => x.warm_pct >= 100).length;
     const universe = uni.map((x, i) => ({ i: i + 1, sym: x.sym, lev: x.sym === 'BTCUSDT' || x.sym === 'ETHUSDT' ? '10x' : '5x', state: x.state, stateStyle: chip(this.SC[x.state]), price: this.fmt(x.price), warmStyle: `display:block;height:100%;width:${x.warm_pct}%;background:${x.warm_pct < 100 ? '#ffb020' : '#00e5a0'};`, go: () => this.setState({ sym: x.sym }), style: `background:none;border:0;padding:0;text-align:left;cursor:pointer;color:${sym === x.sym ? '#35c8ff' : '#dbe7f3'};font-weight:500;` }));
@@ -95,26 +171,58 @@ class Component extends DCLogic {
     const feed = ((A && A.feed) || []).slice(0, 14).map(f => ({ t: this.tms(f.t_ns), kind: f.kind, color: feedColor[f.kind] || '#6f849c', msg: f.msg }));
     const fsmCounts = (A && A.fsm) || {};
     const fsm = ['ENTRY_SENT', 'PROTECTING', 'MANAGED', 'CLOSING', 'CLOSED'].map((n, i) => { const v = fsmCounts[n] || 0, live = v > 0 && n !== 'CLOSED'; return { name: n, count: v + (n === 'CLOSED' ? ' kapandı' : ' açık'), arrow: i < 4, style: `border:1px solid ${live ? '#00e5a0' : '#1a2536'};padding:8px 12px;background:${live ? 'rgba(0,229,160,.08)' : 'rgba(12,19,32,.6)'};min-width:110px;` }; });
-    const P = cfg.position || {};
-    const onoff = v => v == null ? ['kapalı (null)', '#6f849c'] : ['aktif', '#00e5a0'];
-    const rules = [['—', 'Koruma zaman aşımı → EMERGENCY', 't_protect_ms = ' + P.t_protect_ms, 'aktif', '#00e5a0'], ['R2', 'Durum bozulması', 'degrade_map = ' + P.degrade_map, 'aktif', '#00e5a0'], ['R1', 'Yedek stop', 't_backup_ms = ' + P.t_backup_ms, 'aktif', '#00e5a0'], ['R5', 'Zaman aşımı (yalnızca net ≤ 0)', 'max_hold_ms = ' + P.max_hold_ms, ...onoff(P.max_hold_ms)], ['R4', 'Kısmi azaltma (filtre izin verirse)', 'tp1_pct = ' + P.tp1_pct, ...onoff(P.tp1_pct)], ['R3', 'Kâr kilidi / trail (yalnızca lehte)', 'lock_trigger_pct = ' + P.lock_trigger_pct + ' · trail_gap = ' + P.trail_gap_pct, ...onoff(P.lock_trigger_pct)]].map(r => ({ id: r[0], name: r[1], param: r[2], status: r[3], style: chip(r[4]) }));
+    const P = cfg.position || {}, hasPos = Object.keys(P).length > 0;
+    const pv = k => hasPos ? (P[k] == null ? 'null' : String(P[k])) : 'config yok';
+    const onoff = v => !hasPos ? ['config yok', '#6f849c'] : v == null ? ['kapalı (null)', '#6f849c'] : ['aktif', '#00e5a0'];
+    const rules = [['—', 'Koruma zaman aşımı → EMERGENCY', 't_protect_ms = ' + pv('t_protect_ms'), ...(hasPos ? ['aktif', '#00e5a0'] : ['config yok', '#6f849c'])], ['R2', 'Durum bozulması', 'degrade_map = ' + pv('degrade_map'), ...(hasPos ? ['aktif', '#00e5a0'] : ['config yok', '#6f849c'])], ['R1', 'Yedek stop', 't_backup_ms = ' + pv('t_backup_ms'), ...(hasPos ? ['aktif', '#00e5a0'] : ['config yok', '#6f849c'])], ['R5', 'Zaman aşımı (yalnızca net ≤ 0)', 'max_hold_ms = ' + pv('max_hold_ms'), ...onoff(P.max_hold_ms)], ['R4', 'Kısmi azaltma (filtre izin verirse)', 'tp1_pct = ' + pv('tp1_pct'), ...onoff(P.tp1_pct)], ['R3', 'Kâr kilidi / trail (yalnızca lehte)', 'lock_trigger_pct = ' + pv('lock_trigger_pct') + ' · trail_gap = ' + pv('trail_gap_pct'), ...onoff(P.lock_trigger_pct)]].map(r => ({ id: r[0], name: r[1], param: r[2], status: r[3], style: chip(r[4]) }));
     const exitSrc = Object.keys((A && A.exit_reasons) || {}).length ? A.exit_reasons : (cmp ? (cmp[Object.keys(cmp)[1]] || {}).exit_reasons || {} : {});
     const exitMax = Math.max(1, ...Object.values(exitSrc));
     const exitSrcIsPaper = Object.keys((A && A.exit_reasons) || {}).length > 0;
     const exitReasons = Object.keys(exitSrc).length ? Object.entries(exitSrc).map(e => ({ name: e[0] + (exitSrcIsPaper ? ' (paper)' : ' (replay)'), n: e[1], bar: `height:100%;width:${e[1] / exitMax * 100}%;background:${e[0] === 'tp' ? '#00e5a0' : e[0] === 'sl' ? '#ff5470' : '#35c8ff'};` })) : [{ name: 'henüz çıkış yok', n: 0, bar: 'width:0' }];
     const staleFlags = (A && A.stale_flags) || {}, skew = lat.skew ? lat.skew.p99 : null, anyStale = Object.values(staleFlags).some(Boolean);
     const chk = (id, name, param, val, kind) => ({ id, name, param, val, style: chip(kind === 'bad' ? '#ff5470' : kind === 'warn' ? '#ffb020' : kind === 'na' ? '#6f849c' : '#00e5a0') + (kind === 'bad' ? 'animation:blink 1s infinite;' : '') });
-    const checks = [chk('K1', 'Kill switch', 'kalıcı dosya', kill ? 'REJECT' : 'kapalı', kill ? 'bad' : 'ok'), chk('K2', 'Mutabakat', 'REST snapshot', 'paper başlamadı', 'na'), chk('K3', 'Isınma', '2W bar', warmDone + '/' + nSym, warmDone === nSym ? 'ok' : 'warn'), chk('K4', 'Bayatlık', 'staleness_s', anyStale ? 'BAYAT' : 'ok', anyStale ? 'bad' : 'ok'), chk('K5', 'Clock skew', 'skew_max', skew == null ? '—' : 'p99 ' + skew + ' ms', skew == null ? 'na' : skew > 1000 ? 'warn' : 'ok'), chk('K6', 'Eşzamanlı pozisyon', '5 (kilitli)', '0/5', 'ok'), chk('K7', 'Sembol maruziyeti', 'one-way', 'ok', 'ok'), chk('K8', 'Toplam maruziyet', 'gross_cap = ' + (cfg.risk || {}).gross_cap_usdt + ' USDT', '0 USDT', 'ok'), chk('K9', 'BTC-beta net', 'beta_cap = null', 'kapalı', 'na'), chk('K10', 'Kaldıraç', 'BTC/ETH 10x, diğer 5x', 'anahtar yok', 'na'), chk('K11', 'Teminat', 'margin_buffer', 'anahtar yok', 'na'), chk('K12', 'Filtreler', 'exchangeInfo · aşağı yuvarla', 'ok', 'ok'), chk('K13', 'Spread', 'spread_max', u.spread_bps != null ? sym + ' ' + u.spread_bps.toFixed(2) + ' bp' : '—', 'ok'), chk('K14', 'Likidite / katılım', 'participation_max', 'depth · paper', 'na'), chk('K15', 'Slippage tahmini', 'slippage_max_bps', '≈ 0 (80 USDT ölçüldü)', 'ok'), chk('K16', 'Cooldown', 'cooldown_ms / loss / stp', 'null', 'na'), chk('K17', 'Emir bütçesi', 'reserve_orders = 3', 'anahtar yok', 'na'), chk('K18', '429 / 418', 'backoff_ms', 'ok', 'ok')];
+    const par = (k, v) => k + ' = ' + (v == null || v === '' ? 'yok' : v);
+    const hasCfg = Object.keys(RC).length > 0;
+    const rejCount = {}; ((PM && PM['ret_nedenleri']) || {}) && Object.entries((PM && PM['ret_nedenleri']) || {}).forEach(e => { rejCount[e[0]] = e[1]; });
+    const kHit = k => { const n = Object.entries(rejCount).filter(e => e[0].indexOf(k + '_') === 0).reduce((a, b) => a + b[1], 0); return n ? n + ' ret' : null; };
+    const kchk = (id, name, param, val, kind) => chk(id, name, param, kHit(id) || val, kHit(id) ? 'warn' : kind);
+    const checks = [
+      kchk('K1', 'Kill switch', killEnv + ' · kalıcı dosya', kill ? 'REJECT' : 'kapalı', kill ? 'bad' : 'ok'),
+      kchk('K2', 'Mutabakat', 'REST snapshot', P0.run_id ? (envKind === 'paper' ? 'paper: gerekmez' : 'beklemede') : 'koşu yok', 'na'),
+      kchk('K3', 'Isınma', '2W bar', warmDone + '/' + nSym, warmDone === nSym ? 'ok' : 'warn'),
+      kchk('K4', 'Bayatlık', 'staleness_s', anyStale ? 'BAYAT' : 'ok', anyStale ? 'bad' : 'ok'),
+      kchk('K5', 'Clock skew', 'skew_max', skew == null ? '—' : 'p99 ' + skew + ' ms', skew == null ? 'na' : skew > 1000 ? 'warn' : 'ok'),
+      kchk('K6', 'Eşzamanlı pozisyon', par('max_positions', RC.max_positions), posCount + '/' + (RC.max_positions != null ? RC.max_positions : '—'), hasCfg ? 'ok' : 'na'),
+      kchk('K7', 'Sembol maruziyeti', 'one-way', openPos.length === new Set(openPos.map(p => p.symbol)).size ? 'ok' : 'ÇAKIŞMA', 'ok'),
+      kchk('K8', 'Toplam maruziyet', par('gross_cap_usdt', RC.gross_cap_usdt), this.fmt(grossNow, 1) + ' USDT', hasCfg ? 'ok' : 'na'),
+      kchk('K9', 'BTC-beta net', par('beta_cap_usdt', RC.beta_cap_usdt), betaNow == null ? (betaCap == null ? 'kapalı' : 'beta yok') : this.fmt(betaNow, 1) + ' USDT', betaCap == null ? 'na' : 'ok'),
+      kchk('K10', 'Kaldıraç', 'BTC/ETH 10x, diğer 5x', envKind === 'paper' ? 'simülasyon' : 'borsa doğrulaması yok', 'na'),
+      kchk('K11', 'Teminat', par('margin_buffer', RC.margin_buffer), envKind === 'paper' ? 'simülasyon' : 'anahtar yok', 'na'),
+      kchk('K12', 'Filtreler', 'exchangeInfo · aşağı yuvarla', 'ok', 'ok'),
+      kchk('K13', 'Spread', par('spread_max_bps', RC.spread_max_bps), u.spread_bps != null ? sym + ' ' + u.spread_bps.toFixed(2) + ' bp' : '—', 'ok'),
+      kchk('K14', 'Likidite / katılım', par('participation_max', RC.participation_max), 'depth · ' + envKind, 'na'),
+      kchk('K15', 'Slippage tahmini', par('slippage_max_bps', RC.slippage_max_bps), 'L2 defter yürüyüşü (ADR 0013)', 'ok'),
+      kchk('K16', 'Cooldown', par('cooldown_loss_ms', RC.cooldown_loss_ms), RC.cooldown_loss_ms == null ? 'kapalı' : 'aktif', RC.cooldown_loss_ms == null ? 'na' : 'ok'),
+      kchk('K17', 'Emir bütçesi', par('reserve_orders', RC.reserve_orders), hasCfg ? 'ok' : 'config yok', hasCfg ? 'ok' : 'na'),
+      kchk('K18', '429 / 418', 'backoff_ms', 'ok', 'ok')];
     if (envKind === 'testnet') checks.push(chk('TN', 'Testnet emir yolu', 'REST + HMAC · yalnızca testnet', P0.run_id ? 'aktif' : '—', 'warn'));
     const vsrc = (A && A.verdicts) || [];
     const verdicts = vsrc.length ? vsrc.map(v => ({ t: v.t_ms ? new Date(v.t_ms).toISOString().slice(11, 19) : '—', kind: v.kind,
         sym: v.symbol + ' · ' + (v.cell || ''), reasons: (v.reasons || []).join(', ') || (v.explain || '').slice(0, 70),
         style: chip(v.kind === 'APPROVE' ? '#00e5a0' : v.kind === 'REJECT' ? '#ff5470' : '#ffb020') }))
       : [{ t: '—', kind: 'YOK', sym: P0.run_id ? P0.run_id + ' · ısınma' : 'paper çalışmıyor', reasons: 'allowed_cells boş ya da 2W bar dolmadı', style: chip('#6f849c') }];
-    const grossNow = positions.filter(p => p.state !== 'CLOSED').length * 80;
+    const lastV = vsrc[0] || null;
     if (CD.alarms && CD.alarms.length) CD.alarms.forEach(function (k) { checks.push(chk('6.4', 'Maliyet sürüklenmesi', k, (CD.detail && CD.detail[k]) ? CD.detail[k].slice(0, 46) : 'eşik aşıldı', 'bad')); });
     else if (CD.trades) checks.push(chk('6.4', 'Maliyet sürüklenmesi', CD.trades + ' işlem · net/işlem ' + (CD.net_per_trade_pct != null ? CD.net_per_trade_pct.toFixed(3) + '%' : '—'), 'eşik içinde', 'ok'));
-    const exposure = [['Σ notional', grossNow, (cfg.risk || {}).gross_cap_usdt || 400, '#35c8ff'], ['BTC-beta net', 0, 400, '#6f849c'], ['teminat kullanımı', Math.round(grossNow / 10), 100, '#00e5a0']].map(e => ({ name: e[0], val: e[1] + (e[2] === 100 ? '%' : ' USDT'), cap: e[2] + (e[2] === 100 ? '%' : ' USDT'), bar: `height:100%;width:${e[1] / e[2] * 100}%;background:${e[3]};` }));
+    const RC = cfg.risk || {}, num = v => (v == null || v === '' || isNaN(Number(v))) ? null : Number(v);
+    const betaNow = num((A && A.beta_net_usdt)), grossCap = num(RC.gross_cap_usdt), betaCap = num(RC.beta_cap_usdt);
+    const expRows = [['Σ notional', grossNow, grossCap, ' USDT', '#35c8ff'],
+                     ['BTC-beta net', betaNow, betaCap, ' USDT', '#6f849c'],
+                     ['pozisyon', posCount, num(RC.max_positions), '', '#00e5a0']];
+    const exposure = expRows.map(e => ({ name: e[0],
+      val: e[1] == null ? '—' : this.fmt(e[1], e[3] ? 1 : 0) + e[3],
+      cap: e[2] == null ? 'sınır yok' : this.fmt(e[2], e[3] ? 1 : 0) + e[3],
+      bar: `height:100%;width:${(e[1] != null && e[2]) ? Math.min(100, e[1] / e[2] * 100) : 0}%;background:${e[4]};` }));
     const stateDefs = [['S0', 'nötr', 'diğerlerinin hiçbiri', 0], ['S1', 'trend yukarı', 'pct(ret_15) > p_hi ∧ pct(rv_15) ∈ band', 2], ['S2', 'trend aşağı', 'pct(ret_15) < p_lo ∧ pct(rv_15) ∈ band', 2], ['S3', 'sıkışma', 'pct(rv_15) < p_lo ∧ pct(spread) < p_hi', 2], ['S4', 'aşırı genişleme', 'pct(rv_5) > p_hi ∧ pct(vol_ratio) > p_hi', 2]].map(s => ({ id: s[0], name: s[1], rule: s[2], n: s[3], color: this.SC[s[0]] }));
     const fp = (f, k) => f && f[k] != null ? 'p' + Math.round(f[k] * 100) : '—';
     const symStates = uni.map(x => { const f = x.features || {}, st = x.state, conf = x.conf; return { sym: x.sym, state: st, style: chip(this.SC[st]), age: x.age_bars + ' bar', conf: conf == null ? '—' : conf.toFixed(2), confBar: `display:block;height:100%;width:${Math.max(0, Math.min(100, (conf || 0) * 200))}%;background:${this.SC[st]};`, evidence: `ret_long ${fp(f, 'pct_ret_long')} · rv_long ${fp(f, 'pct_rv_long')} · rv_short ${fp(f, 'pct_rv_short')}`, counter: `vol_ratio ${fp(f, 'pct_vol_ratio')} · imb ${f.imb_short == null ? '—' : f.imb_short.toFixed(2)}`, cell: 'allowed_cells boş', cellStyle: 'color:#6f849c;' }; });
@@ -123,14 +231,19 @@ class Component extends DCLogic {
     const tt = S.cost === 'taker/taker';
     const cellRows = [];
     if (res && res.cells) { ['S1', 'S2', 'S3', 'S4'].forEach(st => ['long', 'short'].forEach(dir => { const rowCells = [1, 5, 15, 60].map(hz => { const c = res.cells.find(x => x.scenario === S.cost && x.state === st && x.dir === dir && x.h === hz && x.part === 'val'); if (!c) return { mean: '—', lo: '', hi: '', n: 0, title: `${st} ${dir} · ${hz} dk · hücre yok`, style: 'padding:6px 8px;font-size:11px;text-align:center;border:1px solid #111a28;color:#6f849c;' }; const pass = /GEÇTİ/.test(c.karar); return { mean: this.sg(c.mean, 3, '%'), lo: this.sg(c.lo, 2), hi: this.sg(c.hi, 2), n: c.n, title: `${st} ${dir} · ${hz} dk · doğrulama · ${c.karar}`, style: `padding:6px 8px;font-size:11px;text-align:center;border:1px solid ${pass ? '#00e5a0' : '#111a28'};background:${c.mean >= 0 ? `rgba(0,229,160,${Math.min(.35, c.mean * 6)})` : `rgba(255,84,112,${Math.min(.35, -c.mean * 6)})`};` }; }); if (rowCells.some(c => c.n > 0)) cellRows.push({ label: st + ' ' + dir, cells: rowCells }); })); }
-    const replayRuns = [['process 1', 'f3db4dba4ed5c6ef…', 'eşit'], ['process 2', 'f3db4dba4ed5c6ef…', 'eşit'], ['negatif (1 basamak)', 'farklı hash', 'farklı ✓']].map(r => ({ proc: r[0], hash: r[1], res: r[2], style: chip('#00e5a0') }));
+    const DT = A && A.determinism;
+    const replayRuns = DT
+      ? DT.runs.map(r => ({ proc: r.proc, hash: (r.hash || '').slice(0, 16) + '…', res: DT.equal ? 'eşit' : 'FARKLI', style: chip(DT.equal ? '#00e5a0' : '#ff5470') }))
+          .concat([{ proc: 'kayıt · ' + (DT.max_files || '?') + ' dosya', hash: this.fmt(DT.events, 0) + ' olay · ' + this.fmt(DT.commands, 0) + ' komut', res: new Date(DT.t_ms).toISOString().slice(0, 16).replace('T', ' '), style: chip('#6f849c') }])
+      : [{ proc: 'ölçüm yok', hash: 'make determinism-report REC=…', res: '—', style: chip('#6f849c') }];
     const frames = rec.frames || {};
     const streams = [['aggTrade', 'market', 'a ardışık'], ['markPrice@1s', 'market', '—'], ['forceOrder', 'market', '—'], ['bookTicker', 'public', 'u monoton'], ['depth@100ms', 'public', 'pu == önceki u']].map(s => ({ name: s[0], cat: s[1], rule: s[2], n: frames[s[1]] != null ? this.fmt(frames[s[1]], 0) + ' (kategori)' : '—', stale: (A && A.stale && A.stale[s[1]] != null) ? A.stale[s[1]].toFixed(1) + ' s' : '—' }));
     const files = envs.map(e => ({ name: (e.env === 'testnet' ? '● TESTNET  ' : '○ paper    ') + e.run_id + (e.run_id === P0.run_id ? '   ← görüntülenen' : ''),
                                    size: e.open + ' açık / ' + e.positions + ' pozisyon' }))
       .concat(((A && A.recorder_files) || []).map(f => ({ name: f.name, size: this.fmt(f.size / 1e6, 0) + ' MB' })));
     const locked = (cfg.locked || []).map(l => ({ k: l[0], v: l[1] }));
-    const posCfg = Object.entries(P).map(c => ({ k: c[0], v: String(c[1]), note: '', style: c[1] == null ? chip('#6f849c') : 'color:#00e5a0;font-variant-numeric:tabular-nums;' }));
+    const posCfg = hasPos ? Object.entries(P).map(c => ({ k: c[0], v: String(c[1]), note: '', style: c[1] == null ? chip('#6f849c') : 'color:#00e5a0;font-variant-numeric:tabular-nums;' }))
+      : [{ k: 'koşu config yazmadı', v: 'eski koşu · yeniden başlatınca dolar', note: '', style: chip('#6f849c') }];
     const staleNow = (A && A.stale) || {}, staleThr = (A && A.staleness_s) || {};
     const staleCfg = ['public', 'market', 'private'].map(c => { const thr = staleThr[c] || (c === 'private' ? 60 : 30), now = staleNow[c] != null ? staleNow[c] : null; return { cat: c, thr, now: now == null ? '—' : now.toFixed(1), bar: `height:100%;width:${now == null ? 0 : Math.min(100, now / thr * 100)}%;background:${now != null && now / thr > .6 ? '#ffb020' : '#00e5a0'};` }; });
     const cur_state = u.state || 'S0', F = u.features || {};
@@ -146,26 +259,68 @@ class Component extends DCLogic {
     const intentFields = [['symbol', sym, ''], ['dir', dirOf, ''], ['notional', '80 USDT · step\'e aşağı', ''], ['horizon h', 'hücreden · yok', 'null'], ['sl / tp', 'Faz 3/4 replay\'inden · null', 'null'], ['clientOrderId', `e${sym}{bar_end_ms}${cur_state === 'S2' ? 'S' : 'L'}`, ''], ['entry', 'maker GTX / priceMatch=QUEUE · entry_timeout iptal', ''], ['git · cfg', (rec.git_sha || '—') + ' · ' + (rec.config_hash || '—'), '']].map(f => ({ k: f[0], v: f[1], style: f[2] === 'null' ? 'color:#ffb020;' : '' }));
     const hypotheses = [['H1', 'S1 → 15/60 dk long net > 0'], ['H2', 'S2 → 15/60 dk short net > 0'], ['H3', 'S3 → imb_5 yönü 5/15 dk net > 0'], ['H4a', 'S4 → ters yön 5 dk net > 0 (tükenme)'], ['H4b', 'S4 → aynı yön 15 dk net > 0 (devam)'], ['H0', 'hiçbiri geçmez']].map(x => { const r = res ? (x[0] === 'H0' ? (res.passed === 0 ? 'gerçekleşti' : 'red') : (res.passed === 0 ? 'red' : '?')) : '…'; return { id: x[0], text: x[1], res: r, style: chip(r === 'red' ? '#ff5470' : r === 'gerçekleşti' ? '#ffb020' : '#6f849c') }; });
     const pipeline = [['FEATURE', 'Feature Engine', `ret, rv, imb, vol_ratio, spread → rolling persentil (W=${(cfg.research || {}).W || '?'})`, '7 feature · look-ahead yok', '#35c8ff'], ['STATE', 'Market State', 'S0–S4 · ≤2 koşul AND · öncelik S4>S1/S2>S3', cur_state + ' · conf ' + (u.conf == null ? '—' : u.conf.toFixed(2)), this.SC[cur_state]], ['DECIDE', 'Decision Engine', 'D1 ∧ D2 ∧ D3 → EntryIntent', 'D1 başarısız · intent yok', '#ff5470'], ['RISK', 'Risk Engine', 'K1–K18 veto · APPROVE/REJECT/RESIZE', 'beklemede', '#6f849c'], ['EXEC', 'Order Sender', 'WS API · maker GTX · deterministik id', 'beklemede (Faz 9)', '#6f849c'], ['POS', 'Position Manager', 'fill → SL+TP algo → R1–R5', 'P0 fast path', '#6f849c']].map((p, i) => ({ step: p[0], name: p[1], detail: p[2], out: p[3], color: p[4], arrow: i < 5, style: `border:1px solid ${p[4] === '#6f849c' ? '#1a2536' : p[4]};padding:10px 12px;width:190px;background:rgba(12,19,32,.6);` }));
+    const HH = S.hist, HPf = (HH && HH.performance) || {};
+    const hsum = Object.values(HPf.by_symbol || {}).reduce((a, b) => ({ n: a.n + b.n, wins: a.wins + b.wins, net_pct: a.net_pct + b.net_pct,
+      net_usdt: b.net_usdt == null ? a.net_usdt : (a.net_usdt || 0) + b.net_usdt }), { n: 0, wins: 0, net_pct: 0, net_usdt: null });
+    const bestSym = Object.entries(HPf.by_symbol || {}).sort((a, b) => b[1].net_pct - a[1].net_pct)[0];
+    const worstSym = Object.entries(HPf.by_symbol || {}).sort((a, b) => a[1].net_pct - b[1].net_pct)[0];
+    const eqArr = (HPf.equity || []).map(e => e.cum_net_pct);
+    let pk = 0, ddMax = 0; eqArr.forEach(v => { pk = Math.max(pk, v); ddMax = Math.max(ddMax, pk - v); });
+    const holds = ((HH && HH.trades) || []).map(t => t.hold_ms).filter(x => x != null);
+    const HP = !HH ? [card('GEÇMİŞ', S.histErr ? 'HATA' : '…', S.histErr || 'yükleniyor', S.histErr ? '#ff5470' : '#6f849c')] : [
+      card('İŞLEM', String(HH.total), (HH.env || '') + ' · ' + (HH.run_id || '—'), '#dbe7f3'),
+      card('NET TOPLAM', hsum.n ? this.sg(hsum.net_pct, 3, '%') : '—', hsum.n ? (hsum.net_usdt == null ? 'USDT karşılığı bilinmiyor (miktar kaydı yok)' : this.sg(hsum.net_usdt, 2, ' USDT')) + ' · maliyet düşülmüş' : 'kapanmış işlem yok', hsum.net_pct >= 0 ? '#00e5a0' : '#ff5470'),
+      card('KAZANMA', hsum.n ? (hsum.wins / hsum.n * 100).toFixed(0) + '%' : '—', hsum.wins + ' / ' + hsum.n, '#dbe7f3'),
+      card('BEKLENTİ', hsum.n ? this.sg(hsum.net_pct / hsum.n, 4, '%') : '—', 'işlem başına net · kârlılık gösterilmedi', (hsum.net_pct || 0) >= 0 ? '#00e5a0' : '#ff5470'),
+      card('MAKS DD', eqArr.length ? this.fmt(ddMax, 3) + '%' : '—', 'kümülatif net tepeden düşüş', ddMax ? '#ffb020' : '#6f849c'),
+      card('EN İYİ / EN KÖTÜ', bestSym ? bestSym[0].replace('USDT', '') + ' / ' + (worstSym ? worstSym[0].replace('USDT', '') : '—') : '—', bestSym ? this.sg(bestSym[1].net_pct, 2, '%') + ' / ' + this.sg(worstSym[1].net_pct, 2, '%') : 'sembol kırılımı yok', '#35c8ff')];
+    const grp = (title, obj) => ({ title, rows: Object.entries(obj || {}).sort((a, b) => b[1].n - a[1].n).slice(0, 8).map(e => ({
+      k: e[0], n: String(e[1].n), win: e[1].win_rate == null ? '—' : (e[1].win_rate * 100).toFixed(0) + '%',
+      net: this.sg(e[1].net_pct, 3, '%'), usdt: this.sg(e[1].net_usdt, 2), color: e[1].net_pct >= 0 ? '#00e5a0' : '#ff5470' })) });
+    const histGroups = [grp('SEMBOL', HPf.by_symbol), grp('ÇIKIŞ NEDENİ', HPf.by_exit_reason), grp('GİRİŞ DURUMU', HPf.by_entry_state), grp('YÖN', HPf.by_side)]
+      .filter(g => g.rows.length);
+    const rStyle = { tp: chip('#00e5a0'), sl: chip('#ff5470'), timeout: chip('#ffb020'), degrade: chip('#35c8ff') };
+    const histRows = ((HH && HH.trades) || []).map(t => ({
+      closed: t.closed_ns ? new Date(t.closed_ns / 1e6).toISOString().slice(5, 16).replace('T', ' ') : '—',
+      sym: t.symbol, side: (t.side || '').toUpperCase(), sideStyle: chip(t.side === 'long' ? '#00e5a0' : '#ff5470'),
+      entryState: t.entry_state || '—', qty: t.filled_qty || t.qty || '—',
+      entry: this.fmt(t.entry_price == null ? null : Number(t.entry_price)),
+      exit: this.fmt(t.exit_price == null ? null : Number(t.exit_price)),
+      notional: t.notional_usdt == null ? '—' : this.fmt(t.notional_usdt, 1),
+      net: t.net_pct == null ? '—' : this.sg(t.net_pct, 3, '%'), netUsdt: t.net_usdt == null ? '—' : this.sg(t.net_usdt, 3),
+      color: (t.net_pct || 0) >= 0 ? '#00e5a0' : '#ff5470',
+      reason: t.exit_reason || '—', reasonStyle: rStyle[t.exit_reason] || chip('#6f849c'),
+      hold: t.hold_ms == null ? '—' : (t.hold_ms / 60000).toFixed(1) + ' dk' }));
+    const histBtn = off => `padding:4px 10px;border:1px solid #1a2536;background:transparent;font-size:11px;color:${off ? '#3a4658' : '#9fb0c3'};cursor:${off ? 'default' : 'pointer'};`;
+    const histPageLabel = HH ? (HH.total ? (S.histOffset + 1) + '–' + Math.min(HH.total, S.histOffset + histRows.length) + ' / ' + HH.total : 'kayıt yok') : '';
     const ageP = staleNow.public, ageM = staleNow.market, lag = lat.ws_public_lag || {};
     const wsLag = lag.p99 != null ? Math.round(lag.p99) + ' ms' : '—';
     return {
       features, stateRules, decisions, intentFields, hypotheses, pipeline,
-      intentResult: 'None · intent üretilmedi', intentNote: `allowed_cells boş (Faz 3: ${res ? res.passed : '?'}/${res && res.cells ? res.cells.length / 2 : '?'} hücre). Hücre geçince D1 açılır; sl/tp null iken de intent üretilmez (fail-closed).`, intentStyle: 'border:1px dashed #ff5470;color:#ff5470;padding:10px 12px;margin-top:6px;',
-      navItems, phases, screenTitle: cur[1], screenSub: (S.err ? 'API HATASI: ' + S.err + ' · ' : '') + cur[3],
-      isAlgo: S.screen === 'algo', isStatus: S.screen === 'status', isPositions: S.screen === 'positions', isRisk: S.screen === 'risk', isStates: S.screen === 'states', isReplay: S.screen === 'replay', isRecorder: S.screen === 'recorder', isConfig: S.screen === 'config', goPositions: go('positions'),
+      intentResult: lastV ? (lastV.kind === 'APPROVE' ? 'APPROVE · ' + (lastV.symbol || '') + ' ' + (lastV.cell || '') : lastV.kind + ' · ' + ((lastV.reasons || []).join(', ') || (lastV.explain || '').slice(0, 60))) : 'None · intent üretilmedi', intentNote: `allowed_cells boş (Faz 3: ${res ? res.passed : '?'}/${res && res.cells ? res.cells.length / 2 : '?'} hücre). Hücre geçince D1 açılır; sl/tp null iken de intent üretilmez (fail-closed).`, intentStyle: 'border:1px dashed #ff5470;color:#ff5470;padding:10px 12px;margin-top:6px;',
+      navItems, phases, screenTitle: cur[1],
+      screenSub: (S.err ? 'API HATASI: ' + S.err + ' · ' : '') + (S.notice ? S.notice + ' · ' : '') + (FR.live ? '' : FR.reason + ' · ') + cur[3],
+      isAlgo: S.screen === 'algo', isStatus: S.screen === 'status', isPositions: S.screen === 'positions', isRisk: S.screen === 'risk', isStates: S.screen === 'states', isReplay: S.screen === 'replay', isRecorder: S.screen === 'recorder', isConfig: S.screen === 'config', isHistory: S.screen === 'history', goPositions: go('positions'),
       dotPublic: dot(ageP != null && !staleFlags.public ? '#00e5a0' : '#ff5470', ageP != null), dotMarket: dot(ageM != null && !staleFlags.market ? '#00e5a0' : '#ff5470', ageM != null), dotPrivate: dot('#1a2536', false), loopLag: rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) : '—',
       setPaper: () => { const p = envs.find(e => e.env === 'paper'); this.goRun(p ? p.run_id : ''); },
       setLive: () => { const t = envs.find(e => e.env === 'testnet'); if (t) { this.goRun(t.run_id); } else { alert('Testnet koşusu yok. Canlı (mainnet) yol yazılmadı: LiveExecutionAdapter korumalı stub (Faz 10).'); } },
       paperBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${envKind === 'paper' ? '#00e5a0' : 'transparent'};color:${envKind === 'paper' ? '#070b12' : '#6f849c'};font-weight:700;`,
       liveBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${envKind === 'testnet' ? '#ffb020' : 'transparent'};color:${envKind === 'testnet' ? '#070b12' : '#6f849c'};font-weight:700;` + (hasTestnet ? '' : 'opacity:.5;'),
-      modeTag: envLabel, modeTagStyle: chip(envColor) + (envKind === 'testnet' ? 'animation:blink 2s infinite;' : ''),
+      modeTag: (FR.live ? '' : '⚠ ' + frLabel.toUpperCase() + ' (' + frAge + ') · ') + envLabel,
+      modeTagStyle: chip(FR.live ? envColor : frColor) + (FR.live ? (envKind === 'testnet' ? 'animation:blink 2s infinite;' : '') : 'animation:blink 1.4s infinite;'),
       ticker: this.ticker(),
       killDot: React.createElement('span', { style: { width: 10, height: 10, borderRadius: '50%', background: kill ? '#ff5470' : '#00e5a0', display: 'inline-block', animation: (kill ? 'pulseRed' : 'pulse') + ' 1.6s ease-out infinite' } }),
-      killLabel: kill ? 'AKTİF' : 'kapalı', killSub: kill ? `trigger ${A.kill.reason} · ${this.tms(A.kill.ts_ns)} UTC · git ${A.kill.git_sha}` : 'son tetik yok · restart\'ı hayatta kalır · yalnızca elle sıfırlama',
+      killLabel: (kill ? 'AKTİF' : 'kapalı') + ' · ' + killEnv, killSub: kill ? `trigger ${killState.reason} · ${this.tms(killState.ts_ns)} UTC · git ${killState.git_sha}` : killEnv + ' · son tetik yok · restart\'ı hayatta kalır · yalnızca elle sıfırlama',
       killBtn: `padding:9px 10px;border:1px solid ${kill ? '#1a2536' : '#ff5470'};background:${kill ? 'transparent' : 'rgba(255,84,112,.1)'};color:${kill ? '#6f849c' : '#ff5470'};font-weight:700;font-size:12px;cursor:pointer;`,
-      killBtnLabel: kill ? 'kill-reset (elle)' : 'KILL SWITCH', toggleKill: () => kill ? this.post('/api/kill/reset', { note: 'konsol' }) : this.setState({ killDialog: true }),
-      killDialog: S.killDialog, closeKill: () => this.setState({ killDialog: false }), confirmKill: () => { this.setState({ killDialog: false }); this.post('/api/kill', { reason: 'manual (konsol)' }); }, stop: e => e.stopPropagation(),
-      statusCards: [card('ORTAM', envKind.toUpperCase(), (P0.run_id || 'koşu yok') + ' · ' + envs.length + ' koşu', envColor), card('MUTABAKAT', 'YOK', 'anahtar yok · Faz 9', '#6f849c'), card('ISINMA', warmDone + '/' + nSym, '2W = ' + 2 * ((cfg.research || {}).W || 240) + ' bar', warmDone === nSym ? '#00e5a0' : '#ffb020'), card('AÇIK POZİSYON', posCount + ' / 5', (posCount * 80) + ' USDT notional · ' + (PM['işlem'] || 0) + ' kapandı', '#dbe7f3'), card('NET (' + envKind.toUpperCase() + ')', PM['net_toplam_pct'] != null && PM['işlem'] ? this.sg(PM['net_toplam_pct'], 3, '%') : '—', (PM['işlem'] || 0) + ' işlem · kazanma ' + (PM['kazanma_oranı'] != null ? (PM['kazanma_oranı'] * 100).toFixed(0) + '%' : '—') + ' · kârlılık gösterilmedi', (PM['net_toplam_pct'] || 0) >= 0 ? '#00e5a0' : '#ff5470'), card('ws_lag p99', wsLag, 'Faz 0 ölçümü · public', '#dbe7f3')],
+      killBtnLabel: S.busy ? 'gönderiliyor…' : (kill ? 'kill-reset · ' + killEnv : 'KILL SWITCH · ' + killEnv),
+      toggleKill: () => { if (S.busy) return; kill ? this.post('/api/kill/reset', { env: killEnv, note: 'konsol' }) : this.setState({ killDialog: true }); },
+      killDialog: S.killDialog, closeKill: () => this.setState({ killDialog: false }),
+      confirmKill: () => { if (S.busy) return; this.setState({ killDialog: false }); this.post('/api/kill', { env: killEnv, reason: 'manual (konsol)' }); },
+      confirmKillLabel: S.busy ? 'gönderiliyor…' : 'KILL · ' + killEnv.toUpperCase(),
+      confirmKillBtn: `background:${S.busy ? '#1a2536' : '#ff5470'};border:0;color:${S.busy ? '#6f849c' : '#070b12'};font-weight:700;padding:8px 14px;cursor:${S.busy ? 'wait' : 'pointer'};`,
+      killEnvLabel: killEnv.toUpperCase(), killEnvStyle: `color:${envColor};`, killPath: killState.path || '—', busy: S.busy,
+      stop: e => e.stopPropagation(),
+      statusCards: [card('VERİ', frLabel.toUpperCase(), FR.reason + ' · son olay ' + frAge + ' önce' + (FR.tail_lines ? ' · ' + this.fmt(FR.tail_lines / 1e6, 2) + ' M satır' : ''), frColor), card('ORTAM', envKind.toUpperCase(), (P0.run_id || 'koşu yok') + ' · ' + hbTxt + (P0.run_missing ? ' · İSTENEN KOŞU YOK' : ''), P0.run_missing ? '#ff5470' : (hbStale ? '#ffb020' : envColor)), card('ISINMA', warmDone + '/' + nSym, '2W = ' + 2 * ((cfg.research || {}).W || 240) + ' bar', warmDone === nSym ? '#00e5a0' : '#ffb020'), card('AÇIK POZİSYON', posCount + ' / ' + (RC.max_positions != null ? RC.max_positions : '—'), this.fmt(grossNow, 1) + ' USDT notional · ' + (PM['işlem'] || 0) + ' kapandı', '#dbe7f3'), card('NET (' + envKind.toUpperCase() + ')', PM['net_toplam_pct'] != null && PM['işlem'] ? this.sg(PM['net_toplam_pct'], 3, '%') : '—', (PM['işlem'] || 0) + ' işlem · kazanma ' + (PM['kazanma_oranı'] != null ? (PM['kazanma_oranı'] * 100).toFixed(0) + '%' : '—') + ' · kârlılık gösterilmedi', (PM['net_toplam_pct'] || 0) >= 0 ? '#00e5a0' : '#ff5470'), card('ws_lag p99', wsLag, 'Faz 0 ölçümü · public', '#dbe7f3')],
       activeSymbol: sym, activeLev: (sym === 'BTCUSDT' || sym === 'ETHUSDT' ? '10x' : '5x') + ' · PERPETUAL', activeState: cur_state + ' · ' + this.SNAME[cur_state], stateChipStyle: chip(this.SC[cur_state]),
       activePriceLive: React.createElement('span', { key: String(u.price), style: { padding: '0 6px', animation: 'flash .8s ease-out', fontVariantNumeric: 'tabular-nums' } }, this.fmt(u.price)),
       chart: this.chart(), equity: this.equity(), chartRef: this.chartRef, equityRef: this.equityRef, spreadBps: u.spread_bps != null ? u.spread_bps.toFixed(2) : '—',
@@ -173,13 +328,30 @@ class Component extends DCLogic {
       posCols: ['POS_ID', 'SEMBOL', 'YÖN', 'DURUM', 'GİRİŞ DURUMU', 'MİKTAR', 'GİRİŞ', 'MARK', 'SL', 'TP', 'BRÜT − MALİYET', 'NET %', 'ROE', 'SÜRE', 'R3'],
       checks, verdicts, exposure, weight1m: '—',
       stateDefs, symStates, stateIds, matrix,
-      replayCards: [card('REPLAY HIZI', '65 k olay/s', 'ölçüldü · tek çekirdek', '#35c8ff'), card('ARAŞTIRMA', res ? this.fmt(res.hours, 0) + ' saat' : '—', res ? this.fmt(res.bars, 0) + ' bar · ' + res.symbols + ' sembol' : 'report.json yok'), card('HASH', 'f3db4dba…', 'ilk saat · 2 process eşit', '#00e5a0'), card('ETİKETLİ', res ? Object.entries(res.state_counts).filter(e => e[0] !== 'S0').map(e => e[0] + ' ' + this.fmt(e[1] / 1000, 1) + 'k').join(' · ') : '—', 'bar sayısı (30 g)'), card('GEÇEN HÜCRE', res ? res.passed + ' / ' + res.cells.length / 2 : '—', 'ADR 0008 doğrulama', res && res.passed ? '#00e5a0' : '#ff5470'), card('RAPOR HASH', res ? res.hash : '—', 'deterministik', '#dbe7f3')],
+      replayCards: [card('REPLAY HIZI', DT ? this.fmt(DT.events_per_s / 1000, 1) + ' k olay/s' : '—', DT ? 'ölçüldü · tek çekirdek' : 'make determinism-report', '#35c8ff'), card('ARAŞTIRMA', res ? this.fmt(res.hours, 0) + ' saat' : '—', res ? this.fmt(res.bars, 0) + ' bar · ' + res.symbols + ' sembol' : 'report.json yok'), card('HASH', DT ? (DT.runs[0].hash || '').slice(0, 8) + '…' : 'ölçülmedi', DT ? (DT.equal ? '2 process eşit' : 'HASH FARKLI') : 'make determinism-report', DT ? (DT.equal ? '#00e5a0' : '#ff5470') : '#6f849c'), card('ETİKETLİ', res ? Object.entries(res.state_counts).filter(e => e[0] !== 'S0').map(e => e[0] + ' ' + this.fmt(e[1] / 1000, 1) + 'k').join(' · ') : '—', 'bar sayısı (30 g)'), card('GEÇEN HÜCRE', res ? res.passed + ' / ' + res.cells.length / 2 : '—', 'ADR 0008 doğrulama', res && res.passed ? '#00e5a0' : '#ff5470'), card('RAPOR HASH', res ? res.hash : '—', 'deterministik', '#dbe7f3')],
       setCostTT: () => this.setState({ cost: 'taker/taker' }), setCostMT: () => this.setState({ cost: 'maker/taker' }),
       costTTBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${tt ? '#35c8ff' : 'transparent'};color:${tt ? '#070b12' : '#6f849c'};`, costMTBtn: `padding:4px 10px;border:0;font-size:11px;cursor:pointer;background:${!tt ? '#35c8ff' : 'transparent'};color:${!tt ? '#070b12' : '#6f849c'};`,
       cellRows, replayRuns,
       recCards: [card('RUN', rec.run_id || '—', 'restart ' + (rec.restart_no ?? '—') + ' · git ' + (rec.git_sha || '—'), '#35c8ff'), card('OLAY', rec.seq != null ? this.fmt(rec.seq / 1e6, 2) + ' M' : '—', 'seq (tail) · parse hatası ' + (rec.parse_errors ?? '—'), '#dbe7f3'), card('LOOP LAG', rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) + ' ms p99' : '—', 'maks ' + (rec.loop_lag_max != null ? rec.loop_lag_max.toFixed(1) + ' ms' : '—') + ' (10 s pencere)', '#00e5a0'), card('KUYRUK', rec.queue != null ? String(rec.queue) : '—', 'dropped ' + (rec.dropped ?? '—')), card('BAĞLANTI', Object.entries(rec.connects || {}).map(e => e[0] + ' ' + e[1]).join(' · ') || '—', 'bayatlık olayı ' + (rec.stale_events ?? 0), '#00e5a0'), card('SNAPSHOT', String(rec.snapshots ?? '—'), 'depth 1000 · her 10 dk')],
       streams, files, diskUsed: A ? this.fmt(A.recorder_bytes / 1e9, 2) + ' GB · boş ' + A.disk_free_gb + ' GB' : '—',
-      locked, posCfg, staleCfg
+      locked, posCfg, staleCfg,
+      // ---- Geçmiş & performans ekranı
+      histEqRef: this.histEqRef, histEquity: this.histEquity(),
+      histRunLabel: HH ? (HH.env || '') + ' · ' + (HH.run_id || '—') + ' · ' + HH.total + ' kapanmış işlem' : (S.histErr ? 'hata' : 'yükleniyor…'),
+      histCards: HP,
+      histGroups: histGroups,
+      histCols: ['KAPANIŞ', 'SEMBOL', 'YÖN', 'GİRİŞ DURUMU', 'MİKTAR', 'GİRİŞ', 'ÇIKIŞ', 'NOTIONAL', 'NET %', 'NET USDT', 'NEDEN', 'SÜRE'],
+      histRows, histPageLabel, histNote: (HH && HH.note) || 'kârlılık gösterilmedi (ADR 0010)',
+      histPrev: () => { if (HH && S.histOffset > 0) this.setState(st => ({ histOffset: Math.max(0, st.histOffset - this.HIST_PAGE) })); },
+      histNext: () => { if (HH && (S.histOffset + this.HIST_PAGE) < (HH.total || 0)) this.setState(st => ({ histOffset: st.histOffset + this.HIST_PAGE })); },
+      histPrevBtn: histBtn(!HH || S.histOffset <= 0), histNextBtn: histBtn(!HH || (S.histOffset + this.HIST_PAGE) >= (HH.total || 0)),
+      cfgSource: 'Kaynak: ' + (cfg.source || '—') + (P0.config_hash ? ' · config_hash ' + String(P0.config_hash).slice(0, 12) : '') + ((cfg.run || {}).config_path ? ' · ' + cfg.run.config_path : ''),
+      securityChips: [
+        { text: '.env gitignore · doğrulandı', style: chip('#00e5a0') },
+        { text: 'çekim yetkisi: borsada doğrulanmadı', style: chip('#6f849c') },
+        { text: 'IP whitelist: borsada doğrulanmadı', style: chip('#6f849c') },
+        { text: 'Ed25519 session.logon · Faz 9', style: chip('#1a2536') }
+      ],
     };
   }
 }

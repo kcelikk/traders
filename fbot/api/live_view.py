@@ -47,11 +47,13 @@ class LiveView:
         self.snapshots = 0
         self.stale_flags: dict[str, bool] = {}
         self.alarms: list = []
+        self.last_event_ns: int | None = None   # beslenen son olayın duvar saati (tazelik için)
 
     def _push(self, t_ns: int, kind: str, msg: str):
         self.log.appendleft({"t_ns": t_ns, "kind": kind, "msg": msg})
 
     def feed(self, ev: RawEvent):
+        self.last_event_ns = ev.recv_ns
         if ev.cat == "ctrl":
             try:
                 info = json.loads(ev.raw.decode())
@@ -148,7 +150,8 @@ class LiveView:
                          "loop_lag_p99": self.stats.get("loop_lag_ms", {}).get("p99"), "loop_lag_max": self.stats.get("loop_lag_ms", {}).get("max"),
                          "queue": self.stats.get("queue"), "dropped": self.stats.get("dropped"), "connects": dict(self.connects), "stale_events": self.stale_events,
                          "snapshots": self.snapshots, "parse_errors": self.state.parse_errors},
-            "stale": stale_age, "stale_flags": dict(self.stale_flags),
+            "stale": stale_age, "stale_flags": dict(self.stale_flags), "last_event_ns": self.last_event_ns,
+            "betas": {s: self.state.beta.beta(s) for s in self.symbols} if self.state.beta is not None else {},
             "feed": list(self.log), "alarms": list(self.alarms),
             "state_counts": {s: self.state_counts.get(s, 0) for s in STATES},
             "transitions": {f"{a}>{b}": n for (a, b), n in self.transitions.items()},

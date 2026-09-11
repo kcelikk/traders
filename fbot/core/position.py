@@ -60,6 +60,7 @@ class Position:
     filters: Filters
     state: PosState = PosState.ENTRY_SENT
     qty: Decimal = Decimal(0)
+    entry_qty: Decimal = Decimal(0)   # ilk dolum miktarı; kapanışta qty sıfırlanır, maruziyet/maliyet bunu kullanır
     entry_price: Decimal | None = None
     entry_time_ns: int | None = None
     entry_is_maker: bool = False
@@ -121,6 +122,7 @@ class PositionManager:
     def on_entry_fill(self, pos: Position, price: Decimal, qty: Decimal, sl: Decimal, tp: Decimal, now_ns: int,
                       is_maker: bool = False, entry_state: str | None = None) -> list:
         pos.entry_price, pos.qty, pos.entry_time_ns, pos.entry_is_maker = price, qty, now_ns, is_maker
+        pos.entry_qty = qty
         pos.entry_state = entry_state
         pos.sl_price, pos.tp_price = sl, tp
         pos.sl_version = pos.tp_version = 1

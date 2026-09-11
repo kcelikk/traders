@@ -136,3 +136,11 @@ def test_net_unrealized_pnl_includes_costs():
     net = pm.net_unrealized_pct(pos, mark=Decimal("101"))
     # brüt +1.0%; giriş 0.05 + tahmini çıkış 0.05 = 0.10 → 0.90
     assert net == Decimal("0.90")
+
+
+def test_entry_qty_survives_close():
+    pm = PositionManager(CFG)
+    pos, _ = open_long(pm, qty="0.5")
+    assert pos.entry_qty == Decimal("0.5")
+    pm.on_exit_fill(pos, Decimal("103"), Decimal("0.5"), 1, reason="tp")
+    assert pos.qty == 0 and pos.entry_qty == Decimal("0.5")   # maruziyet hesabı için giriş miktarı kalır

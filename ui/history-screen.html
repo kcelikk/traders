@@ -1,0 +1,72 @@
+      <!-- ===== GEÇMİŞ & PERFORMANS (tasarım şablonuna ek ekran; scripts/build_ui.py yerleştirir) ===== -->
+      <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
+          <sc-for list="{{ histCards }}" as="c" hint-placeholder-count="6">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">{{ c.label }}</div>
+              <div style="font-family:'Space Grotesk'; font-weight:700; font-size:22px; margin-top:4px; color:{{ c.color }}; white-space:nowrap;">{{ c.value }}</div>
+              <div style="font-size:11px; color:#6f849c; margin-top:2px;">{{ c.sub }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+          <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:8px;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">KÜMÜLATİF NET % (maliyet düşülmüş)</div>
+            <span style="font-size:10px; color:#6f849c;">{{ histRunLabel }}</span>
+          </div>
+          <div ref="{{ histEqRef }}" style="height:150px;">{{ histEquity }}</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:12px;">
+          <sc-for list="{{ histGroups }}" as="g" hint-placeholder-count="4">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+              <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">{{ g.title }}</div>
+              <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead><tr style="color:#6f849c; text-align:left;"><th style="padding:4px 6px;">ANAHTAR</th><th style="padding:4px 6px;">N</th><th style="padding:4px 6px;">KAZANMA</th><th style="padding:4px 6px;">NET %</th><th style="padding:4px 6px;">NET USDT</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+                    <tr style="border-top:1px solid #111a28;"><td style="padding:4px 6px; color:#dbe7f3;">{{ r.k }}</td><td style="padding:4px 6px;">{{ r.n }}</td><td style="padding:4px 6px;">{{ r.win }}</td><td style="padding:4px 6px; color:{{ r.color }}; font-variant-numeric:tabular-nums;">{{ r.net }}</td><td style="padding:4px 6px; color:{{ r.color }}; font-variant-numeric:tabular-nums;">{{ r.usdt }}</td></tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">İŞLEM GEÇMİŞİ</div>
+            <span style="font-size:10px; color:#6f849c;">{{ histPageLabel }}</span>
+            <span style="margin-left:auto; display:flex; gap:6px;">
+              <button onClick="{{ histPrev }}" style="{{ histPrevBtn }}">‹ önceki</button>
+              <button onClick="{{ histNext }}" style="{{ histNextBtn }}">sonraki ›</button>
+            </span>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:760px;">
+            <thead><tr style="color:#6f849c; text-align:left;">
+              <sc-for list="{{ histCols }}" as="h" hint-placeholder-count="11"><th style="padding:6px 8px; border-bottom:1px solid #1a2536; white-space:nowrap;">{{ h }}</th></sc-for>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ histRows }}" as="t" hint-placeholder-count="6">
+                <tr style="border-bottom:1px solid #111a28;">
+                  <td style="padding:6px 8px; color:#6f849c; white-space:nowrap;">{{ t.closed }}</td>
+                  <td style="padding:6px 8px; color:#dbe7f3;">{{ t.sym }}</td>
+                  <td style="padding:6px 8px;"><span style="{{ t.sideStyle }}">{{ t.side }}</span></td>
+                  <td style="padding:6px 8px; color:#6f849c;">{{ t.entryState }}</td>
+                  <td style="padding:6px 8px; font-variant-numeric:tabular-nums;">{{ t.qty }}</td>
+                  <td style="padding:6px 8px; font-variant-numeric:tabular-nums;">{{ t.entry }}</td>
+                  <td style="padding:6px 8px; font-variant-numeric:tabular-nums;">{{ t.exit }}</td>
+                  <td style="padding:6px 8px; font-variant-numeric:tabular-nums; color:#6f849c;">{{ t.notional }}</td>
+                  <td style="padding:6px 8px; font-variant-numeric:tabular-nums; color:{{ t.color }};">{{ t.net }}</td>
+                  <td style="padding:6px 8px; font-variant-numeric:tabular-nums; color:{{ t.color }};">{{ t.netUsdt }}</td>
+                  <td style="padding:6px 8px;"><span style="{{ t.reasonStyle }}">{{ t.reason }}</span></td>
+                  <td style="padding:6px 8px; color:#6f849c; white-space:nowrap;">{{ t.hold }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <div style="font-size:10px; color:#6f849c; margin-top:8px;">{{ histNote }}</div>
+        </div>
+      </sc-if>
+

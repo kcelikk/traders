@@ -21,6 +21,7 @@ from fbot.execution.sim import SimConfig, SimExecutor
 from fbot.gateway.killswitch import KillSwitch
 from fbot.gateway.rest import exchange_info
 from fbot.paper.config import load_paper_config
+from fbot.paper.config_view import effective_config
 from fbot.paper.store import PaperStore
 from fbot.paper.trader import PaperTrader
 from fbot.recorder.main import Recorder, git_sha
@@ -75,6 +76,7 @@ class PaperRecorder(Recorder):
             await asyncio.sleep(10.0)
             ks = KillSwitch(self.kill.path)
             if self.trader is not None:
+                self._beat(ks.active)
                 self.trader.engine_state.kill_switch = ks.active
                 st = self.trader.engine_state
                 self.store.flush()
@@ -82,6 +84,13 @@ class PaperRecorder(Recorder):
                                           "open": sum(1 for p in st.positions.values() if p.state.value not in ("CLOSED",)),
                                           "intents": st.intents_made, "rejected": st.intents_rejected,
                                           "kill_switch": ks.active}, notify=False)
+
+    def _beat(self, kill: bool) -> None:
+        """Canlılık damgası: konsol verinin tazeliğini buradan bilir (F05)."""
+        st = self.trader.engine_state
+        self.store.heartbeat(now_ns=time.time_ns(),
+                             detail={"kill_switch": kill, "positions": len(st.positions), "stats": dict(self.trader.stats),
+                                     "open": sum(1 for p in st.positions.values() if p.state.value != "CLOSED")})
 
     async def main(self):
         self._extra_task = None
@@ -109,6 +118,7 @@ def main(argv):
     run_id = a.run_id or time.strftime("paper-%Y%m%dT%H%M%SZ", time.gmtime())
     db = Path(a.db or (Path(cfg.recorder.out_dir) / run_id / "paper.db"))
     store = PaperStore(db, run_id=run_id)
+    store.set_config({"config_path": a.config, "git_sha": git_sha(), **effective_config(cfg)}, config_hash=h)
     print(json.dumps({"msg": "paper start", "run_id": run_id, "config_hash": h, "git_sha": git_sha(), "db": str(db),
                       "cells": [c.key() for c in cfg.core.decision.allowed_cells],
                       "note": "allowed_cells boşsa giriş emri üretilmez (ADR 0010)"}), flush=True)

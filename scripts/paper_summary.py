@@ -12,7 +12,9 @@ from pathlib import Path
 
 def metrics(db: Path) -> dict:
     con = sqlite3.connect(str(db))
-    closed = con.execute("SELECT net_pct, exit_reason, opened_ns, closed_ns, symbol, side FROM positions WHERE state='CLOSED' AND net_pct IS NOT NULL").fetchall()
+    # Drawdown zaman dizisidir: kapanış sırası olmadan hesaplanırsa anlamsız bir sayı çıkar (F08)
+    closed = con.execute("SELECT net_pct, exit_reason, opened_ns, closed_ns, symbol, side FROM positions "
+                         "WHERE state='CLOSED' AND net_pct IS NOT NULL ORDER BY COALESCE(closed_ns, opened_ns), pos_id").fetchall()
     nets = [float(r[0]) for r in closed]
     wins = [x for x in nets if x > 0]
     losses = [x for x in nets if x <= 0]

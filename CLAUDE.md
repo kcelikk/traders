@@ -182,6 +182,7 @@ make setup
 # testler
 make test              # birim (87 test)
 make test-determinism  # Rule Zero doğrulaması (fixture, iki process)
+make determinism-report REC=<run_id>  # gerçek kayıtla iki process; konsolun determinizm kutusunu besler
 
 # Faz 0 ölçüm
 make measure-latency RUN=<run_id>    # 24 saat, 4 process, nohup
@@ -206,6 +207,7 @@ make replay-positions REC=<run_id> SL=0.5 TP=1.0 W=120
 
 # Konsol (fbot Console, ui/)
 make ui REC=<run_id> / make ui-stop   # 127.0.0.1:8787
+make ui-build                         # ui/index.html'i üretir; ui/design/*.dc.html ASLA elle değiştirilmez
 
 # (Faz 7+ ile gelecek: run-paper)
 ```
