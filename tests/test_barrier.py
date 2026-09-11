@@ -140,3 +140,15 @@ def test_funding_only_counts_bars_actually_held():
               (100, 100.5, 99.5, 100, 0.001, 20000))
     r = evaluate(entry=100.0, side="long", future=b, cfg=BarrierConfig(5.0, 5.0, 3, 0.0, funding=True))
     assert r["reason"] == "tp" and r["bars"] == 1 and r["funding_pct"] == 0.0
+
+
+def test_neutral_state_is_never_traded():
+    """S0 "durum yok" demektir; giriş üretilmemeli. Etiket listesine sızarsa yön olarak yorumlanıyordu."""
+    from scripts.barrier_scan import scan
+    rows = [{"symbol": "X", "start_ms": i * 60000, "open": 100, "high": 100.6, "low": 99.4,
+             "close": 100.0, "spread_bps": 0.0} for i in range(600)]
+    labels = {"X": ["S0" if i % 2 else "S1" for i in range(600)]}
+    out = scan({"X": rows}, labels, 0.0, 0.0, 0.7, 30, 1, 0.05, 10)
+    assert out, "hiç birleşim üretilmedi"
+    assert all(r["state"] != "S0" for r in out)
+    assert all(r["dir"] in ("long", "short") for r in out)

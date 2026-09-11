@@ -197,7 +197,7 @@ def main(argv):
                       "armed_env": bool(os.environ.get("FBOT_TESTNET_ARMED")),
                       "hot_reload": "anahtar .env'den 10 s'de bir okunur; yeniden başlatma gerekmez",
                       "note": "yalnızca testnet.binancefuture.com; kârlılık kanıtı değildir"}), flush=True)
-    asyncio.run(TestnetRecorder(cfg, h, run_id, a.duration, store).main())
+    asyncio.run(TestnetRecorder(cfg, h, run_id, a.duration, store, config_path=a.config).main())
     print(json.dumps({"msg": "testnet stop", "summary": store.summary()}, default=str), flush=True)
     store.close()
 

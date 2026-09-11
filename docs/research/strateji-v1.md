@@ -100,3 +100,68 @@ iki ayrı şey birbirinden ayrılır:
   hipotez döngüsü.
 
 Bu ikisi karıştırılmaz. Testnet'te işlem açılıyor olması stratejinin çalıştığı anlamına gelmez.
+
+
+---
+
+## İkinci tur: çoklu zaman dilimi ve kullanılmayan veri (2026-09-11)
+
+Proje sahibinin tespiti üzerine iki eksik kapatıldı ve aynı karar kuralıyla yeniden ölçüldü.
+
+### Ne değişti
+
+1. **Zaman dilimi.** Sistem yalnızca 1 dakikalık bar üretiyordu. Artık 1 dk barlardan 3/5/15/30/60
+   dakikalık barlar türetiliyor (epoch'a hizalı, tamamlanmamış kova düşürülür).
+2. **Kullanılmayan veri.** Defter derinliği (`bookDepth`) ve konumlanma metrikleri (`metrics`)
+   arşivden indirildi ve barlara eklendi: 460.341 barın tamamı iki kaynağı da aldı.
+3. **Funding maliyeti.** Bariyer hesabı funding'i hiç saymıyordu. 30 saatlik bir tutmada üç ödeme
+   kaçıyordu ve uzun zaman dilimleri olduğundan iyi görünüyordu. Artık sayılıyor.
+
+### H5 tekrar: durum etiketleri, tüm zaman dilimleri
+
+| Zaman dilimi | Bar | Birleşim | Geçen | En iyi doğrulama net % |
+|---|---|---|---|---|
+| 1 dk | 460.341 | 360 | 0 | −0,078 |
+| 3 dk | 153.163 | 360 | 0 | +0,071 |
+| 5 dk | 91.740 | 360 | 0 | +0,091 |
+| 15 dk | 30.357 | 360 | 0 | +0,305 |
+| 30 dk | 15.046 | 280 | 0 | +0,470 |
+| 60 dk | 7.434 | 40 | 0 | örneklem yetersiz |
+
+Doğrulama netleri zaman dilimiyle birlikte yükseliyor ama **hiçbiri geçmiyor**, çünkü keşif dilimi
+aynı yönde davranmıyor. En iyi satır (30 dk, S3 long, stop 1,20 %, hedef 2,40 %): keşif +0,019 %,
+doğrulama +0,470 %. İki yarının bu kadar ayrışması sinyal değil gürültü işaretidir; karar kuralı
+tam bunun için önceden yazılmıştı. Ayrıca örneklem çöküyor: 30 dakikada doğrulama dilimi 130 işlem.
+
+### H6–H8: kullanılmayan veriden üretilen sinyaller
+
+| Hipotez | Giriş kuralı | Birleşim | Geçen | En iyi doğrulama net % |
+|---|---|---|---|---|
+| H6 defter dengesizliği | ±%1 bandında alış/satış notional ucu | 320 | 0 | +0,024 (5 dk, long) |
+| H7 açık pozisyon değişimi | OI artışı ucunda fiyat yönüne uy | 280 | 0 | +0,020 (30 dk, long) |
+| H8 taker oranı tükenmesi | aşırı alış baskısında ters yön | 320 | 0 | −0,015 (30 dk, long) |
+
+**Üçü de reddedildi.** En iyi satırların güven aralıkları sıfırı içeriyor.
+
+### Ortaya çıkan tek tutarlı örüntü
+
+Her üç sinyalde ve her zaman diliminde aynı şey görülüyor: **short yönü net biçimde zarar ediyor,
+long yönü sıfır civarında.**
+
+| Sinyal | En iyi long | En iyi short |
+|---|---|---|
+| defter dengesizliği | +0,024 (CI −0,042 … +0,089) | −0,047 (CI −0,087 … −0,008) |
+| OI değişimi | +0,020 (CI −0,180 … +0,243) | −0,127 (CI −0,131 … −0,123) |
+| taker oranı | −0,015 (CI −0,148 … +0,136) | −0,090 (CI −0,137 … −0,046) |
+
+Bu, sinyalin bilgisi değil dönemin yukarı sürüklenmesidir. Sinyali tersine çevirsek de aynı
+tablo çıkardı. Yani bu üç kaynak da, en azından bu kurgu ve bu dönemde, yön bilgisi taşımıyor.
+
+### Sınırlar
+
+- 32 gün, tek rejim. Düşüş rejiminde tablo simetrik biçimde ters dönerdi; bu, long tarafın
+  gerçekten kazandığı anlamına gelmez.
+- Yüksek zaman dilimlerinde örneklem küçük: 30 dakikada doğrulama 130–280 işlem.
+- Defter dengesizliği dakikada bir örnekle ölçülüyor (arşiv çözünürlüğü), sürekli değil.
+- Konumlanma metrikleri 15 dakikada bir yayınlanıyor; 1 ve 5 dakikalık dilimlerde aynı değer
+  tekrar ediliyor, bu da o dilimlerde sinyali zayıflatıyor.

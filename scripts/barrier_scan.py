@@ -74,7 +74,8 @@ def scan(by_symbol: dict, labels: dict, fee_in: float, fee_out: float, disc_frac
     # Sembol başına sabitler bir kez hesaplanır (maliyet, kesim noktası, giriş indeksleri)
     costs, cuts, entries = {}, {}, {}
     # `labels` ya durum etiketi (S1…S4) ya da doğrudan yön (long/short) taşır; ikisi de aynı boru hattı
-    tags = sorted({t for lab in labels.values() for t in lab if t})
+    # Yalnızca işlem üreten etiketler: S0 "durum yok" demektir, giriş üretmez
+    tags = sorted({t for lab in labels.values() for t in lab if t in STATES or t in DIRS})
     for sym, rows in by_symbol.items():
         costs[sym] = fee_in + fee_out + 2 * spread_cost(rows)
         cuts[sym] = int(len(rows) * disc_frac)

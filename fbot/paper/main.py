@@ -43,9 +43,10 @@ def filters_from_exchange_info(ex: dict, symbols: set[str]) -> dict[str, Filters
 class PaperRecorder(Recorder):
     """Recorder + trader: evren çözüldükten sonra filtreleri yükler ve trader'ı bağlar."""
 
-    def __init__(self, pcfg, cfg_hash, run_id, duration, store: PaperStore):
+    def __init__(self, pcfg, cfg_hash, run_id, duration, store: PaperStore, config_path: str | None = None):
         super().__init__(pcfg.recorder, cfg_hash, run_id, duration)
         self.pcfg = pcfg
+        self._config_path = config_path
         self.store = store
         self.kill = KillSwitch(ROOT / "data" / "state" / "kill_switch.json")
 
@@ -65,6 +66,10 @@ class PaperRecorder(Recorder):
             from fbot.core.cost_drift import CostDriftMonitor
             self.trader.drift = CostDriftMonitor(self.pcfg.cost_drift)
         self.trader.engine_state.kill_switch = self.kill.active
+        # Filtreler evren çözüldükten sonra yüklendi: konsolun gördüğü config bunu da içersin
+        self.store.set_config({"config_path": getattr(self, "_config_path", None), "git_sha": git_sha(),
+                               "symbols": syms, **effective_config(type(self.pcfg)(**{**self.pcfg.__dict__, "core": core}))},
+                              config_hash=self.cfg_hash)
         self.ctrl("paper_start", {"cells": [c.key() for c in core.decision.allowed_cells], "notional": str(core.decision.notional_usdt),
                                   "kill_switch": self.kill.active, "sim_latency_ms": self.pcfg.sim_latency_ms,
                                   "sim_seed": self.pcfg.sim_seed, "filters": len(core.filters), "note": "kârlılık gösterilmedi (ADR 0010)"}, notify=False)
@@ -122,7 +127,7 @@ def main(argv):
     print(json.dumps({"msg": "paper start", "run_id": run_id, "config_hash": h, "git_sha": git_sha(), "db": str(db),
                       "cells": [c.key() for c in cfg.core.decision.allowed_cells],
                       "note": "allowed_cells boşsa giriş emri üretilmez (ADR 0010)"}), flush=True)
-    asyncio.run(PaperRecorder(cfg, h, run_id, a.duration, store).main())
+    asyncio.run(PaperRecorder(cfg, h, run_id, a.duration, store, config_path=a.config).main())
     print(json.dumps({"msg": "paper stop", "summary": store.summary()}, default=str), flush=True)
     store.close()
 

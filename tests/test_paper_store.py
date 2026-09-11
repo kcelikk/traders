@@ -103,3 +103,12 @@ def test_old_db_without_new_columns_still_opens(tmp_path):
                        "entry_state": "S1", "exit_price": "1.1"})
     s.flush()
     assert s.con.execute("select exit_price from positions").fetchone()[0] == "1.1"
+
+
+def test_config_can_be_updated_after_filters_resolve(tmp_path):
+    """Filtreler evren çözüldükten sonra yükleniyor; konsolun gördüğü config bunu içermeli."""
+    s = PaperStore(tmp_path / "u.db", run_id="r")
+    s.set_config({"core": {"filters": {}}}, config_hash="h1")
+    s.set_config({"core": {"filters": {"BTCUSDT": {"step_size": "0.001"}}}, "symbols": 1}, config_hash="h1")
+    cfg, h = s.get_config()
+    assert list(cfg["core"]["filters"]) == ["BTCUSDT"] and h == "h1"
