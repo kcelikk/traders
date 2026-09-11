@@ -165,3 +165,15 @@ def test_service_arming_reports_what_the_testnet_process_last_wrote(tmp_path):
     out = service_arming(tmp_path, "testnet")
     assert out["armed"] is True and out["run_id"] == "testnet-x" and out["reason"] == "anahtar …abcd"
     assert out["age_s"] is not None
+
+
+def test_environments_carry_heartbeat_for_the_topology_view(tmp_path):
+    """Topoloji ekranı her sürecin canlılığını ortam listesinden okur."""
+    from fbot.api.paper_view import environments
+    d = tmp_path / "testnet-t"; d.mkdir()
+    s = PaperStore(d / "paper.db", run_id="testnet-t", env="testnet")
+    s.heartbeat(now_ns=10**18, detail={"armed": True, "reconciled": True, "orders": 4})
+    s.flush(); s.close()
+    e = environments(tmp_path)[0]
+    assert e["env"] == "testnet" and e["heartbeat"]["detail"]["orders"] == 4
+    assert e["heartbeat"]["ts_ns"] == 10**18

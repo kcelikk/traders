@@ -542,6 +542,71 @@
           </div>
         </div>
       </sc-if>
+      <!-- ===== TOPOLOJİ (tasarım şablonuna ek ekran; scripts/build_ui.py yerleştirir) ===== -->
+      <sc-if value="{{ isTopology }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+          <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">UÇTAN UCA AKIŞ</div>
+            <span style="font-size:10px; color:#6f849c;">{{ topoNote }}</span>
+          </div>
+          <div ref="{{ topoRef }}" style="min-height:430px; overflow-x:auto;">{{ topoDiagram }}</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:12px;">
+          <sc-for list="{{ topoNodes }}" as="n" hint-placeholder-count="5">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="{{ n.dot }}"></span>
+                <span style="font-family:'Space Grotesk'; font-weight:700; font-size:14px; color:{{ n.color }};">{{ n.title }}</span>
+                <span style="margin-left:auto; {{ n.chip }}">{{ n.status }}</span>
+              </div>
+              <div style="font-size:11px; color:#9fb0c3; margin-top:6px; line-height:1.6;">{{ n.role }}</div>
+              <div style="font-size:10px; color:#6f849c; margin-top:6px; font-variant-numeric:tabular-nums;">{{ n.metrics }}</div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                <sc-for list="{{ n.tags }}" as="t" hint-placeholder-count="3"><span style="{{ t.style }}">{{ t.text }}</span></sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">SÜREÇ İÇİ BORU HATTI · her süreç kendi kopyasını çalıştırır</div>
+          <div style="display:flex; gap:0; align-items:stretch; flex-wrap:wrap;">
+            <sc-for list="{{ topoPipe }}" as="p" hint-placeholder-count="7">
+              <div style="{{ p.style }}">
+                <div style="font-size:9px; letter-spacing:.12em; color:{{ p.color }};">{{ p.step }}</div>
+                <div style="font-size:12px; color:#dbe7f3; margin-top:3px;">{{ p.name }}</div>
+                <div style="font-size:10px; color:#6f849c; margin-top:3px; line-height:1.5;">{{ p.detail }}</div>
+              </div>
+              <sc-if value="{{ p.arrow }}" hint-placeholder-val="{{ true }}"><div style="display:grid; place-items:center; padding:0 6px; color:#35c8ff;">→</div></sc-if>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">İLİŞKİLER · kim neyi okur, kim neyi yazar</div>
+          <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:640px;">
+            <thead><tr style="color:#6f849c; text-align:left;">
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">KAYNAK</th>
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">İLİŞKİ</th>
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">HEDEF</th>
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">TAŞINAN</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ topoEdges }}" as="e" hint-placeholder-count="10">
+                <tr style="border-bottom:1px solid #111a28;">
+                  <td style="padding:5px 8px; color:#dbe7f3; white-space:nowrap;">{{ e.from }}</td>
+                  <td style="padding:5px 8px;"><span style="{{ e.kindStyle }}">{{ e.kind }}</span></td>
+                  <td style="padding:5px 8px; color:#dbe7f3; white-space:nowrap;">{{ e.to }}</td>
+                  <td style="padding:5px 8px; color:#6f849c;">{{ e.what }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <div style="font-size:10px; color:#6f849c; margin-top:8px; line-height:1.6;">{{ topoIsolation }}</div>
+        </div>
+      </sc-if>
+
       <!-- ===== GEÇMİŞ & PERFORMANS (tasarım şablonuna ek ekran; scripts/build_ui.py yerleştirir) ===== -->
       <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
@@ -633,7 +698,7 @@
 class Component extends DCLogic {
   state = { screen: 'status', sym: null, cost: 'taker/taker', killDialog: false, api: null, err: null, tickN: 0,
             hist: null, histOffset: 0, histErr: null, busy: false, notice: null };
-  chartRef = React.createRef(); equityRef = React.createRef(); histEqRef = React.createRef();
+  chartRef = React.createRef(); equityRef = React.createRef(); histEqRef = React.createRef(); topoRef = React.createRef();
   HIST_PAGE = 25;
   SC = { S0: '#6f849c', S1: '#00e5a0', S2: '#ff5470', S3: '#35c8ff', S4: '#ffb020' };
   SNAME = { S0: 'nötr', S1: 'trend yukarı', S2: 'trend aşağı', S3: 'sıkışma', S4: 'aşırı genişleme' };
@@ -690,8 +755,8 @@ class Component extends DCLogic {
         else { this.setState({ busy: false, notice: 'İstek başarısız: ' + (e.message || e) }); }
       });
   }
-  observe() { [this.chartRef.current, this.equityRef.current, this.histEqRef.current].forEach(el => { if (el && !el.__obs) { el.__obs = true; this.ro.observe(el); } }); this.measure(); }
-  measure() { const w = r => r.current ? Math.round(r.current.getBoundingClientRect().width) : 0, c = w(this.chartRef), e = w(this.equityRef), g = w(this.histEqRef); if ((c && c !== this.state.cw) || (e && e !== this.state.ew) || (g && g !== this.state.gw)) this.setState({ cw: c || this.state.cw, ew: e || this.state.ew, gw: g || this.state.gw }); }
+  observe() { [this.chartRef.current, this.equityRef.current, this.histEqRef.current, this.topoRef.current].forEach(el => { if (el && !el.__obs) { el.__obs = true; this.ro.observe(el); } }); this.measure(); }
+  measure() { const w = r => r.current ? Math.round(r.current.getBoundingClientRect().width) : 0, c = w(this.chartRef), e = w(this.equityRef), g = w(this.histEqRef), t = w(this.topoRef); if ((c && c !== this.state.cw) || (e && e !== this.state.ew) || (g && g !== this.state.gw) || (t && t !== this.state.tw)) this.setState({ cw: c || this.state.cw, ew: e || this.state.ew, gw: g || this.state.gw, tw: t || this.state.tw }); }
   fmt(n, d) { if (n == null || isNaN(n)) return '—'; n = Number(n); if (d === undefined) d = Math.abs(n) < 0.01 ? 5 : Math.abs(n) < 1 ? 4 : Math.abs(n) < 100 ? 2 : Math.abs(n) < 10000 ? 1 : 0; return n.toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
   sg(n, d = 2, suf = '') { if (n == null || isNaN(n)) return '—'; return (n >= 0 ? '+' : '−') + this.fmt(Math.abs(n), d) + suf; }
   tms(ns) { return ns ? new Date(Number(ns) / 1e6).toISOString().slice(11, 19) : '—'; }
@@ -738,6 +803,55 @@ class Component extends DCLogic {
       h('text', { x: 4, y: 12, fontSize: 10, fill: col, fontFamily: 'JetBrains Mono' }, eq.length + ' işlem · kümülatif ' + this.sg(last, 2, '%')),
       h('text', { x: W - 4, y: HH - 4, fontSize: 10, textAnchor: 'end', fill: '#6f849c', fontFamily: 'JetBrains Mono' }, 'maliyet düşülmüş net'));
   }
+  topoDiagram(nodes) {
+    const h = React.createElement, W = Math.max(860, this.state.tw || 860), H = 430;
+    const box = (x, y, w, hh, n) => h('g', { key: n.id },
+      h('rect', { x, y, width: w, height: hh, fill: 'rgba(12,19,32,.85)', stroke: n.color, strokeWidth: n.live ? 1.6 : 1,
+                  strokeDasharray: n.live ? '' : '4 3' }),
+      h('text', { x: x + 10, y: y + 18, fontSize: 11, fill: n.color, fontFamily: 'Space Grotesk', fontWeight: 700 }, n.title),
+      ...n.lines.map((t, i) => h('text', { key: i, x: x + 10, y: y + 34 + i * 13, fontSize: 9.5, fill: '#9fb0c3', fontFamily: 'JetBrains Mono' }, t)),
+      h('circle', { cx: x + w - 12, cy: y + 14, r: 4, fill: n.live ? '#00e5a0' : '#6f849c' }));
+    const arrow = (x1, y1, x2, y2, label, col, dash) => h('g', { key: label + x1 + y1 },
+      h('line', { x1, y1, x2, y2, stroke: col, strokeWidth: 1.2, strokeDasharray: dash || '', markerEnd: 'url(#tri)' }),
+      h('text', { x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 4, fontSize: 9, fill: col, textAnchor: 'middle', fontFamily: 'JetBrains Mono' }, label));
+    const N = {};
+    nodes.forEach(n => { N[n.id] = n; });
+    const g = (id, d) => Object.assign({ id, color: '#6f849c', live: false, lines: [] }, N[id] || {}, d);
+    const src = g('binance', { title: 'BINANCE USDⓈ-M', color: '#35c8ff', live: true });
+    const col1 = 20, col2 = 300, col3 = 580, colW = 250;
+    const boxes = [
+      [src, col1, 20, colW, 96],
+      [g('arsiv', { title: 'ARŞİV data.binance.vision', color: '#6f849c', live: true }), col1, 300, colW, 86],
+      [g('recorder', { title: 'PROCESS 1 · recorder' }), col2, 20, colW, 86],
+      [g('paper', { title: 'PROCESS 2 · paper' }), col2, 124, colW, 86],
+      [g('testnet', { title: 'PROCESS 3 · testnet' }), col2, 228, colW, 96],
+      [g('research', { title: 'ARAŞTIRMA · çevrimdışı' }), col2, 342, colW, 76],
+      [g('disk', { title: 'DİSK · kayıt + SQLite', color: '#ffb020', live: true }), col3, 76, colW, 96],
+      [g('console', { title: 'PROCESS 4 · konsol' }), col3, 200, colW, 86],
+      [g('browser', { title: 'TARAYICI · nginx + Cloudflare', color: '#00e5a0', live: true }), col3, 310, colW, 66]
+    ];
+    const mid = (x, y, w, hh) => [x + w, y + hh / 2];
+    const at = id => { const b = boxes.find(b2 => b2[0].id === id); return b ? [b[1], b[2], b[3], b[4]] : [0, 0, 0, 0]; };
+    const rightOf = id => { const [x, y, w, hh] = at(id); return [x + w, y + hh / 2]; };
+    const leftOf = id => { const [x, y, , hh] = at(id); return [x, y + hh / 2]; };
+    const A = [];
+    ['recorder', 'paper', 'testnet'].forEach(id => {
+      const [x1, y1] = rightOf('binance'), [x2, y2] = leftOf(id);
+      A.push(arrow(x1, y1, x2, y2, 'WS', '#35c8ff'));
+    });
+    A.push(arrow(...rightOf('arsiv'), ...leftOf('research'), 'zip', '#6f849c', '3 3'));
+    ['recorder', 'paper', 'testnet'].forEach(id => A.push(arrow(...rightOf(id), ...leftOf('disk'), 'yaz', '#ffb020')));
+    A.push(arrow(...rightOf('research'), ...leftOf('disk'), 'rapor', '#6f849c', '3 3'));
+    A.push(arrow(...leftOf('disk'), ...rightOf('research'), '', '#6f849c', '3 3'));
+    A.push(arrow(at('disk')[0] + at('disk')[2] / 2, at('disk')[1] + at('disk')[3], at('console')[0] + at('console')[2] / 2, at('console')[1], 'oku', '#00e5a0'));
+    A.push(arrow(at('console')[0] + at('console')[2] / 2, at('console')[1] + at('console')[3], at('browser')[0] + at('browser')[2] / 2, at('browser')[1], 'HTTPS', '#00e5a0'));
+    const tn = at('testnet');
+    A.push(arrow(tn[0] + tn[2] / 2, tn[1] + tn[3], at('binance')[0] + at('binance')[2] / 2, at('binance')[1] + at('binance')[3], 'REST emir + mutabakat', '#ff5470'));
+    return h('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', height: '100%', style: { display: 'block', minWidth: 860 } },
+      h('defs', null, h('marker', { id: 'tri', markerWidth: 8, markerHeight: 8, refX: 7, refY: 3, orient: 'auto' },
+        h('path', { d: 'M0,0 L7,3 L0,6 Z', fill: '#6f849c' }))),
+      A, boxes.map(b => box(b[1], b[2], b[3], b[4], b[0])));
+  }
   renderVals() {
     const S = this.state, A = S.api, go = s => () => this.setState({ screen: s }), chip = (c, bg) => `font-size:10px;letter-spacing:.06em;padding:2px 7px;border:1px solid ${c};color:${c};${bg ? 'background:' + bg + ';' : ''}white-space:nowrap;`;
     const uni = A ? A.universe : [], sym = S.sym || 'BTCUSDT', u = uni.find(x => x.sym === sym) || {};
@@ -748,7 +862,7 @@ class Component extends DCLogic {
     const frLabel = { live: 'canlı', loading: 'yükleniyor', stale: 'BAYAT', no_data: 'veri yok' }[FR.status] || FR.status;
     const ageTxt = n => n == null ? '—' : n < 90 ? n.toFixed(1) + ' s' : n < 5400 ? (n / 60).toFixed(1) + ' dk' : (n / 3600).toFixed(1) + ' sa';
     const frAge = ageTxt(FR.data_age_s);
-    const screens = [['status', 'Durum', frLabel, '/status'], ['positions', 'Pozisyonlar', '0/5', 'Faz 4 · durum makinesi, R1–R5'], ['risk', 'Risk Engine', 'K18', 'Faz 5 · veto, kill switch, mutabakat'], ['algo', 'Algoritma & sinyal', 'D1–D3', 'Faz 3/6 · feature → durum → karar → risk → pozisyon'], ['states', 'Piyasa durumu', 'S0–S4', 'Faz 3/6 · durum etiketi ve karar hücreleri'], ['replay', 'Replay & araştırma', res ? res.passed + '/' + (res.cells ? res.cells.length / 2 : '?') : '', 'Faz 2/3 · Rule Zero, hücre tablosu'], ['recorder', 'Kayıt', rec.run_id || '', 'Faz 1 · bütünlük ve dosyalar'], ['history', 'Geçmiş & performans', '', 'kapanmış işlemler, kümülatif net, kırılım'], ['config', 'Config', '', 'kilitli kararlar ve parametreler']];
+    const screens = [['status', 'Durum', frLabel, '/status'], ['positions', 'Pozisyonlar', '0/5', 'Faz 4 · durum makinesi, R1–R5'], ['risk', 'Risk Engine', 'K18', 'Faz 5 · veto, kill switch, mutabakat'], ['algo', 'Algoritma & sinyal', 'D1–D3', 'Faz 3/6 · feature → durum → karar → risk → pozisyon'], ['states', 'Piyasa durumu', 'S0–S4', 'Faz 3/6 · durum etiketi ve karar hücreleri'], ['replay', 'Replay & araştırma', res ? res.passed + '/' + (res.cells ? res.cells.length / 2 : '?') : '', 'Faz 2/3 · Rule Zero, hücre tablosu'], ['recorder', 'Kayıt', rec.run_id || '', 'Faz 1 · bütünlük ve dosyalar'], ['history', 'Geçmiş & performans', '', 'kapanmış işlemler, kümülatif net, kırılım'], ['topology', 'Topoloji', '', 'uçtan uca akış: hangi süreç ne yapıyor, neyi okur, neyi yazar'], ['config', 'Config', '', 'kilitli kararlar ve parametreler']];
     const cur = screens.find(s => s[0] === S.screen);
     const navItems = screens.map((s, i) => ({ label: s[1], badge: s[2], badgeColor: S.screen === s[0] ? '#35c8ff' : '#6f849c', num: String(i + 1).padStart(2, '0'), go: go(s[0]), style: `display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0;border-left:2px solid ${S.screen === s[0] ? '#00e5a0' : 'transparent'};background:${S.screen === s[0] ? 'rgba(0,229,160,.07)' : 'transparent'};color:${S.screen === s[0] ? '#dbe7f3' : '#9fb0c3'};cursor:pointer;font-size:13px;white-space:nowrap;` }));
     const phRow = {}; ((A && A.phases) || []).forEach(p => { phRow[p.n] = p; });
@@ -929,12 +1043,81 @@ class Component extends DCLogic {
     const histPageLabel = HH ? (HH.total ? (S.histOffset + 1) + '–' + Math.min(HH.total, S.histOffset + histRows.length) + ' / ' + HH.total : 'kayıt yok') : '';
     const ageP = staleNow.public, ageM = staleNow.market, lag = lat.ws_public_lag || {};
     const wsLag = lag.p99 != null ? Math.round(lag.p99) + ' ms' : '—';
+    // ---- Topoloji: kutular canlı duruma göre renklenir, hiçbiri sabit değil
+    const tnHb = ((envs.find(e => e.env === 'testnet') || {}).heartbeat) || {};
+    const paperHb = ((envs.find(e => e.env === 'paper') || {}).heartbeat) || {};
+    const hbAgeOf = hb => (hb && hb.ts_ns) ? (Date.now() - hb.ts_ns / 1e6) / 1000 : null;
+    const tnAge = hbAgeOf(tnHb), paAge = hbAgeOf(paperHb);
+    const alive = a => a != null && a < 60;
+    const tnD = (tnHb.detail) || {}, paD = (paperHb.detail) || {};
+    const recLive = rec.seq != null && !FR.loading;
+    const chipOf = c => chip(c);
+    const nSyms = (cfg.universe || {}).top_n || nSym;
+    const topoNodes = [
+      { id: 'binance', title: 'BINANCE USDⓈ-M', color: '#35c8ff', live: true,
+        lines: [nSyms + ' sembol · 5 akış', 'public: bookTicker, depth@100ms', 'market: aggTrade, markPrice, forceOrder'],
+        role: 'Veri kaynağı ve emir borsası. Üç süreç ayrı ayrı bağlanır; ortak bağlantı yoktur.',
+        metrics: 'bayatlık eşiği ' + ((A && A.staleness_s && A.staleness_s.public) || 30) + ' s · ws_lag p99 ' + wsLag,
+        status: 'kaynak', tags: [['WebSocket', '#35c8ff'], ['REST', '#6f849c'], ['Algo Service', '#6f849c']] },
+      { id: 'recorder', title: 'PROCESS 1 · recorder', color: recLive ? '#00e5a0' : '#6f849c', live: recLive,
+        lines: ['tek sıralama noktası · monoton seq', 'saatlik gzip + manifest SHA-256', 'karar üretmez, yalnızca kaydeder'],
+        role: 'Ham veriyi tek sıralı akışa dizip diske yazar. Faz 2 replay ve Faz 3 araştırmasının tek girdisi budur.',
+        metrics: 'olay ' + (rec.seq != null ? this.fmt(rec.seq / 1e6, 1) + ' M' : '—') + ' · loop lag p99 ' + (rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) + ' ms' : '—') + ' · bağlantı ' + (Object.values(rec.connects || {}).reduce((a, b) => a + b, 0) || 0),
+        status: recLive ? 'çalışıyor' : 'bilinmiyor', tags: [['kendi WS bağlantısı', '#35c8ff'], ['append-only', '#ffb020']] },
+      { id: 'paper', title: 'PROCESS 2 · paper', color: alive(paAge) ? '#00e5a0' : '#6f849c', live: alive(paAge),
+        lines: ['canlı veri · simüle execution', 'L2 defter yürüyüşü (ADR 0013)', 'gerçek emir YOK'],
+        role: 'Canlı veriyi aynı çekirdekten geçirir, emirleri simülatörde doldurur. Kendi kaydı ve kendi veritabanı vardır.',
+        metrics: paAge == null ? 'canlılık damgası yok' : 'damga ' + ageTxt(paAge) + ' önce · açık pozisyon ' + (paD.open != null ? paD.open : '—'),
+        status: alive(paAge) ? 'çalışıyor' : 'sessiz', tags: [['izole container', '#00e5a0'], ['SimExecutor', '#6f849c']] },
+      { id: 'testnet', title: 'PROCESS 3 · testnet', color: tnD.armed ? '#ffb020' : '#6f849c', live: alive(tnAge),
+        lines: ['GERÇEK emir · yalnızca testnet', 'silahlanma: anahtar dosyası, 10 s', 'mutabakat: borsa snapshot, 10 s'],
+        role: 'Aynı çekirdek, farklı execution: emirler testnet borsasına gider. Silahlanma ve mutabakat denetçileri burada çalışır.',
+        metrics: (tnAge == null ? 'damga yok' : 'damga ' + ageTxt(tnAge) + ' önce') + ' · emir ' + (tnD.orders != null ? tnD.orders : '—') + ' · dolum ' + (tnD.fills != null ? tnD.fills : '—'),
+        status: tnD.armed ? (tnD.reconciled ? 'silahlı · mutabık' : 'silahlı · KİLİTLİ') : 'silahsız',
+        tags: [['izole container', '#00e5a0'], [tnD.armed ? 'silahlı' : 'silahsız', tnD.armed ? '#ffb020' : '#6f849c'], [tnD.reconciled === false ? 'mutabakat KİLİT' : 'mutabakat tamam', tnD.reconciled === false ? '#ff5470' : '#00e5a0']] },
+      { id: 'console', title: 'PROCESS 4 · konsol', color: FR.live ? '#00e5a0' : '#ffb020', live: true,
+        lines: ['kaydı tail eder · bus yok', 'paper.db dosyalarını salt okur', 'görünüm önbelleği ile hızlı açılır'],
+        role: 'Hiçbir işlem kararına karışmaz. Kaydı ve veritabanlarını okuyup arayüze sunar; kill switch ve anahtar yazma uçları token ister.',
+        metrics: 'satır ' + this.fmt(FR.tail_lines / 1e6, 1) + ' M · önbellekten ' + this.fmt(((A && A.tail_from_cache) || 0) / 1e6, 1) + ' M · veri ' + frLabel,
+        status: FR.live ? 'canlı' : frLabel, tags: [['salt okur', '#6f849c'], ['token korumalı yazma', '#ffb020']] },
+      { id: 'research', title: 'ARAŞTIRMA · çevrimdışı', color: '#6f849c', live: false,
+        lines: ['export → enrich → barrier_scan', 'süreç değil, elle çalıştırılır'],
+        role: 'Kayıttan bar üretir, arşiv verisiyle zenginleştirir, hücre ve stop/hedef ızgarasını tarar. Çalışan sisteme dokunmaz.',
+        metrics: res ? this.fmt(res.bars, 0) + ' bar · ' + res.symbols + ' sembol · geçen hücre ' + res.passed : 'rapor yok',
+        status: 'elle', tags: [['çevrimdışı', '#6f849c'], ['kayıt + arşiv', '#6f849c']] }
+    ].map(n => ({ ...n, dot: dot(n.color, n.live), chip: chipOf(n.color),
+                  tags: n.tags.map(t => ({ text: t[0], style: chip(t[1]) })) }));
+    const pipeStyle = 'border:1px solid #1a2536; padding:8px 10px; min-width:150px; background:rgba(12,19,32,.6);';
+    const topoPipe = [
+      ['GATEWAY', 'Sıralama', 'kategori başına bağlantı → tek monoton seq', '#35c8ff'],
+      ['BAR', 'SymbolMarket', 'aggTrade → 1 dk OHLCV, işlem zamanı ile', '#35c8ff'],
+      ['FEATURE', 'Feature Engine', '7 büyüklük + 4 saatlik persentil', '#35c8ff'],
+      ['STATE', 'Market State', 'S0–S4, en fazla 2 koşul', this.SC[cur_state] || '#6f849c'],
+      ['DECIDE', 'Decision Engine', 'D1 hücre ∧ D2 yaş ∧ D3 yürütme', '#ffb020'],
+      ['RISK', 'Risk Engine', 'K1–K18 veto · çıkışlar muaf', '#ff5470'],
+      ['EXEC', 'Adapter', 'paper: simülatör · testnet: REST', '#00e5a0'],
+      ['POS', 'Position Manager', 'SL+TP algo → R1–R5 → kapanış', '#00e5a0']
+    ].map((p, i, arr) => ({ step: p[0], name: p[1], detail: p[2], color: p[3], arrow: i < arr.length - 1, style: pipeStyle }));
+    const ek = (k) => chip(k === 'yazar' ? '#ffb020' : k === 'okur' ? '#00e5a0' : k === 'emir' ? '#ff5470' : '#35c8ff');
+    const topoEdges = [
+      ['Binance WS', 'akış', 'recorder / paper / testnet', 'bookTicker, depth, aggTrade, markPrice, forceOrder — her süreç ayrı bağlanır'],
+      ['recorder', 'yazar', 'data/recordings/rec-72h', 'sıralanmış ham olaylar, saatlik gzip + manifest SHA-256'],
+      ['paper', 'yazar', 'data/recordings/paper', 'kendi ham kaydı + paper.db (pozisyon, karar, emir, dolum)'],
+      ['testnet', 'yazar', 'data/recordings/testnet', 'kendi ham kaydı + paper.db + silahlanma/mutabakat olayları'],
+      ['testnet', 'emir', 'Binance testnet REST', 'giriş emri, SL/TP algo emri, iptal; mutabakat için pozisyon ve emir snapshot\'ı'],
+      ['konsol', 'okur', 'recorder kaydı', 'tail; görünüm önbelleği ile yeniden başlatmada baştan okumaz'],
+      ['konsol', 'okur', 'paper.db dosyaları', 'salt okunur bağlantı; pozisyon, karar, metrik, canlılık damgası'],
+      ['konsol', 'yazar', 'data/state/*/kill_switch.json', 'ortama bağlı kill switch; token ister'],
+      ['konsol', 'yazar', 'data/state/testnet/credentials.env', 'testnet anahtarı; servis 10 s içinde okur, yeniden başlatma gerekmez'],
+      ['araştırma', 'okur', 'kayıt + arşiv', 'bars.jsonl üretir, bookDepth/metrics ile zenginleştirir, ızgarayı tarar'],
+      ['nginx + Cloudflare', 'akış', 'tarayıcı', 'HTTPS; temel kimlik doğrulama + uygulama token\'ı']
+    ].map(e => ({ from: e[0], kind: e[1], kindStyle: ek(e[1]), to: e[2], what: e[3] }));
     return {
       features, stateRules, decisions, intentFields, hypotheses, pipeline,
       intentResult: lastV ? (lastV.kind === 'APPROVE' ? 'APPROVE · ' + (lastV.symbol || '') + ' ' + (lastV.cell || '') : lastV.kind + ' · ' + ((lastV.reasons || []).join(', ') || (lastV.explain || '').slice(0, 60))) : 'None · intent üretilmedi', intentNote: `allowed_cells boş (Faz 3: ${res ? res.passed : '?'}/${res && res.cells ? res.cells.length / 2 : '?'} hücre). Hücre geçince D1 açılır; sl/tp null iken de intent üretilmez (fail-closed).`, intentStyle: 'border:1px dashed #ff5470;color:#ff5470;padding:10px 12px;margin-top:6px;',
       navItems, phases, screenTitle: cur[1],
       screenSub: (S.err ? 'API HATASI: ' + S.err + ' · ' : '') + (S.notice ? S.notice + ' · ' : '') + (FR.live ? '' : FR.reason + ' · ') + cur[3],
-      isAlgo: S.screen === 'algo', isStatus: S.screen === 'status', isPositions: S.screen === 'positions', isRisk: S.screen === 'risk', isStates: S.screen === 'states', isReplay: S.screen === 'replay', isRecorder: S.screen === 'recorder', isConfig: S.screen === 'config', isHistory: S.screen === 'history', goPositions: go('positions'),
+      isAlgo: S.screen === 'algo', isStatus: S.screen === 'status', isPositions: S.screen === 'positions', isRisk: S.screen === 'risk', isStates: S.screen === 'states', isReplay: S.screen === 'replay', isRecorder: S.screen === 'recorder', isConfig: S.screen === 'config', isHistory: S.screen === 'history', isTopology: S.screen === 'topology', goPositions: go('positions'),
       dotPublic: dot(ageP != null && !staleFlags.public ? '#00e5a0' : '#ff5470', ageP != null), dotMarket: dot(ageM != null && !staleFlags.market ? '#00e5a0' : '#ff5470', ageM != null), dotPrivate: dot('#1a2536', false), loopLag: rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) : '—',
       setPaper: () => { const p = envs.find(e => e.env === 'paper'); this.goRun(p ? p.run_id : ''); },
       setLive: () => { const t = envs.find(e => e.env === 'testnet'); if (t) { this.goRun(t.run_id); } else { alert('Testnet koşusu yok. Canlı (mainnet) yol yazılmadı: LiveExecutionAdapter korumalı stub (Faz 10).'); } },
@@ -969,6 +1152,9 @@ class Component extends DCLogic {
       recCards: [card('RUN', rec.run_id || '—', 'restart ' + (rec.restart_no ?? '—') + ' · git ' + (rec.git_sha || '—'), '#35c8ff'), card('OLAY', rec.seq != null ? this.fmt(rec.seq / 1e6, 2) + ' M' : '—', 'seq (tail) · parse hatası ' + (rec.parse_errors ?? '—'), '#dbe7f3'), card('LOOP LAG', rec.loop_lag_p99 != null ? rec.loop_lag_p99.toFixed(1) + ' ms p99' : '—', 'maks ' + (rec.loop_lag_max != null ? rec.loop_lag_max.toFixed(1) + ' ms' : '—') + ' (10 s pencere)', '#00e5a0'), card('KUYRUK', rec.queue != null ? String(rec.queue) : '—', 'dropped ' + (rec.dropped ?? '—')), card('BAĞLANTI', Object.entries(rec.connects || {}).map(e => e[0] + ' ' + e[1]).join(' · ') || '—', 'bayatlık olayı ' + (rec.stale_events ?? 0), '#00e5a0'), card('SNAPSHOT', String(rec.snapshots ?? '—'), 'depth 1000 · her 10 dk')],
       streams, files, diskUsed: A ? this.fmt(A.recorder_bytes / 1e9, 2) + ' GB · boş ' + A.disk_free_gb + ' GB' : '—',
       locked, posCfg, staleCfg,
+      topoNodes, topoPipe, topoEdges, topoRef: this.topoRef, topoDiagram: this.topoDiagram(topoNodes),
+      topoNote: 'kutu kenarı kesikse o bileşen şu an çalışmıyor · sağ üstteki nokta canlılık damgasından gelir',
+      topoIsolation: 'İzolasyon: üç işlem süreci ayrı container, ayrı WS bağlantısı, ayrı kayıt dizini, ayrı SQLite. Paylaşılan tek şey kill switch dosyalarıdır ve onlar da ortam başına ayrıdır. Konsol hiçbir karar yoluna bağlı değildir; yalnızca okur ve token korumalı iki uçtan yazar.',
       // Sistemde var olup konsolda izlenmeyen parçalar: sessiz kalmak yerine durumunu yaz
       wiring: [
         ['Emir durum makinesi', SVC.orders == null ? 'testnet koşusu bildirmiyor' : SVC.orders + ' emir · dolum ' + (SVC.fills || 0) + ' · ret ' + (SVC.rejected || 0), SVC.orders == null ? '#6f849c' : '#00e5a0'],

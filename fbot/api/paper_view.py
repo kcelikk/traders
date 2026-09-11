@@ -38,13 +38,14 @@ def environments(recordings: Path) -> list[dict]:
         try:
             con = sqlite3.connect(f"file:{r['db']}?mode=ro", uri=True)
             fsm = dict(con.execute("SELECT state, COUNT(*) FROM positions GROUP BY state").fetchall())
+            _, _, hb = _meta(con)
             con.close()
             m = metrics(Path(r["db"]))
         except sqlite3.Error:
-            fsm, m = {}, {}
+            fsm, m, hb = {}, {}, None
         out.append({"run_id": r["run_id"], "env": r["env"], "mtime": r["mtime"],
                     "positions": sum(fsm.values()), "open": sum(n for s, n in fsm.items() if s != "CLOSED"),
-                    "metrics": m})
+                    "metrics": m, "heartbeat": hb})
     return out
 
 

@@ -94,7 +94,7 @@ def template(design: str) -> str:
         if body.count(old) != 1:
             raise SystemExit(f"yapı durdu: '{why}' için desen {body.count(old)} kez bulundu (1 bekleniyor)")
         body = body.replace(old, new)
-    screen = (UI / "history-screen.html").read_text()
+    screen = (UI / "topology-screen.html").read_text() + (UI / "history-screen.html").read_text()
     if body.count("    </main>") != 1:
         raise SystemExit("yapı durdu: </main> tek değil; geçmiş ekranı yerleştirilemedi")
     return body.replace("    </main>", screen + "    </main>")

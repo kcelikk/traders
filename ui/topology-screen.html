@@ -1,0 +1,65 @@
+      <!-- ===== TOPOLOJİ (tasarım şablonuna ek ekran; scripts/build_ui.py yerleştirir) ===== -->
+      <sc-if value="{{ isTopology }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+          <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:6px; flex-wrap:wrap;">
+            <div style="font-size:10px; letter-spacing:.14em; color:#6f849c;">UÇTAN UCA AKIŞ</div>
+            <span style="font-size:10px; color:#6f849c;">{{ topoNote }}</span>
+          </div>
+          <div ref="{{ topoRef }}" style="min-height:430px; overflow-x:auto;">{{ topoDiagram }}</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:12px;">
+          <sc-for list="{{ topoNodes }}" as="n" hint-placeholder-count="5">
+            <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="{{ n.dot }}"></span>
+                <span style="font-family:'Space Grotesk'; font-weight:700; font-size:14px; color:{{ n.color }};">{{ n.title }}</span>
+                <span style="margin-left:auto; {{ n.chip }}">{{ n.status }}</span>
+              </div>
+              <div style="font-size:11px; color:#9fb0c3; margin-top:6px; line-height:1.6;">{{ n.role }}</div>
+              <div style="font-size:10px; color:#6f849c; margin-top:6px; font-variant-numeric:tabular-nums;">{{ n.metrics }}</div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                <sc-for list="{{ n.tags }}" as="t" hint-placeholder-count="3"><span style="{{ t.style }}">{{ t.text }}</span></sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">SÜREÇ İÇİ BORU HATTI · her süreç kendi kopyasını çalıştırır</div>
+          <div style="display:flex; gap:0; align-items:stretch; flex-wrap:wrap;">
+            <sc-for list="{{ topoPipe }}" as="p" hint-placeholder-count="7">
+              <div style="{{ p.style }}">
+                <div style="font-size:9px; letter-spacing:.12em; color:{{ p.color }};">{{ p.step }}</div>
+                <div style="font-size:12px; color:#dbe7f3; margin-top:3px;">{{ p.name }}</div>
+                <div style="font-size:10px; color:#6f849c; margin-top:3px; line-height:1.5;">{{ p.detail }}</div>
+              </div>
+              <sc-if value="{{ p.arrow }}" hint-placeholder-val="{{ true }}"><div style="display:grid; place-items:center; padding:0 6px; color:#35c8ff;">→</div></sc-if>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="border:1px solid #1a2536; background:rgba(12,19,32,.6); padding:12px 14px; overflow-x:auto;">
+          <div style="font-size:10px; letter-spacing:.14em; color:#6f849c; margin-bottom:8px;">İLİŞKİLER · kim neyi okur, kim neyi yazar</div>
+          <table style="width:100%; border-collapse:collapse; font-size:11px; min-width:640px;">
+            <thead><tr style="color:#6f849c; text-align:left;">
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">KAYNAK</th>
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">İLİŞKİ</th>
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">HEDEF</th>
+              <th style="padding:6px 8px; border-bottom:1px solid #1a2536;">TAŞINAN</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ topoEdges }}" as="e" hint-placeholder-count="10">
+                <tr style="border-bottom:1px solid #111a28;">
+                  <td style="padding:5px 8px; color:#dbe7f3; white-space:nowrap;">{{ e.from }}</td>
+                  <td style="padding:5px 8px;"><span style="{{ e.kindStyle }}">{{ e.kind }}</span></td>
+                  <td style="padding:5px 8px; color:#dbe7f3; white-space:nowrap;">{{ e.to }}</td>
+                  <td style="padding:5px 8px; color:#6f849c;">{{ e.what }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          <div style="font-size:10px; color:#6f849c; margin-top:8px; line-height:1.6;">{{ topoIsolation }}</div>
+        </div>
+      </sc-if>
+
