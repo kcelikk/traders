@@ -13,8 +13,11 @@ def split_fixture(tmp_path: Path) -> Path:
     lines = gzip.open(src, "rb").read().splitlines(keepends=True)
     d = tmp_path / "split"; d.mkdir()
     half = len(lines) // 2
-    gzip.open(d / "events-20260910T0800-1.jsonl.gz", "wb").write(b"".join(lines[:half]))
-    gzip.open(d / "events-20260910T0800-2.jsonl.gz", "wb").write(b"".join(lines[half:]))
+    # Kapatmak şart: gzip trailer'ı close() yazar. Açık bırakılan dosya diskte yarım kalır ve
+    # okuyucu onu "kesik" sayar (çöp toplayıcı ne zaman çalışırsa o zaman tamamlanır → kararsız test).
+    for name, chunk in (("events-20260910T0800-1.jsonl.gz", lines[:half]), ("events-20260910T0800-2.jsonl.gz", lines[half:])):
+        with gzip.open(d / name, "wb") as f:
+            f.write(b"".join(chunk))
     (d / "manifest.jsonl").write_text("".join(json.dumps({"file": n}) + "\n" for n in ("events-20260910T0800-1.jsonl.gz", "events-20260910T0800-2.jsonl.gz")))
     return d
 

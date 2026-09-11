@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pickle
 import re
 import shutil
 import subprocess
@@ -90,17 +91,65 @@ def assemble_config(cfg_dir: Path, run_config: dict | None = None) -> dict:
             "source": "koşu kaydı" if core else "yok (koşu config yazmamış)", "locked": LOCKED}
 
 
+class ViewCache:
+    """Konsol görünümünün kontrol noktası. Yeniden başlatmada 24 saatlik kaydı baştan oynatmamak için.
+
+    Yalnızca **manifestte kapanmış** bir dosyanın sonunda yazılır: açık dosya hâlâ büyüyor, oradan
+    devam etmek satır atlamaya yol açardı. Yüklerken uyumluluk doğrulanır (sembol evreni, feature
+    ayarı, hedef dosyanın hâlâ var olması). Uyumsuz ya da bozuk önbellek **sessizce atlanır** ve
+    kayıt baştan oynatılır: yanlış duruma devam etmektense yeniden hesaplamak doğrudur.
+    """
+
+    VERSION = 1
+
+    def __init__(self, path: Path, symbols: list, key: str):
+        self.path = Path(path)
+        self.symbols, self.key = list(symbols), key
+
+    def _file(self) -> Path:
+        return self.path / "view.pkl"
+
+    def load(self, available: set[str]) -> tuple[object, str, int] | None:
+        f = self._file()
+        if not f.exists():
+            return None
+        try:
+            blob = pickle.loads(f.read_bytes())
+        except Exception:  # noqa: BLE001 — bozuk önbellek her istisnayı atabilir
+            return None
+        if not isinstance(blob, dict) or blob.get("version") != self.VERSION:
+            return None
+        if blob.get("symbols") != self.symbols or blob.get("key") != self.key:
+            return None            # evren ya da feature ayarı değişmiş: eski görünüm geçersiz
+        if blob.get("after_file") not in available:
+            return None            # kayıt dönmüş, hedef dosya silinmiş
+        view = blob.get("view")
+        if not isinstance(view, LiveView):
+            return None
+        return view, blob["after_file"], int(blob.get("lines") or 0)
+
+    def save(self, view, after_file: str, lines: int) -> None:
+        self.path.mkdir(parents=True, exist_ok=True)
+        tmp = self._file().with_suffix(".tmp")
+        tmp.write_bytes(pickle.dumps({"version": self.VERSION, "symbols": self.symbols, "key": self.key,
+                                      "after_file": after_file, "lines": lines, "view": view},
+                                     protocol=pickle.HIGHEST_PROTOCOL))
+        tmp.replace(self._file())
+
+
 class Tailer(threading.Thread):
     """Kayıt dizinini izler: geçmiş dosyaları oynatır, sonra açık dosyayı tail eder; dosya döndükçe sıradakine geçer."""
 
-    def __init__(self, run_dir: Path, view: LiveView, lock: threading.Lock, history_files: int):
+    def __init__(self, run_dir: Path, view: LiveView, lock: threading.Lock, history_files: int, cache: ViewCache | None = None):
         super().__init__(daemon=True)
         self.run_dir, self.view, self.lock, self.history_files = run_dir, view, lock, history_files
+        self.cache = cache
         self.current: Path | None = None
         self.reader: GrowingGzipReader | None = None
         self.done: set[str] = set()
         self.loading = True
         self.lines = 0
+        self.from_cache = 0
 
     def _files(self):
         return sorted(self.run_dir.glob("events-*.jsonl.gz"), key=lambda p: p.name)
@@ -125,13 +174,47 @@ class Tailer(threading.Thread):
                 except Exception:  # noqa: BLE001 — görünüm, hot path değil; bozuk satır atlanır
                     continue
 
-    def run(self):
+    def replay_history(self):
+        """Kapanmış dosyaları oynatır; önbellek varsa oradan devam eder ve her kapanmış dosyadan
+        sonra kontrol noktası yazar."""
         files = self._files()
         start = max(0, len(files) - self.history_files)
-        for p in files[start:-1] if files else []:
+        pending = files[start:-1] if files else []
+        if self.cache is not None:
+            hit = self.cache.load({p.name for p in files})
+            if hit is not None:
+                view, after, lines = hit
+                idx = next((i for i, p in enumerate(files) if p.name == after), None)
+                if idx is not None and idx >= start:
+                    with self.lock:
+                        self.view.__dict__.update(view.__dict__)
+                    self.done |= {p.name for p in files[: idx + 1]}
+                    self.from_cache = lines
+                    self.lines = lines
+                    pending = [p for p in files[idx + 1: -1]]
+        closed = self._closed_names()
+        for p in pending:
             self._feed_lines(GrowingGzipReader(p).read_new())
             self.done.add(p.name)
+            if self.cache is not None and p.name in closed:
+                with self.lock:
+                    self.cache.save(self.view, p.name, self.lines)
         self.loading = False
+
+    def _closed_names(self) -> set[str]:
+        m = self.run_dir / "manifest.jsonl"
+        if not m.exists():
+            return set()
+        out = set()
+        for line in m.read_text().splitlines():
+            try:
+                out.add(json.loads(line)["file"])
+            except (ValueError, KeyError):
+                continue
+        return out
+
+    def run(self):
+        self.replay_history()
         while True:
             files = self._files()
             pending = [p for p in files if p.name not in self.done]
@@ -156,7 +239,8 @@ class Tailer(threading.Thread):
 
 
 class Api:
-    def __init__(self, run_dir: Path, ui_dir: Path, history_files: int, auth: AuthConfig | None = None):
+    def __init__(self, run_dir: Path, ui_dir: Path, history_files: int, auth: AuthConfig | None = None,
+                 cache_dir: Path | None = None):
         self.run_dir, self.ui_dir = run_dir, ui_dir
         self.auth = auth or AuthConfig(token=os.environ.get("FBOT_UI_TOKEN") or None,
                                        protect_reads=os.environ.get("FBOT_UI_PROTECT_READS", "") == "1")
@@ -166,7 +250,11 @@ class Api:
         f = res_cfg["features"]; st = res_cfg["states"]
         self.view = LiveView(symbols, W=f["W"], N_short=f["N_short"], N_long=f["N_long"], p_lo=st["p_lo"], p_hi=st["p_hi"])
         self.lock = threading.Lock()
-        self.tailer = Tailer(run_dir, self.view, self.lock, history_files)
+        # Önbellek anahtarı: feature/durum ayarı değişirse eski görünüm geçersizdir
+        key = json.dumps({"W": f["W"], "N_short": f["N_short"], "N_long": f["N_long"],
+                          "p_lo": st["p_lo"], "p_hi": st["p_hi"]}, sort_keys=True)
+        cache = None if cache_dir is None else ViewCache(Path(cache_dir) / Path(run_dir).name, symbols, key)
+        self.tailer = Tailer(run_dir, self.view, self.lock, history_files, cache=cache)
         self.kills = {e: KillSwitch(kill_path_for(e, ROOT)) for e in known_envs()}
         self.staleness_s = rec_cfg.get("staleness_s", {})
         self._cache = (0.0, None)
@@ -256,6 +344,7 @@ class Api:
         rec_size = sum(f["size"] for f in recorder_files(self.run_dir))
         out = {
             "t_ms": int(now * 1000), "mode": "paper", "loading": self.tailer.loading, "tail_lines": self.tailer.lines,
+            "tail_from_cache": self.tailer.from_cache,
             "kill": {"active": pk.active, **{k: v for k, v in pk.state.items() if k != "active"}, "env": "paper", "path": str(pk.path)},
             "kills": {e: {"active": k.active, "env": e, "path": str(k.path),
                           **{x: v for x, v in k.state.items() if x != "active"}} for e, k in self.kills.items()},
@@ -379,15 +468,18 @@ def main(argv):
     ap.add_argument("--port", type=int, default=int(os.environ.get("FBOT_UI_PORT", "8787")))
     ap.add_argument("--history-files", type=int, default=5, help="başlangıçta oynatılacak kapalı dosya sayısı (saat)")
     ap.add_argument("--protect-reads", action="store_true", help="okuma uçlarını da token ile koru")
+    ap.add_argument("--cache-dir", default="data/state/console-cache", help="görünüm kontrol noktası; boş verilirse kapalı")
     a = ap.parse_args(argv)
     token = os.environ.get("FBOT_UI_TOKEN") or None
     api = Api(Path(a.run_dir), Path(a.ui_dir), a.history_files,
-              AuthConfig(token=token, protect_reads=a.protect_reads or os.environ.get("FBOT_UI_PROTECT_READS", "") == "1"))
+              AuthConfig(token=token, protect_reads=a.protect_reads or os.environ.get("FBOT_UI_PROTECT_READS", "") == "1"),
+              cache_dir=Path(a.cache_dir) if a.cache_dir else None)
     api.start()
     srv = ThreadingHTTPServer((a.bind, a.port), make_handler(api))
     print(json.dumps({"msg": "konsol", "url": f"http://{a.bind}:{a.port}/", "run_dir": a.run_dir,
                       "yazma_uçları": "token ile açık" if token else "KAPALI (FBOT_UI_TOKEN yok)",
-                      "okuma_koruması": bool(api.auth.protect_reads)}), flush=True)
+                      "okuma_koruması": bool(api.auth.protect_reads),
+                      "önbellek": a.cache_dir or "kapalı"}), flush=True)
     srv.serve_forever()
 
 
