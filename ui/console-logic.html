@@ -90,7 +90,8 @@ class Component extends DCLogic {
     const card = (label, value, sub, color, spark) => ({ label, value, sub, color: color || '#dbe7f3', spark: spark || '' });
     const warmDone = uni.filter(x => x.warm_pct >= 100).length;
     const universe = uni.map((x, i) => ({ i: i + 1, sym: x.sym, lev: x.sym === 'BTCUSDT' || x.sym === 'ETHUSDT' ? '10x' : '5x', state: x.state, stateStyle: chip(this.SC[x.state]), price: this.fmt(x.price), warmStyle: `display:block;height:100%;width:${x.warm_pct}%;background:${x.warm_pct < 100 ? '#ffb020' : '#00e5a0'};`, go: () => this.setState({ sym: x.sym }), style: `background:none;border:0;padding:0;text-align:left;cursor:pointer;color:${sym === x.sym ? '#35c8ff' : '#dbe7f3'};font-weight:500;` }));
-    const feedColor = { 'SİNYAL': '#00e5a0', CONNECT: '#35c8ff', DISCONNECT: '#ff5470', STALE: '#ffb020', RUN: '#dbe7f3', INFO: '#6f849c' };
+    const feedColor = { 'SİNYAL': '#00e5a0', CONNECT: '#35c8ff', DISCONNECT: '#ff5470', STALE: '#ffb020', RUN: '#dbe7f3', INFO: '#6f849c', ALARM: '#ff5470' };
+    const CD = (A && A.cost_drift) || {};
     const feed = ((A && A.feed) || []).slice(0, 14).map(f => ({ t: this.tms(f.t_ns), kind: f.kind, color: feedColor[f.kind] || '#6f849c', msg: f.msg }));
     const fsmCounts = (A && A.fsm) || {};
     const fsm = ['ENTRY_SENT', 'PROTECTING', 'MANAGED', 'CLOSING', 'CLOSED'].map((n, i) => { const v = fsmCounts[n] || 0, live = v > 0 && n !== 'CLOSED'; return { name: n, count: v + (n === 'CLOSED' ? ' kapandı' : ' açık'), arrow: i < 4, style: `border:1px solid ${live ? '#00e5a0' : '#1a2536'};padding:8px 12px;background:${live ? 'rgba(0,229,160,.08)' : 'rgba(12,19,32,.6)'};min-width:110px;` }; });
@@ -111,6 +112,8 @@ class Component extends DCLogic {
         style: chip(v.kind === 'APPROVE' ? '#00e5a0' : v.kind === 'REJECT' ? '#ff5470' : '#ffb020') }))
       : [{ t: '—', kind: 'YOK', sym: P0.run_id ? P0.run_id + ' · ısınma' : 'paper çalışmıyor', reasons: 'allowed_cells boş ya da 2W bar dolmadı', style: chip('#6f849c') }];
     const grossNow = positions.filter(p => p.state !== 'CLOSED').length * 80;
+    if (CD.alarms && CD.alarms.length) CD.alarms.forEach(function (k) { checks.push(chk('6.4', 'Maliyet sürüklenmesi', k, (CD.detail && CD.detail[k]) ? CD.detail[k].slice(0, 46) : 'eşik aşıldı', 'bad')); });
+    else if (CD.trades) checks.push(chk('6.4', 'Maliyet sürüklenmesi', CD.trades + ' işlem · net/işlem ' + (CD.net_per_trade_pct != null ? CD.net_per_trade_pct.toFixed(3) + '%' : '—'), 'eşik içinde', 'ok'));
     const exposure = [['Σ notional', grossNow, (cfg.risk || {}).gross_cap_usdt || 400, '#35c8ff'], ['BTC-beta net', 0, 400, '#6f849c'], ['teminat kullanımı', Math.round(grossNow / 10), 100, '#00e5a0']].map(e => ({ name: e[0], val: e[1] + (e[2] === 100 ? '%' : ' USDT'), cap: e[2] + (e[2] === 100 ? '%' : ' USDT'), bar: `height:100%;width:${e[1] / e[2] * 100}%;background:${e[3]};` }));
     const stateDefs = [['S0', 'nötr', 'diğerlerinin hiçbiri', 0], ['S1', 'trend yukarı', 'pct(ret_15) > p_hi ∧ pct(rv_15) ∈ band', 2], ['S2', 'trend aşağı', 'pct(ret_15) < p_lo ∧ pct(rv_15) ∈ band', 2], ['S3', 'sıkışma', 'pct(rv_15) < p_lo ∧ pct(spread) < p_hi', 2], ['S4', 'aşırı genişleme', 'pct(rv_5) > p_hi ∧ pct(vol_ratio) > p_hi', 2]].map(s => ({ id: s[0], name: s[1], rule: s[2], n: s[3], color: this.SC[s[0]] }));
     const fp = (f, k) => f && f[k] != null ? 'p' + Math.round(f[k] * 100) : '—';

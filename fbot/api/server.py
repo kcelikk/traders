@@ -172,6 +172,34 @@ class Api:
         except ValueError:
             return None
 
+    def _drift(self, run_id: str | None) -> dict:
+        """Kapanan pozisyonlardan maliyet sürüklenmesi (BÖLÜM 6.4) — konsol için yeniden hesaplanır."""
+        try:
+            import sqlite3
+            from decimal import Decimal
+            from fbot.api.paper_view import find_paper_runs
+            from fbot.core.cost_drift import CostDriftConfig, CostDriftMonitor
+            runs = find_paper_runs(Path(self.run_dir).parent)
+            if run_id:
+                runs = [r for r in runs if r["run_id"] == run_id] or runs
+            if not runs:
+                return {}
+            con = sqlite3.connect(f"file:{runs[0]['db']}?mode=ro", uri=True)
+            rows = con.execute("SELECT net_pct, entry_price, qty, closed_ns FROM positions WHERE state='CLOSED' AND net_pct IS NOT NULL ORDER BY closed_ns").fetchall()
+            con.close()
+            m = CostDriftMonitor(CostDriftConfig(window_ms=86_400_000, capital_usdt=Decimal("1000"),
+                                                 commission_to_gross_max=Decimal("0.30"), cost_to_capital_max=Decimal("0.02"),
+                                                 net_per_trade_min=Decimal("-0.05"), min_trades=20))
+            for net, entry, qty, cns in rows:
+                notional = Decimal("80")
+                m.on_trade({"net_pct": Decimal(str(net)), "commission_usdt": notional * Decimal("0.001"),
+                            "funding_usdt": Decimal(0), "slippage_usdt": Decimal(0), "notional": notional},
+                           now_ms=(cns or 0) // 1_000_000)
+            r = m.report(now_ms=int(time.time() * 1000))
+            return {k: (float(v) if hasattr(v, "quantize") else v) for k, v in r.items() if k != "detail"} | {"detail": r["detail"]}
+        except Exception as e:  # noqa: BLE001
+            return {"error": repr(e)}
+
     def _paper(self, run_id: str | None = None) -> dict:
         """Paper/testnet koşusu — ayrı süreç/container; konsol yalnızca SQLite'ı salt okur."""
         try:
@@ -210,7 +238,7 @@ class Api:
             "replay_cmp": self._read_json(ROOT / "data" / "research" / "replay-positions.json"),
             "latency": parse_latency_md(lat_md),
             "config": assemble_config(ROOT / "config"),
-            **self._paper(run_id),
+            **self._paper(run_id), "cost_drift": self._drift(run_id),
         }
         if run_id is None:
             self._cache = (now, out)

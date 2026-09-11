@@ -46,6 +46,7 @@ class LiveView:
         self.stale_events = 0
         self.snapshots = 0
         self.stale_flags: dict[str, bool] = {}
+        self.alarms: list = []
 
     def _push(self, t_ns: int, kind: str, msg: str):
         self.log.appendleft({"t_ns": t_ns, "kind": kind, "msg": msg})
@@ -71,6 +72,10 @@ class LiveView:
                 self.snapshots += 1
             elif ev.stream == "stats":
                 self.stats = info
+            elif ev.stream == "alarm":
+                self.alarms.insert(0, {"t_ns": ev.recv_ns, **info})
+                del self.alarms[20:]
+                self._push(ev.recv_ns, "ALARM", f"{info.get('kind')} · {info.get('detail', '')[:90]}")
         state, cmds = self.engine.step(self.state, ev, ev.recv_ns)
         for c in cmds:
             if isinstance(c, BarClosed):
@@ -144,7 +149,7 @@ class LiveView:
                          "queue": self.stats.get("queue"), "dropped": self.stats.get("dropped"), "connects": dict(self.connects), "stale_events": self.stale_events,
                          "snapshots": self.snapshots, "parse_errors": self.state.parse_errors},
             "stale": stale_age, "stale_flags": dict(self.stale_flags),
-            "feed": list(self.log),
+            "feed": list(self.log), "alarms": list(self.alarms),
             "state_counts": {s: self.state_counts.get(s, 0) for s in STATES},
             "transitions": {f"{a}>{b}": n for (a, b), n in self.transitions.items()},
         }
