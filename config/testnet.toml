@@ -50,7 +50,7 @@ report_hash = "a693aa0742076410"
 allowed_cells = []              # strateji proje sahibinden gelecek; boşken emir üretilmez
 sl_pct = {}
 tp_pct = {}
-research_spread_bps = { BTCUSDT = "0.013", ETHUSDT = "0.041" }
+research_spread_bps = { BTCUSDT = "0.013", ETHUSDT = "0.041" }   # ölçüldü (mainnet); testnet defteri daha ince olabilir
 
 [position]
 t_protect_ms = 3000

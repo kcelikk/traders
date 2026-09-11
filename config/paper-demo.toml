@@ -50,7 +50,7 @@ allowed_cells = [{ state = "S1", dir = "long", h = 15 }, { state = "S2", dir = "
 # örnek: allowed_cells = [{ state = "S1", dir = "long", h = 15 }]
 sl_pct = { S1 = "0.5", S2 = "0.5", S3 = "0.4", S4 = "0.6" }   # ÖLÇÜLMEDİ — makine testi değeri
 tp_pct = { S1 = "1.0", S2 = "1.0", S3 = "0.8", S4 = "1.2" }   # ÖLÇÜLMEDİ — makine testi değeri
-research_spread_bps = { BTCUSDT = "0.013", ETHUSDT = "0.041", ZECUSDT = "0.082", SOLUSDT = "0.99", IOSTUSDT = "1.81", XRPUSDT = "0.5", HYPEUSDT = "0.5", DOGEUSDT = "0.5", NEARUSDT = "0.5", BNBUSDT = "0.5" }
+research_spread_bps = { BNBUSDT = "0.14", BTCUSDT = "0.013", DOGEUSDT = "1.192", ETHUSDT = "0.041", HYPEUSDT = "0.125", IOSTUSDT = "2.031", NEARUSDT = "0.5", SOLUSDT = "1.004", VTHOUSDT = "3.385", XRPUSDT = "0.742", ZECUSDT = "0.091" }   # ölçüldü: rec-72h son 3 saat, bookTicker medyanı (NEAR evrende değildi, tahmin)
 
 [position]                     # ADR 0012
 t_protect_ms = 3000

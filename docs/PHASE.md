@@ -254,3 +254,18 @@ Hedef: bağımsız, veto yetkili, saf Risk Engine (`assess`), kalıcı kill swit
 **Yakalanan hata (2W penceresi):** durum motoru kayan pencereyi `W + N_long` bar tutuyordu; `vol_ratio` ve `spread` persentilleri W bar geçmiş isteyip kendileri de W bar pencere gerektirdiği için `pct_vol_ratio`/`pct_spread` sessizce `None` kalıyor, **S3 ve S4 hiç etiketlenmiyordu**. Pencere `2W + N_long + 2` yapıldı; aynı hata `fbot/api/live_view.py` ve `scripts/replay_positions.py` içinde de düzeltildi. Faz 5'teki "ısınma = 2W bar" kuralının kaynağı budur.
 
 **Kârlılık gösterilmedi (ADR 0010).** `allowed_cells` boş olduğu için zincir hiçbir giriş emri üretmez; Faz 3'te maliyet üstü beklenti gösteren hücre çıkmadı.
+
+## Faz 7/9 — boru hattı doğrulaması (2026-09-10 23:40)
+
+Karar motoruna gözlemlenebilirlik eklenince (intent üretilmeme nedeni sayılıyor) iki gerçek engel çıktı ve düzeltildi:
+
+| Engel | Neden | Düzeltme |
+|---|---|---|
+| `K9_beta_unknown` — 352 ret | `beta_cap_usdt = 750` verildi ama beta hesabı çekirdeğe bağlanmamıştı; risk fail-closed reddediyordu | `fbot/core/beta_tracker.py`: barlardan kayan BTC-beta, araştırma formülüyle bit-eşit test |
+| `D3_spread` — 90 engel | demo config'deki `research_spread_bps` tahminî (DOGE 0.5 iken gerçek 1.19) | kayıttan ölçüldü (son 3 saat, bookTicker medyanı) ve üç config'e yazıldı |
+
+Ölçülen spread (bps, medyan): BTC 0.013 · ETH 0.041 · ZEC 0.091 · HYPE 0.125 · BNB 0.14 · XRP 0.742 · SOL 1.004 · DOGE 1.192 · IOST 2.031 · VTHO 3.385
+
+Düzeltme sonrası 3 saatlik gerçek kayıt üzerinde (demo config, strateji değil): **13 intent → 13 pozisyon → 22 dolum → 26 koruma emri**. Risk retleri artık anlamlı (`K6_max_positions`, `K8_gross_cap`, `K12_filters`), fail-closed bilinmezlik değil.
+
+**Kârlılık gösterilmedi (ADR 0010):** hücreler ve SL/TP değerleri ölçülmemiş demo değerleridir.
