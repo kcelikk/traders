@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: golden golden-orders-diff golden-orders-baseline bench bench-transport trader-load bench-guard ui-build determinism-report barrier-scan shuffle-control verify-exchange setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down testnet-up testnet-down testnet-logs testnet-summary test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: golden golden-orders-diff golden-orders-baseline bench bench-reactors bench-transport trader-load bench-guard ui-build determinism-report barrier-scan shuffle-control verify-exchange setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down testnet-up testnet-down testnet-logs testnet-summary test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -51,6 +51,9 @@ bench-baseline:          # baseline'ı güncelle (yalnız kasıtlı performans d
 
 trader-load:             # bir koşu dosyasının yük profili: olay/s, stream kırılımı, loop lag (F=<dosya>)
 	$(PY) -m scripts.trader_load $(F)
+
+bench-reactors:          # Gate 4: reactor kapalı vs shadow, bookTicker dalı bütçesi (+%20)
+	$(PY) -m scripts.bench_core --reactors
 
 bench-guard:             # performans regresyon kapısı (yavaş testler)
 	$(PYTEST) -q -m slow tests
