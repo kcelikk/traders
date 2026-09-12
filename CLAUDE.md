@@ -110,6 +110,8 @@ PROCESS 2 recorder | PROCESS 3 persistence | PROCESS 4 api/metrics
 
 - **Fast Path (P0):** açık pozisyonu yönetir. Yeni pozisyon açma kararı bu yolda değildir.
 - **Kalıcılık hot path'te yok:** `AsyncStore` (sınırlı kuyruk + yazıcı görevi) yazımı `to_thread`'e taşır; kuyruk dolarsa düşürülür ve **sayılır** (ADR 0017).
+- **Borsa emir olayları user data akışından gelir:** `fbot/gateway/userdata.py` (listenKey + keepalive aynı yönetici), eşleme `fbot/core/oms.py` kaydından (`cid → pos_id`). Bugün **shadow**: çekirdek tüketmiyor, `[userdata] mode` ile açılır (ayrı onay).
+- **Sahipsiz emir ve koruma onarımı `dry_run`:** yalnız bizim kimlik gramerimize uyan emirlere dokunulur; `apply` onay gerektirir (ADR 0020).
 - **Emir gönderimi olay yolunda değildir:** `ExecutionQueue` + kalıcı bağlantı havuzu; sıkışıklıkta önce giriş reddedilir, koruma/çıkış için rezerv slot durur (ADR 0019). Geri alma: `[execution] transport = "legacy"`.
 - **Yuvarlama ve kimlik grameri tek noktada:** `fbot/core/rounding.py` (kaynak `Filters`, `pricePrecision` değil) ve `fbot/core/ids.py` (uzunluk girdiden bağımsız, ≤ 36) — ADR 0018.
 - **Stream profilleri rol bazlıdır:** `recorder` (5 stream) / `trader_paper` (depth dahil, dolum simülatörü için) / `trader_testnet` (depth yok). Config'de `[streams] profile`.
@@ -188,7 +190,7 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 make setup
 
 # testler
-make test              # birim (557 test)
+make test              # birim (627 test)
 make test-determinism  # Rule Zero doğrulaması (saflık + iki process + golden hash)
 make golden            # sabitlenmiş davranış baseline'ları (replay + emir düzeyi)
 make golden-orders-diff               # emir düzeyi fark tablosu (re-baseline raporu için)

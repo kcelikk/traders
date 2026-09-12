@@ -25,7 +25,7 @@ değişmez.
 | 0 | Test harness, golden baseline, benchmark kapısı, testnet davranış doğrulaması | **KAPANDI** 2026-09-12 (`docs/binance-api-gate0-dogrulama.md`) | golden + bench baseline sabitlendi; `fbot/` değişmedi |
 | 1 | Veri yolu ve kimlik: koşu kimliği, asenkron kalıcılık, rol bazlı stream profilleri | **teslim edildi 2026-09-12, proje sahibi onayı bekliyor** (ADR 0017, ölçüm `docs/gate1-olcum.md`) | **hash-nötr**: golden hash değişmedi ✓ |
 | 2 | 2.0 çekirdek doğruluk düzeltmeleri (**re-baseline #1**) + 2.1 bloklamayan execution transport | **teslim edildi 2026-09-12, onay bekliyor** (ADR 0018, ADR 0019; ölçüm `docs/gate2-olcum.md`) | re-baseline farkı yalnız `trigger_price` / `client_id` / `client_algo_id` ✓ |
-| 3 | Exchange truth: user data akışının tüketilmesi, orphan algo, balance mutabakatı | bekliyor | **hash-nötr** |
+| 3 | Exchange truth: user data akışı (shadow), emir kaydı, çıkış kilidi, orphan/koruma onarımı (dry-run), balance mutabakatı | **teslim edildi 2026-09-12, onay bekliyor** (ADR 0020; gözlem `docs/gate3-userdata-gozlem.md`) | **hash-nötr** ✓ (iki golden de değişmedi) |
 | 4 | Reactor, güvenlik katmanları, metrikler | bekliyor | re-baseline #2 (bayatlıkta çıkış kuralları) + shadow→active ayrı onay |
 | 5 | Strateji platformu: kayıt, versiyonlama, replay→paper→testnet→live terfi | bekliyor | — |
 
@@ -49,6 +49,30 @@ değişmez.
 **Gate 2'de çıkan canlı hata:** gönderim kuyruğu `Recorder.queue`'yu (olay yazım kuyruğu)
 gölgeliyordu; testnet süreci açılışta düştü. Testler yakalamıyordu çünkü `TestnetRecorder` hiçbir
 testte kurulmuyor. Alan adı `exec_queue` oldu, regresyon testi eklendi.
+
+## Gate 3 teslimi (2026-09-12)
+
+| Teslim | Durum |
+|---|---|
+| `fbot/gateway/userdata.py` — listenKey yaşam döngüsü, keepalive yöneticinin parçası (ADR 0003) | tamam; canlıda bağlı, **shadow** |
+| `CategoryConnection.url_factory` — private için ikinci sınıf yazılmadı | tamam |
+| Private çerçeveler tek sıralama noktasından kayda | tamam; gerçek emirle kanıtlandı |
+| `fbot/core/oms.py` — saf emir kaydı, `cid → pos_id/rol`, niyet defteri, UNKNOWN TTL | tamam |
+| Çekirdek borsa emir olaylarını çözüyor (`order_ack/fill/done`) | tamam; **mod shadow olduğu için canlıda tüketilmiyor** |
+| Çıkış kilidi (`exit_in_flight`) + TTL, tam çıkışta filtre, sürüm geri yükleme | tamam |
+| Sahipsiz emir iptali — **yalnız bizim gramerimiz**, `dry_run` | tamam; canlıda plan boş |
+| Korumasız pozisyon onarımı — bilinen pozisyon için, `dry_run` | tamam |
+| Bakiye/teminat snapshot'ı, HEDGE'te emir yolu kapanışı, `positionSide=BOTH`, iptal doğrulaması | tamam |
+| `-2022` → UNKNOWN (ADR 0020, faz4 §9 supersede) | tamam |
+| `trade_id` / `order_id` eşlemesi (dedupe sessizce çalışmıyordu) | tamam |
+| Test | 573 → 627 |
+
+**Gate 3'te çıkan ölçüm bulgusu:** testnet hesabı **çoklu varlık teminat** modunda; `availableBalance`
+USDT dışı bakiyeyi de içeriyor (4.208 cüzdan / 9.892 available, fark USDC). Büyüklük hesabı
+muhafazakâra çekildi; mainnet hesabının modu **proje sahibi kararı**.
+
+**Gate 3'te onay bekleyen kapılar:** `[userdata] mode = "active"` (çekirdeğin tüketmesi),
+`orphan_cancel = "apply"`, `protect_repair = "apply"`. Üçü de bugün kapalı.
 
 **Gate 0 bulgusu (açık, Gate 2/3):** aynı yönde ikinci `closePosition` koruma emri `-4130` ile
 reddediliyor; R3 trailing kuralı gerçek borsada önce yeni SL gönderip sonra eskisini iptal ettiği
