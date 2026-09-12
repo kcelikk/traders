@@ -133,7 +133,7 @@ class TestnetTrader(PaperTrader):
         if kind in ("order_fill", "order_ack", "order_done"):
             self.orders.apply({**mapped, "trade_id": mapped.get("trade_id")})
         ev = self.emit("exec", kind, json.dumps(mapped, separators=(",", ":"), default=str).encode(), now_ns, now_ns)
-        super()._step(ev, now_ns) if False else self._step(ev, now_ns)
+        self._step(ev, now_ns)
 
 
 class _NullSim:
@@ -324,6 +324,9 @@ class TestnetRecorder(PaperRecorder):
 
     def _beat(self, kill: bool) -> None:
         """Canlılık damgası. Bloklayan sorgular `_pre_beat`'te, thread'te yapıldı."""
+        # Kill switch dosyası testnet'te de okunur (paper'da vardı, burada yoktu): tek anahtar
+        # tüm işlem yollarını durdurur.
+        self.trader.engine_state.kill_switch = kill
         st = self.trader.engine_state
         self.store.heartbeat(now_ns=time.time_ns(),
                              detail={"kill_switch": kill, "positions": len(st.positions), "stats": dict(self.trader.stats),

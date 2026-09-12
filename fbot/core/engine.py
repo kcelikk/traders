@@ -8,7 +8,9 @@ from decimal import Decimal
 from fbot.core.beta_tracker import BetaTracker
 from fbot.core.commands import BarClosed, PlaceOrder, StalenessChanged
 from fbot.core.decision import DecisionConfig, decide_explain
+from fbot.core.ids import pos_id_of
 from fbot.core.market import SymbolMarket
+from fbot.core.oms import ENTRY, EXIT, PARTIAL, PROTECTIVE, OrderRegistry
 from fbot.core.position import Filters, Position, PositionConfig, PositionManager, PosState
 from fbot.core.risk import EntryIntent as RiskIntent, RiskConfig, RiskInputs, assess
 from fbot.core.state_engine import StateEngineConfig, SymbolStateEngine
@@ -23,6 +25,7 @@ class CoreConfig:
     filters: dict[str, Filters] = field(default_factory=dict)
     tick_ms: int = 1000
     pending_entry_ttl_ms: int = 60_000   # giriş emri dolum/ret bildirmezse sembol bu süre sonunda serbest kalır
+    order_ack_ttl_ms: int = 30_000       # emir bu süre içinde cevap vermezse UNKNOWN (mutabakat çözer)
     state_engine: StateEngineConfig | None = None
     beta_ref: str = "BTCUSDT"
     beta_window: int = 240
@@ -51,6 +54,7 @@ class CoreState:
     no_intent: dict = field(default_factory=dict)
     last_verdicts: list = field(default_factory=list)
     pending_entries: dict = field(default_factory=dict)   # sembol → son geçerlilik (ns). TTL ile süpürülür
+    orders: OrderRegistry = field(default_factory=OrderRegistry)   # cid → pozisyon/rol (Gate 3c)
     kill_switch: bool = False
     reconciled: bool = True
     events: int = 0
@@ -81,6 +85,7 @@ class Engine:
                     state.last_recv_ns[cat] = ev.recv_ns
             elif ev.stream == "tick":
                 self._sweep_pending(state, now_ns)
+                state.orders.sweep(now_ns, self.cfg.order_ack_ttl_ms * 1_000_000)
                 cmds += self._staleness(state, now_ns)
                 self._apply_freeze(state)
                 cmds += self._tick_positions(state, now_ns)
@@ -105,7 +110,22 @@ class Engine:
                 cmds += self._route(state, d, now_ns)
         cmds += self._staleness(state, now_ns)
         self._apply_freeze(state)
+        self._register_orders(state, cmds, now_ns)
         return state, cmds
+
+    def _register_orders(self, state: CoreState, cmds: list, now_ns: int) -> None:
+        """Üretilen her emir kayda girer: user data çerçevesi `pos_id` taşımaz, çözüm buradan yapılır.
+        Tek yer olduğu için replay'de aynı olay dizisi aynı kaydı üretir (Rule Zero)."""
+        for c in cmds:
+            name = type(c).__name__
+            if name == "PlaceOrder":
+                role = ENTRY if not c.reduce_only else (PARTIAL if "-TP1-" in c.client_id else EXIT)
+                pid = c.client_id if role == ENTRY else (pos_id_of(c.client_id) or c.client_id)
+                key = None if role == ENTRY else f"{pid}:{role}"
+                state.orders.register(c.client_id, pid, role, c.symbol, now_ns, intent_key=key)
+            elif name == "PlaceAlgo":
+                pid = pos_id_of(c.client_algo_id) or c.client_algo_id
+                state.orders.register(c.client_algo_id, pid, PROTECTIVE, c.symbol, now_ns)
 
     # ---------------- pozisyonlar (Faz 4)
     def _exec(self, state: CoreState, ev: RawEvent, now_ns: int) -> list:
@@ -115,17 +135,31 @@ class Engine:
             state.parse_errors += 1
             return []
         kind = ev.stream
-        if kind in ("order_rejected", "order_unknown"):
+        cid = d.get("client_id") or d.get("client_algo_id")
+        if kind in ("order_rejected", "order_unknown", "algo_unknown"):
             # Giriş emri borsaya ulaşmadı ya da sonucu bilinmiyor: sembolü kilitli tutmak sızıntıdır.
             # `unknown` durumunda güvenlik mutabakattadır (K2 kilidi), rezervasyonun kendisi değil.
             # Pozisyon yönetimi kapalı olsa da (`pm is None`) rezervasyon bırakılır.
+            if cid:
+                if kind.endswith("_unknown"):
+                    state.orders.mark_unknown(cid)      # yürütme durumu bilinmiyor: mutabakat çözer
+                else:
+                    state.orders.on_event({"client_id": cid, "kind": "order_done", "status": "REJECTED"})
             sym = d.get("symbol")
             if sym:
                 state.pending_entries.pop(sym, None)
             return []
+        # User data kindleri: `pos_id` taşımazlar, kayıt üzerinden çözülür (Gate 3c)
+        ref = state.orders.on_event(d) if cid else None
         if self.pm is None:
             return []
+        if kind in ("order_ack", "order_fill", "order_done"):
+            d = self._from_user_data(state, d, ref)
+            kind = d.get("kind_mapped") or kind
+            if kind in ("order_ack", "order_done", ""):
+                return []                      # pozisyon durumunu değiştirmeyen bildirim
         pos = state.positions.get(d.get("pos_id"))
+        kind = d.get("kind_mapped") or kind
         if kind == "entry_fill":
             d = self._entry_from_meta(state, d)
             sym = d["symbol"]
@@ -133,6 +167,7 @@ class Engine:
             if f is None:
                 return []   # filtre bilinmeyen sembolde pozisyon yönetilemez (fail-closed)
             pos = Position.new(d["pos_id"], sym, d["side"], f)
+            self.pm.restore_versions(pos, state.orders)   # restart sonrası sürüm 1'e dönmesin
             state.positions[pos.pos_id] = pos
             state.pending_entries.pop(sym, None)
             return self.pm.on_entry_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), Decimal(d["sl"]), Decimal(d["tp"]), now_ns,
@@ -144,8 +179,38 @@ class Engine:
         if kind == "algo_triggered":
             return self.pm.on_algo_triggered(pos, d["client_algo_id"], now_ns)
         if kind == "exit_fill":
-            return self.pm.on_exit_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), now_ns, reason=d.get("reason"))
+            return self.pm.on_exit_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), now_ns,
+                                        reason=d.get("reason"), client_id=d.get("client_id"))
+        if kind == "order_done" and d.get("client_id"):
+            self.pm.on_exit_terminal(pos, d["client_id"])   # iptal/ret: uçuş kilidi açılır
+            return []
         return []
+
+    def _from_user_data(self, state: CoreState, d: dict, ref) -> dict:
+        """Borsa emir olayını çekirdeğin anladığı biçime çevirir: `cid` → `pos_id` + rol.
+        Rol bilinmiyorsa olay **yok sayılır**: yabancı ya da bizim olmayan emir pozisyon yönetmez."""
+        out = dict(d)
+        cid = d.get("client_id")
+        role = ref.role if ref is not None else state.orders.role_of(cid)
+        pid = ref.pos_id if ref is not None else state.orders.resolve_pos(cid)
+        if role is None or pid is None:
+            out["kind_mapped"] = ""
+            return out
+        out["pos_id"] = pid
+        if d.get("kind") == "order_done" and role == ENTRY and str(d.get("status")) in ("CANCELED", "EXPIRED", "REJECTED", "EXPIRED_IN_MATCH"):
+            state.pending_entries.pop(d.get("symbol"), None)     # giriş düştü: sembol rezervasyonu bırakılır
+            out["kind_mapped"] = "order_done"
+            return out
+        if d.get("kind") != "order_fill":
+            out["kind_mapped"] = d.get("kind")
+            return out
+        if role == ENTRY:
+            out["kind_mapped"] = "entry_fill"
+            out["is_maker"] = bool(d.get("is_maker"))
+            return out
+        out["kind_mapped"] = "exit_fill"
+        out["reason"] = d.get("reason") or ("tp1" if role == PARTIAL else "exit")
+        return out
 
     @staticmethod
     def _entry_from_meta(state: CoreState, d: dict) -> dict:

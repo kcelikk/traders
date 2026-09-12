@@ -44,6 +44,7 @@ class PositionConfig:
     min_replace_interval_ms: int
     taker_fee_pct: Decimal
     maker_fee_pct: Decimal
+    exit_ttl_ms: int = 30_000      # uçuştaki çıkış emri bu sürede sonuçlanmazsa kilit açılır (Gate 3c)
     max_hold_ms: int | None = None
     lock_trigger_pct: Decimal | None = None
     lock_offset_pct: Decimal | None = None
@@ -82,6 +83,8 @@ class Position:
     exit_reason: str | None = None
     exit_seq: int = 0
     prev_state: PosState | None = None
+    exit_in_flight: str | None = None      # terminal olmamış çıkış emrinin cid'si (Gate 3c)
+    exit_sent_ns: int | None = None        # TTL: cevap gelmezse kilit sonsuza kadar kalmaz
 
     @staticmethod
     def new(pos_id: str, symbol: str, side: str, filters: Filters) -> "Position":
@@ -117,6 +120,22 @@ class PositionManager:
         return self.gross_pct(pos, mark) - self.cost_pct(pos)
 
     # ---------------- olaylar
+    def restore_versions(self, pos: Position, registry) -> None:
+        """Koruma sürümlerini emir kaydından geri yükler. Yeniden başlatmadan sonra sürüm 1'e
+        dönerse yeni `clientAlgoId` eskisiyle çakışır ve borsadaki koruma emri sahipsiz kalır."""
+        sl = tp = 0
+        for ref in registry.open_by_pos(pos.pos_id) if registry else []:
+            tail = ref.client_id.rsplit("-v", 1)
+            if len(tail) != 2 or not tail[1].isdigit():
+                continue
+            n = int(tail[1])
+            if "-SL-" in ref.client_id:
+                sl = max(sl, n)
+            elif "-TP-" in ref.client_id:
+                tp = max(tp, n)
+        pos.sl_version = max(pos.sl_version, sl)
+        pos.tp_version = max(pos.tp_version, tp)
+
     def on_entry_fill(self, pos: Position, price: Decimal, qty: Decimal, sl: Decimal, tp: Decimal, now_ns: int,
                       is_maker: bool = False, entry_state: str | None = None) -> list:
         pos.entry_price, pos.qty, pos.entry_time_ns, pos.entry_is_maker = price, qty, now_ns, is_maker
@@ -146,7 +165,12 @@ class PositionManager:
         pos.exit_reason = pos.exit_reason or ("sl" if "-SL-" in client_algo_id else "tp")
         return self._cancel_active(pos)
 
-    def on_exit_fill(self, pos: Position, price: Decimal, qty: Decimal, now_ns: int, reason: str | None = None) -> list:
+    def on_exit_fill(self, pos: Position, price: Decimal, qty: Decimal, now_ns: int, reason: str | None = None,
+                     client_id: str | None = None) -> list:
+        if client_id is not None:
+            self.on_exit_terminal(pos, client_id)
+        else:
+            pos.exit_in_flight = None
         if qty >= pos.qty:
             pos.qty = Decimal(0)
             pos.state = PosState.CLOSED
@@ -169,32 +193,34 @@ class PositionManager:
             if pos.protect_sent_ns is not None and now_ns - pos.protect_sent_ns > self.cfg.t_protect_ms * MS:
                 pos.state = PosState.EMERGENCY
                 pos.exit_reason = "protect_timeout"
-                return [self._exit_order(pos, "EM")]
+                if self.exit_locked(pos, now_ns):
+                    return []
+                return [self._exit_order(pos, "EM", now_ns)]
             return []
         if pos.state != PosState.MANAGED:
             return []
         # R2 durum bozulması
         dm = self.cfg.degrade_map
         if dm and pos.entry_state in dm and state_label in dm[pos.entry_state]:
-            return self._close(pos, "degradation")
+            return self._close(pos, "degradation", now_ns)
         # R1 yedek stop
         crossed = mark <= pos.sl_price if pos.side == "long" else mark >= pos.sl_price
         if crossed:
             if pos.sl_crossed_ns is None:
                 pos.sl_crossed_ns = now_ns
             elif now_ns - pos.sl_crossed_ns > self.cfg.t_backup_ms * MS:
-                return self._close(pos, "backup_stop")
+                return self._close(pos, "backup_stop", now_ns)
             return []
         pos.sl_crossed_ns = None
         net = self.net_unrealized_pct(pos, mark)
         cmds: list = []
         # R5 zaman aşımı (yalnızca kârda değilken)
         if self.cfg.max_hold_ms is not None and pos.entry_time_ns is not None and now_ns - pos.entry_time_ns > self.cfg.max_hold_ms * MS and net <= 0:
-            return self._close(pos, "timeout")
+            return self._close(pos, "timeout", now_ns)
         # R4 kısmi azaltma
         if self.cfg.tp1_pct is not None and not pos.tp1_done and net >= self.cfg.tp1_pct:
             q = floor_step(pos.qty * self.cfg.tp1_frac, pos.filters.step_size)
-            if q >= pos.filters.min_qty and q * mark >= pos.filters.min_notional:
+            if q >= pos.filters.min_qty and q * mark >= pos.filters.min_notional and not self.exit_locked(pos, now_ns):
                 pos.tp1_done = True
                 pos.exit_seq += 1
                 cmds.append(PlaceOrder(pos.symbol, pos.exit_side, "MARKET", q, None, True, exit_cid(pos.pos_id, "TP1", pos.exit_seq), None))
@@ -228,14 +254,49 @@ class PositionManager:
     def _algo(self, pos: Position, typ: str, trigger: Decimal, cid: str) -> PlaceAlgo:
         return PlaceAlgo(pos.symbol, pos.exit_side, typ, trigger, True, self.cfg.working_type, self.cfg.price_protect, cid)
 
-    def _exit_order(self, pos: Position, tag: str) -> PlaceOrder:
-        pos.exit_seq += 1
-        return PlaceOrder(pos.symbol, pos.exit_side, "MARKET", pos.qty, None, True, exit_cid(pos.pos_id, tag, pos.exit_seq), None)
+    def exit_qty(self, pos: Position) -> Decimal:
+        """Tam çıkış miktarı da borsa filtresine uymak zorundadır: step'e yuvarlanmamış miktar
+        `-1111` ile reddedilir ve pozisyon kapatılamaz."""
+        return floor_step(pos.qty, pos.filters.step_size)
 
-    def _close(self, pos: Position, reason: str) -> list:
+    def can_exit(self, pos: Position) -> bool:
+        """Filtre altı kalan artık miktar market emriyle kapatılamaz; borsa tarafı koruma
+        (`closePosition=true`) devrede kalır ve durum mutabakata bırakılır."""
+        return self.exit_qty(pos) >= pos.filters.min_qty
+
+    def _exit_order(self, pos: Position, tag: str, now_ns: int | None = None) -> PlaceOrder:
+        pos.exit_seq += 1
+        cid = exit_cid(pos.pos_id, tag, pos.exit_seq)
+        pos.exit_in_flight = cid
+        pos.exit_sent_ns = now_ns
+        return PlaceOrder(pos.symbol, pos.exit_side, "MARKET", self.exit_qty(pos), None, True, cid, None)
+
+    def exit_locked(self, pos: Position, now_ns: int) -> bool:
+        """Uçuşta bir çıkış emri varken ikincisi üretilmez: iki `reduceOnly` market emri, ilki
+        pozisyonu kapattıktan sonra ikincisinin `-2022` ile dönmesine ya da ters pozisyona yol açar.
+        TTL: cevap hiç gelmezse kilit sonsuza kadar kalmaz (mutabakat zaten UNKNOWN'ı çözer)."""
+        if pos.exit_in_flight is None:
+            return False
+        if pos.exit_sent_ns is not None and now_ns - pos.exit_sent_ns >= self.cfg.exit_ttl_ms * MS:
+            pos.exit_in_flight = None
+            return False
+        return True
+
+    def on_exit_terminal(self, pos: Position, client_id: str) -> None:
+        """Çıkış emri terminal oldu (doldu, iptal, ret): kilit açılır."""
+        if pos.exit_in_flight == client_id:
+            pos.exit_in_flight = None
+            pos.exit_sent_ns = None
+
+    def _close(self, pos: Position, reason: str, now_ns: int | None = None) -> list:
+        if self.exit_locked(pos, now_ns or 0):
+            return []
+        if not self.can_exit(pos):
+            pos.exit_reason = pos.exit_reason or f"{reason}_filtre_alti"
+            return []
         pos.state = PosState.CLOSING
         pos.exit_reason = reason
-        return [self._exit_order(pos, "X")]
+        return [self._exit_order(pos, "X", now_ns)]
 
     def _cancel_active(self, pos: Position) -> list:
         ids = sorted(pos.active_algos)

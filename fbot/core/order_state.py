@@ -13,6 +13,7 @@ from enum import Enum
 
 class OrderStatus(Enum):
     NEW = "NEW"
+    UNKNOWN = "UNKNOWN"                       # yürütme durumu bilinmiyor (timeout / 503 / -2022)
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
     FILLED = "FILLED"
     CANCELED = "CANCELED"
@@ -22,8 +23,9 @@ class OrderStatus(Enum):
 
 
 TERMINAL = {OrderStatus.FILLED, OrderStatus.CANCELED, OrderStatus.EXPIRED, OrderStatus.EXPIRED_IN_MATCH, OrderStatus.REJECTED}
-_RANK = {OrderStatus.NEW: 0, OrderStatus.PARTIALLY_FILLED: 1, OrderStatus.FILLED: 2, OrderStatus.CANCELED: 2,
-         OrderStatus.EXPIRED: 2, OrderStatus.EXPIRED_IN_MATCH: 2, OrderStatus.REJECTED: 2}
+# UNKNOWN, NEW'in üstünde ama terminalin altındadır: bilinmezlik bir ilerlemedir, sonuç değildir.
+_RANK = {OrderStatus.NEW: 0, OrderStatus.UNKNOWN: 1, OrderStatus.PARTIALLY_FILLED: 1, OrderStatus.FILLED: 2,
+         OrderStatus.CANCELED: 2, OrderStatus.EXPIRED: 2, OrderStatus.EXPIRED_IN_MATCH: 2, OrderStatus.REJECTED: 2}
 
 
 @dataclass

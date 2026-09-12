@@ -65,10 +65,17 @@ def test_cancel_algo():
 
 
 def test_expected_rejection_is_returned_not_raised():
-    """-2022 reduceOnly reddi yarış durumunun normal sonucudur: alarm değil, olay."""
+    """Yarış durumunun normal sonucu olan retler olay döner, alarm üretmez."""
+    a = adapter([(400, {}, b'{"code":-2011,"msg":"Unknown order sent."}')])
+    out = a.submit(PlaceOrder("BTCUSDT", "SELL", "MARKET", D("0.001"), None, True, "p1-X-v1", None), now_ms=0)
+    assert out["kind"] == "order_rejected" and out["code"] == -2011 and out["expected"] is True
+
+
+def test_reduce_only_rejection_is_unknown_execution_not_a_quiet_success():
+    """ADR 0020: -2022 "pozisyon zaten kapalı" demek değildir; mutabakat çözer."""
     a = adapter([(400, {}, b'{"code":-2022,"msg":"ReduceOnly Order is rejected."}')])
     out = a.submit(PlaceOrder("BTCUSDT", "SELL", "MARKET", D("0.001"), None, True, "p1-X-v1", None), now_ms=0)
-    assert out["kind"] == "order_rejected" and out["code"] == -2022 and out["expected"] is True
+    assert out["kind"] == "order_unknown" and out["code"] == -2022 and out["needs_reconcile"] is True
 
 
 def test_unknown_execution_is_flagged_for_reconciliation():

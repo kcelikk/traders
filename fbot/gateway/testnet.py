@@ -21,8 +21,14 @@ BASE = "https://testnet.binancefuture.com"
 _HOST = BASE.split("://", 1)[1]
 
 # Beklenen retler: yarış durumunun normal sonucu, alarm üretmez (docs/design/faz4-cikis-kurallari.md §9)
-EXPECTED_CODES = {-2022, -2011, -2013, -4137, -4138, -1111, -4164, -5021, -5022}
-UNKNOWN_EXECUTION = {-1001}
+EXPECTED_CODES = {-2011, -2013, -4137, -4138, -1111, -4164, -5021, -5022}
+
+# Yürütme durumu bilinmiyor → mutabakat gerekir.
+#   -1001 iç hata / 503 "Unknown error": istek işlenmiş olabilir.
+#   -2022 ReduceOnly reject: **"pozisyon zaten kapalı" demek değildir** (Gate 0 §6). Başka
+#   nedenlerle de gelir; sessizce yutulursa gerçekten açık kalmış bir pozisyon kapandı sanılır.
+#   ADR 0020 ile `docs/design/faz4-cikis-kurallari.md` §9'daki eski politika supersede edilir.
+UNKNOWN_EXECUTION = {-1001, -2022}
 
 
 class TestnetError(RuntimeError):
@@ -93,7 +99,7 @@ class TestnetClient:
         except ValueError:
             pass
         raise TestnetError(f"HTTP {status} code={code} {msg}" + (f" [{act}]" if act else ""), status=status, code=code,
-                           unknown_execution=(status >= 500 and code in UNKNOWN_EXECUTION) or status == 503,
+                           unknown_execution=code in UNKNOWN_EXECUTION or status == 503,
                            expected=code in EXPECTED_CODES)
 
     # ---------------- emirler

@@ -59,10 +59,19 @@ def test_503_unknown_status_is_flagged_not_failed():
 
 
 def test_error_codes_are_mapped():
+    """ADR 0020: -2022 artık "beklenen ret" değil. Gate 0 §6 gösterdi ki bu kod tek başına
+    "pozisyon zaten kapalı" anlamına gelmiyor; yutulursa açık kalmış pozisyon kapandı sanılır."""
     c = client([(400, {}, b'{"code":-2022,"msg":"ReduceOnly Order is rejected."}')])
     with pytest.raises(TestnetError) as e:
         c.place_order({"symbol": "X", "side": "SELL", "type": "MARKET", "quantity": "1", "reduceOnly": "true"}, now_ms=0)
-    assert e.value.code == -2022 and e.value.expected is True     # beklenen ret (yarış durumu), alarm değil
+    assert e.value.code == -2022 and e.value.expected is False and e.value.unknown_execution is True
+
+
+def test_still_expected_race_rejections_stay_expected():
+    c = client([(400, {}, b'{"code":-2011,"msg":"Unknown order sent."}')])
+    with pytest.raises(TestnetError) as e:
+        c.cancel_order({"symbol": "X", "origClientOrderId": "p1-X-v1"}, now_ms=0)
+    assert e.value.expected is True and e.value.unknown_execution is False
 
 
 def test_algo_order_uses_algo_endpoint_and_trigger_price():
