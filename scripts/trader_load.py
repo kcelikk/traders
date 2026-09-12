@@ -21,6 +21,18 @@ def _p(xs: list[float], q: float) -> float | None:
     return round(s[min(len(s) - 1, int(q * (len(s) - 1) + 0.5))], 2)
 
 
+def _lines(f):
+    """Yazılmakta olan dosya gzip akışını kapatmamış olabilir; okunabilen kısım geçerlidir."""
+    while True:
+        try:
+            line = f.readline()
+        except (EOFError, OSError):
+            return
+        if not line:
+            return
+        yield line
+
+
 def scan(paths: list[str]) -> dict:
     kinds: Counter = Counter()
     cats: Counter = Counter()
@@ -32,7 +44,7 @@ def scan(paths: list[str]) -> dict:
     n = 0
     for path in paths:
         with gzip.open(path, "rt") as f:
-            for line in f:
+            for line in _lines(f):
                 try:
                     e = json.loads(line)
                 except ValueError:

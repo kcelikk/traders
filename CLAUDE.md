@@ -109,6 +109,8 @@ PROCESS 2 recorder | PROCESS 3 persistence | PROCESS 4 api/metrics
 ```
 
 - **Fast Path (P0):** açık pozisyonu yönetir. Yeni pozisyon açma kararı bu yolda değildir.
+- **Kalıcılık hot path'te yok:** `AsyncStore` (sınırlı kuyruk + yazıcı görevi) yazımı `to_thread`'e taşır; kuyruk dolarsa düşürülür ve **sayılır** (ADR 0017).
+- **Stream profilleri rol bazlıdır:** `recorder` (5 stream) / `trader_paper` (depth dahil, dolum simülatörü için) / `trader_testnet` (depth yok). Config'de `[streams] profile`.
 - **Analytics Path (P2):** yeni giriş fırsatını değerlendirir.
 - Bir modül, işi için gerek duymadığı başka bir modülün sonucunu beklemez.
 - Fast path'te 1 ms **bütçe**: loop lag p99 ölçülür ve yayınlanır, aşım alarm üretir (ADR 0011).
@@ -159,6 +161,7 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 - Bağımlılıklar izole ortamda. Sistem Python'ı kirletilmez.
 - Saf çekirdek ile I/O kenarları dosya seviyesinde ayrıdır. Çekirdek modüllerinde `import` seviyesinde ağ/DB/dosya bağımlılığı bulunmaz.
 - Her karar ve işlem şu damgaları taşır: config sürümü, git commit SHA, correlation id.
+- Koşu kimliği `fbot/identity.py`: `mode`, `strategy_id`, `strategy_version`, ham + anlamsal config hash'i, `code_hash`, `git_sha`, `restart_no`. `paper.db` içindeki `runs` tablosu doğruluk kaynağıdır (ADR 0017).
 - Tüm eşikler ve parametreler config'dedir. Hard-code edilmiş eşik = hata.
 - Test önce yazılır.
 - `LiveExecutionAdapter` onay alınana kadar korumalı stub kalır. Yarım implementasyon, hiç implementasyondan tehlikelidir.
@@ -183,9 +186,13 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 make setup
 
 # testler
-make test              # birim (87 test)
-make test-determinism  # Rule Zero doğrulaması (fixture, iki process)
+make test              # birim (495 test)
+make test-determinism  # Rule Zero doğrulaması (saflık + iki process + golden hash)
+make golden            # sabitlenmiş davranış baseline'ı (Gate 0)
+make bench             # Engine.step mikro-ölçümü; make bench-guard regresyon kapısı (slow)
 make determinism-report REC=<run_id>  # gerçek kayıtla iki process; konsolun determinizm kutusunu besler
+make trader-load F=<dosya.jsonl.gz>   # bir koşunun yük profili: olay/s, stream kırılımı, loop lag
+make verify-exchange   # testnet'e karşı API davranış doğrulaması — GERÇEK testnet emri gönderir
 
 # Faz 0 ölçüm
 make measure-latency RUN=<run_id>    # 24 saat, 4 process, nohup

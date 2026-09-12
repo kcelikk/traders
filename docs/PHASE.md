@@ -14,6 +14,38 @@
 | 9 | Testnet execution | **AKTİF** 2026-09-10 (proje sahibi onayı): izole servis; emir durum makinesi + rate limiter + imzalama yazılıyor | 2 hafta hatasız |
 | 10 | Küçük sermaye canlı | bekliyor (tasarım notu: `docs/design/faz10-kucuk-sermaye-canli.md`) | proje sahibi onayı |
 
+## Mimari refactor gate'leri (2026-09-12 →)
+
+Fazlardan bağımsız, execution katmanını üretime hazır hâle getiren ve üstüne strateji platformu
+kuran iş. Yeni alpha geliştirmesi değildir: entry mantığı, durum tanımları ve `allowed_cells`
+değişmez.
+
+| Gate | Konu | Durum | Çıkış koşulu |
+|---|---|---|---|
+| 0 | Test harness, golden baseline, benchmark kapısı, testnet davranış doğrulaması | **KAPANDI** 2026-09-12 (`docs/binance-api-gate0-dogrulama.md`) | golden + bench baseline sabitlendi; `fbot/` değişmedi |
+| 1 | Veri yolu ve kimlik: koşu kimliği, asenkron kalıcılık, rol bazlı stream profilleri | **teslim edildi 2026-09-12, proje sahibi onayı bekliyor** (ADR 0017, ölçüm `docs/gate1-olcum.md`) | **hash-nötr**: golden hash değişmedi ✓ |
+| 2 | 2.0 çekirdek doğruluk düzeltmeleri (**re-baseline #1**) + 2.1 bloklamayan execution transport | bekliyor | golden bilerek güncellenir; fark yalnız yuvarlama/CID/TTL alanlarında |
+| 3 | Exchange truth: user data akışının tüketilmesi, orphan algo, balance mutabakatı | bekliyor | **hash-nötr** |
+| 4 | Reactor, güvenlik katmanları, metrikler | bekliyor | re-baseline #2 (bayatlıkta çıkış kuralları) + shadow→active ayrı onay |
+| 5 | Strateji platformu: kayıt, versiyonlama, replay→paper→testnet→live terfi | bekliyor | — |
+
+**Gate 0 bulgusu (açık, Gate 2/3):** aynı yönde ikinci `closePosition` koruma emri `-4130` ile
+reddediliyor; R3 trailing kuralı gerçek borsada önce yeni SL gönderip sonra eskisini iptal ettiği
+için pozisyonu **korumasız bırakır**. `allowed_cells` boş olduğu için bugün tetiklenmiyor.
+
+## Gate 1 teslimi (2026-09-12)
+
+| Teslim | Durum |
+|---|---|
+| `fbot/identity.py` + `runs` tablosu + satır bazlı kimlik sütunları (tek `ADD COLUMN` göçü) | tamam; canlı `paper.db` ve `testnet.db` göç etti, satır kaybı yok |
+| `fbot/persistence/writer.py` (`AsyncStore`): sınırlı kuyruk + yazıcı görevi + `to_thread` | tamam; hot path'te SQLite ifadesi **0** (trace ile test edildi) |
+| `PaperTrader._record_positions` kirli-bayrak + tick tazeleme | tamam |
+| `[streams] profile` (recorder / trader_paper / trader_testnet), fail-closed depth denetimi | tamam; `fbot-paper` ve `fbot-testnet` yeni imajla yeniden başlatıldı |
+| `config_semantic_hash` (etkin değerlerin hash'i) | tamam |
+| `CoreState` yinelenen alanları ve `_risk_inputs` yinelenen bloğu | silindi; golden hash değişmedi |
+| Ölçüm | `docs/gate1-olcum.md` |
+| Test | 472 → 495 |
+
 ## Faz 0 ilerleme (2026-09-10)
 
 | Teslim | Durum |
