@@ -196,6 +196,7 @@ class TestnetRecorder(PaperRecorder):
                                      "orders": len(self.trader.orders.orders),
                                      "fills": self.trader.orders._stats["fills"],
                                      "rejected": self.trader.errors["rejected"],
+                                     "persist": self._persist_stats(),
                                      "reconciled": getattr(self, "_recon_state", {}).get("reconciled"),
                                      "reconcile_reason": getattr(self, "_recon_state", {}).get("reason"),
                                      "mismatches": getattr(self, "_recon_state", {}).get("mismatches") or []})

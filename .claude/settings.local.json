@@ -24,7 +24,9 @@
       "Bash(.venv/bin/pytest -q tests)",
       "Bash(kill 204397)",
       "Bash(ps -eo pid,etime,args)",
-      "Bash(ps -eo pid,etime,pcpu,args --sort=-pcpu)"
+      "Bash(ps -eo pid,etime,pcpu,args --sort=-pcpu)",
+      "Bash(curl -s -m 5 -o /dev/null -w '%{http_code}\\\\n' http://127.0.0.1:8787/)",
+      "Bash(curl -s -m 8 http://127.0.0.1:8787/api/paper)"
     ]
   }
 }
