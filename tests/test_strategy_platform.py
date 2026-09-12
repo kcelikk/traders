@@ -253,3 +253,21 @@ def test_parity_between_the_embedded_path_and_the_plugin_path():
     r = scenario_parity()
     assert r["esit"] is True and r["ilk_fark"] is None
     assert r["gomulu"]["hash"] == r["plugin"]["hash"] and r["gomulu"]["komut"] > 0
+
+
+def test_every_enabled_strategy_has_a_manifest_on_disk(repo_root):
+    """Canlıda yakalanan hata: manifest image'a kopyalanmıyordu ve servis açılışta düştü."""
+    import tomllib
+
+    for cfg_name in ("testnet.toml", "paper.toml", "paper-demo.toml"):
+        cfg = tomllib.loads((repo_root / "config" / cfg_name).read_bytes().decode())
+        for sid in (cfg.get("strategy") or {}).get("enabled", []):
+            path = repo_root / "strategies" / sid / "manifest.toml"
+            assert path.exists(), f"{cfg_name}: {sid} manifest'i yok ({path})"
+            m = parse_manifest(tomllib.loads(path.read_bytes().decode()))
+            assert m.id == sid
+
+
+def test_dockerfile_ships_the_strategies_directory(repo_root):
+    text = (repo_root / "docker" / "Dockerfile").read_text()
+    assert "COPY strategies" in text, "manifest dizini image'a kopyalanmazsa servis açılışta düşer"
