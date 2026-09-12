@@ -20,6 +20,7 @@ symbols = ["BTCUSDT", "ETHUSDT"]     # testnet'te dar evren: tesisat doğrulama 
 exclude_bases = []
 
 [streams]
+profile = "trader_testnet"     # depth yok: execution gerçek borsada, simülatör kullanılmıyor
 public = ["{s}@bookTicker", "{s}@depth@100ms"]
 market = ["{s}@aggTrade", "{s}@markPrice@1s"]
 

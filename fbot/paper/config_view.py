@@ -8,6 +8,8 @@ from dataclasses import fields, is_dataclass
 from decimal import Decimal
 from enum import Enum
 
+from fbot.identity import semantic_hash
+
 
 def effective_config(obj):
     if is_dataclass(obj) and not isinstance(obj, type):
@@ -25,3 +27,9 @@ def effective_config(obj):
     if isinstance(obj, (str, int, float, bool)) or obj is None:
         return obj
     return str(obj)
+
+
+def config_semantic_hash(cfg) -> str:
+    """Etkin değerlerin hash'i. Ham bayt hash'i (`fbot/config.py`) yorum değişince de değişir ve
+    ortam değişkeni override'larını görmez; ikisi birlikte saklanır."""
+    return semantic_hash(effective_config(cfg))

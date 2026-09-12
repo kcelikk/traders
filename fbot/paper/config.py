@@ -31,6 +31,8 @@ class PaperConfig:
     sim_prob_fill_on_touch: float = 0.0
     sim_book_levels: int = 20
     cost_drift: CostDriftConfig | None = None
+    strategy_id: str | None = None        # [run] bölümünden; Gate 5'te strateji kaydı bunu doldurur
+    strategy_version: str | None = None
 
 
 def _dec(v):
@@ -93,7 +95,13 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                             net_per_trade_min=_dec(cd.get("net_per_trade_min")),
                             min_trades=int(cd.get("min_trades", 10))) if cd else None
     sim = t["sim"]
+    book_levels = int(sim.get("book_levels", 20))
+    has_depth = any("depth" in x.lower() for x in rec.public_streams + rec.market_streams)
+    if book_levels > 0 and not has_depth and rec.profile != "trader_testnet":
+        raise PaperConfigError(f"[streams] profile={rec.profile!r} depth içermiyor ama sim.book_levels={book_levels}: "
+                               "dolum simülasyonu sessizce bozulur (fail-closed)")
     return PaperConfig(recorder=rec, core=core, sim_latency_ms=int(sim["latency_ms"]), sim_seed=int(sim["seed"]),
                        sim_jitter_ms=int(sim.get("jitter_ms", 0)), sim_partial_timeout_ms=sim.get("partial_timeout_ms"),
                        sim_prob_fill_on_touch=float(sim.get("prob_fill_on_touch", 0.0)),
-                       sim_book_levels=int(sim.get("book_levels", 20)), cost_drift=drift), h
+                       sim_book_levels=book_levels, cost_drift=drift,
+                       strategy_id=t["run"].get("strategy_id"), strategy_version=t["run"].get("strategy_version")), h

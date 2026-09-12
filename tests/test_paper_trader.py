@@ -285,3 +285,52 @@ def test_cost_drift_alarm_reaches_stream():
     a = json.loads(alarms[0].raw)
     assert a["kind"].startswith("cost_drift:") and "eşik" in a["detail"]
     assert trader.stats.get("alarms", 0) >= 1
+
+
+class CountingStore:
+    """Yazım sayan sahte store: kirli-bayrağın etkisi ölçülebilsin."""
+
+    def __init__(self):
+        self.n = {"decision": 0, "order": 0, "fill": 0, "position": 0}
+
+    def record_decision(self, d): self.n["decision"] += 1
+    def record_order(self, o): self.n["order"] += 1
+    def record_fill(self, f): self.n["fill"] += 1
+    def record_position(self, p): self.n["position"] += 1
+    def flush(self): pass
+
+
+def test_unchanged_positions_are_not_rewritten_on_every_event(tmp_path):
+    """Gate 1: pozisyon kaydı yalnız durum değişince ya da tick'te yazılır.
+
+    Eskiden her olayda açık pozisyon başına bir INSERT vardı; 855 olay/s'de asıl maliyet buydu.
+    """
+    cells = discovered_cells()
+    host = Host()
+    store = CountingStore()
+    trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit, store=store)
+    snapshot_event(host, trader)
+    events = market_events()
+    for cat, s, d in events:
+        host.now += 200_000_000
+        trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
+    # Tick yok: yalnızca durumu değişen pozisyonlar yazılmalı, olay başına değil
+    assert store.n["position"] > 0
+    assert store.n["position"] < len(events), (store.n["position"], len(events))
+
+
+def test_tick_refreshes_position_rows(tmp_path):
+    """Mark fiyatından türeyen net_pct tick'te tazelenir; aksi hâlde konsol donuk değer gösterir."""
+    cells = discovered_cells()
+    host = Host()
+    store = CountingStore()
+    trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit, store=store)
+    snapshot_event(host, trader)
+    for cat, s, d in market_events():
+        host.now += 200_000_000
+        trader.on_event(host.emit(cat, s, json.dumps({"stream": s, "data": d}).encode()), host.now)
+    n_before = store.n["position"]
+    host.now += 1_000_000_000
+    trader.on_tick(host.now)
+    # Tick her pozisyonu yazar (kirli olmayanlar dahil); tick'in tetiklediği kurallar fazladan yazım ekleyebilir
+    assert store.n["position"] - n_before >= len(trader.engine_state.positions) > 0

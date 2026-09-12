@@ -15,6 +15,7 @@ top_n = 10
 exclude_bases = ["USDC", "FDUSD", "TUSD", "BUSD", "USD1", "USDE", "USDP", "DAI"]
 
 [streams]
+profile = "trader_paper"       # depth gerekli: dolum simülatörünün girdisi (ADR 0013)
 public = ["{s}@bookTicker", "{s}@depth@100ms"]
 market = ["{s}@aggTrade", "{s}@markPrice@1s", "{s}@forceOrder"]
 

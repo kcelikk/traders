@@ -48,8 +48,6 @@ class CoreState:
     intents_rejected: int = 0
     verdicts_total: int = 0
     no_intent: dict = field(default_factory=dict)
-    verdicts_total: int = 0
-    no_intent: dict = field(default_factory=dict)
     last_verdicts: list = field(default_factory=list)
     pending_entries: set = field(default_factory=set)
     kill_switch: bool = False
@@ -274,10 +272,6 @@ class Engine:
 
     def _risk_inputs(self, state: CoreState, bar: BarClosed, m: SymbolMarket, spread_bps) -> RiskInputs:
         acc = self.cfg.account or {}
-        lev_view = acc.get("leverage") or {}
-        if acc.get("paper") and not lev_view:
-            # paper: borsa yok, kaldıraç görünümü config'in kendisidir (canlıda borsadan okunur)
-            lev_view = {bar.symbol: self.cfg.risk.leverage.get(bar.symbol, self.cfg.risk.default_leverage)}
         lev_view = acc.get("leverage") or {}
         if acc.get("paper") and not lev_view:
             # paper: borsa yok, kaldıraç görünümü config'in kendisidir (canlıda borsadan okunur)

@@ -16,6 +16,7 @@ exclude_bases = ["USDC", "FDUSD", "TUSD", "BUSD", "USD1", "USDE", "USDP", "DAI"]
 # symbols = ["BTCUSDT"]        # mode = "list" için
 
 [streams]
+profile = "recorder"           # tüm stream'ler: araştırma girdisi eksiksiz olmalı
 public = ["{s}@bookTicker", "{s}@depth@100ms"]
 market = ["{s}@aggTrade", "{s}@markPrice@1s", "{s}@forceOrder"]
 

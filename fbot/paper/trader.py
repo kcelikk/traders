@@ -23,6 +23,11 @@ from fbot.orderbook import LocalOrderBook
 ORDER_CMDS = (PlaceOrder, PlaceAlgo, CancelAlgo, CancelOrder)
 
 
+def _is_tick(ev) -> bool:
+    """Periyodik tick: pozisyon kaydının tazelendiği tek nokta (kirli olmayanlar dahil)."""
+    return ev.cat == "ctrl" and ev.stream == "tick"
+
+
 def _cmd_payload(c) -> dict:
     """Komut adı `cmd` anahtarında: emrin kendi `type` alanıyla (MARKET/STOP_MARKET) çakışmasın."""
     d = {"cmd": type(c).__name__}
@@ -47,6 +52,7 @@ class PaperTrader:
         self._drift_seen: set = set()
         self.books: dict[str, LocalOrderBook] = {}   # sembol → L2 defter (dolum simülasyonu, ADR 0013)
         self.book_levels = 20
+        self._pos_sig: dict = {}            # pos_id → son yazılan durum imzası (kirli-bayrak)
 
     # ---------------- akış
     def on_event(self, ev: RawEvent, now_ns: int) -> None:
@@ -88,7 +94,7 @@ class PaperTrader:
                     self.stats["cancels"] += 1
         self.stats["rejects"] = self.engine_state.intents_rejected
         self._record_verdicts()
-        self._record_positions()
+        self._record_positions(force=_is_tick(ev))
 
     def _feed_sim_from(self, ev: RawEvent, now_ns: int) -> None:
         if ev.cat == "ctrl":
@@ -211,11 +217,21 @@ class PaperTrader:
             self.emit("ctrl", "alarm", json.dumps({"kind": a.kind, "detail": a.detail}, separators=(",", ":")).encode(), now_ns, now_ns)
             self.stats["alarms"] = self.stats.get("alarms", 0) + 1
 
-    def _record_positions(self) -> None:
+    def _record_positions(self, force: bool = False) -> None:
         """Pozisyon durumunu işler: net PnL hesaplanır, kapananlar maliyet izleyicisine gider, varsa SQLite'a yazılır.
-        Maliyet izleme store'dan bağımsızdır (BÖLÜM 6.4 alarmı kayıt olmadan da çalışır)."""
+        Maliyet izleme store'dan bağımsızdır (BÖLÜM 6.4 alarmı kayıt olmadan da çalışır).
+
+        Kirli-bayrak: durumu değişmemiş pozisyon her olayda yeniden yazılmaz. `force` (tick) ile
+        mark fiyatından türeyen `net_pct` saniyede bir tazelenir. Bu yol kararı etkilemez, yalnız kayıttır.
+        """
         pm = self.engine.pm
         for pid, p in self.engine_state.positions.items():
+            sig = (p.state, p.qty, p.entry_price, p.sl_price, p.tp_price, p.exit_reason, p.entry_qty)
+            dirty = self._pos_sig.get(pid) != sig
+            if dirty:
+                self._pos_sig[pid] = sig
+            elif not force:
+                continue
             mark = None
             m = self.engine_state.markets.get(p.symbol)
             if m is not None:

@@ -28,10 +28,11 @@ from fbot.gateway.testnet import TestnetClient, TestnetError
 from fbot.gateway.credfile import testnet_paths
 from fbot.testnet.arming import ArmingSupervisor
 from fbot.paper.config import load_paper_config
-from fbot.paper.main import PaperRecorder, filters_from_exchange_info
+from fbot.paper.main import PaperRecorder, filters_from_exchange_info, run_identity
 from fbot.paper.config_view import effective_config
 from fbot.paper.store import PaperStore
-from fbot.paper.trader import ORDER_CMDS, PaperTrader, _cmd_payload
+from fbot.persistence.writer import AsyncStore
+from fbot.paper.trader import ORDER_CMDS, PaperTrader, _cmd_payload, _is_tick
 from fbot.recorder.main import git_sha
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,7 +61,7 @@ class TestnetTrader(PaperTrader):
                 self._send(c, now_ns)
         self.stats["rejects"] = self.engine_state.intents_rejected
         self._record_verdicts()
-        self._record_positions()
+        self._record_positions(force=_is_tick(ev))
 
     def _send(self, c, now_ns: int) -> None:
         payload = _cmd_payload(c)
@@ -216,14 +217,16 @@ def main(argv):
         raise SystemExit(f"config [mode].mode 'testnet' değil ({mode}): testnet süreci başlatılmaz")
     run_id = a.run_id or time.strftime("testnet-%Y%m%dT%H%M%SZ", time.gmtime())
     db = Path(cfg.recorder.out_dir) / run_id / "paper.db"
-    store = PaperStore(db, run_id=run_id, env="testnet")
-    store.set_config({"config_path": a.config, "git_sha": git_sha(), **effective_config(cfg)}, config_hash=h)
-    print(json.dumps({"msg": "testnet start", "run_id": run_id, "config_hash": h, "git_sha": git_sha(),
+    ident = run_identity(cfg, h, run_id, "testnet", Path(cfg.recorder.out_dir) / run_id)
+    store = AsyncStore(PaperStore(db, identity=ident, started_ns=time.time_ns()))
+    store.set_config({"config_path": a.config, "git_sha": git_sha(), **effective_config(cfg)},
+                     config_hash=h, config_semantic_hash=ident.config_semantic_hash)
+    print(json.dumps({"msg": "testnet start", **ident.as_dict(),
                       "armed_env": bool(os.environ.get("FBOT_TESTNET_ARMED")),
                       "hot_reload": "anahtar .env'den 10 s'de bir okunur; yeniden başlatma gerekmez",
                       "note": "yalnızca testnet.binancefuture.com; kârlılık kanıtı değildir"}), flush=True)
     asyncio.run(TestnetRecorder(cfg, h, run_id, a.duration, store, config_path=a.config).main())
-    print(json.dumps({"msg": "testnet stop", "summary": store.summary()}, default=str), flush=True)
+    print(json.dumps({"msg": "testnet stop", "summary": store.summary(), "persist": store.stats}, default=str), flush=True)
     store.close()
 
 

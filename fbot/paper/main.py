@@ -20,11 +20,13 @@ from fbot.core.position import Filters
 from fbot.execution.sim import SimConfig, SimExecutor
 from fbot.gateway.killswitch import KillSwitch
 from fbot.gateway.rest import exchange_info
+from fbot.identity import RunIdentity, code_hash
 from fbot.paper.config import load_paper_config
-from fbot.paper.config_view import effective_config
+from fbot.paper.config_view import config_semantic_hash, effective_config
 from fbot.paper.store import PaperStore
 from fbot.paper.trader import PaperTrader
-from fbot.recorder.main import Recorder, git_sha
+from fbot.persistence.writer import AsyncStore
+from fbot.recorder.main import Recorder, git_sha, last_seq_from_manifest
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -67,9 +69,10 @@ class PaperRecorder(Recorder):
             self.trader.drift = CostDriftMonitor(self.pcfg.cost_drift)
         self.trader.engine_state.kill_switch = self.kill.active
         # Filtreler evren çözüldükten sonra yüklendi: konsolun gördüğü config bunu da içersin
+        eff = type(self.pcfg)(**{**self.pcfg.__dict__, "core": core})
         self.store.set_config({"config_path": getattr(self, "_config_path", None), "git_sha": git_sha(),
-                               "symbols": syms, **effective_config(type(self.pcfg)(**{**self.pcfg.__dict__, "core": core}))},
-                              config_hash=self.cfg_hash)
+                               "symbols": syms, **effective_config(eff)},
+                              config_hash=self.cfg_hash, config_semantic_hash=config_semantic_hash(eff))
         self.ctrl("paper_start", {"cells": [c.key() for c in core.decision.allowed_cells], "notional": str(core.decision.notional_usdt),
                                   "kill_switch": self.kill.active, "sim_latency_ms": self.pcfg.sim_latency_ms,
                                   "sim_seed": self.pcfg.sim_seed, "filters": len(core.filters), "note": "kârlılık gösterilmedi (ADR 0010)"}, notify=False)
@@ -88,14 +91,19 @@ class PaperRecorder(Recorder):
                 self.ctrl("paper_stats", {**self.trader.stats, "positions": len(st.positions),
                                           "open": sum(1 for p in st.positions.values() if p.state.value not in ("CLOSED",)),
                                           "intents": st.intents_made, "rejected": st.intents_rejected,
-                                          "kill_switch": ks.active}, notify=False)
+                                          "kill_switch": ks.active, "persist": self._persist_stats()}, notify=False)
+
+    def _persist_stats(self) -> dict | None:
+        """Kalıcılık kuyruğu ölçümü: derinlik p99 ve düşen satır sayısı (senkron store'da yok)."""
+        return getattr(self.store, "stats", None)
 
     def _beat(self, kill: bool) -> None:
         """Canlılık damgası: konsol verinin tazeliğini buradan bilir (F05)."""
         st = self.trader.engine_state
         self.store.heartbeat(now_ns=time.time_ns(),
                              detail={"kill_switch": kill, "positions": len(st.positions), "stats": dict(self.trader.stats),
-                                     "open": sum(1 for p in st.positions.values() if p.state.value != "CLOSED")})
+                                     "open": sum(1 for p in st.positions.values() if p.state.value != "CLOSED"),
+                                     "persist": self._persist_stats()})
 
     async def main(self):
         self._extra_task = None
@@ -104,7 +112,11 @@ class PaperRecorder(Recorder):
         async def stats_and_status():
             await asyncio.gather(orig(), self.paper_status_task())
         self.stats_task = stats_and_status
+        if hasattr(self.store, "start"):
+            self.store.start()               # kalıcılık yazıcısı: SQLite döngüyü tutmaz
         await super().main()
+        if hasattr(self.store, "aclose"):
+            await self.store.aclose()        # kapanışta kuyruk boşaltılır, kayıp olmaz
         self.store.flush()
 
 
@@ -117,18 +129,29 @@ def parse(argv):
     return p.parse_args(argv)
 
 
+def run_identity(cfg, cfg_hash: str, run_id: str, mode: str, out_dir: Path) -> RunIdentity:
+    """Koşu kimliği: hangi kod, hangi etkin config, kaçıncı başlatma. `code_hash` gerekli çünkü
+    container'da `git_sha` "unknown" dönebiliyor."""
+    _, restart_no = last_seq_from_manifest(out_dir)
+    return RunIdentity(run_id=run_id, mode=mode, strategy_id=cfg.strategy_id, strategy_version=cfg.strategy_version,
+                       config_hash=cfg_hash, config_semantic_hash=config_semantic_hash(cfg),
+                       code_hash=code_hash(ROOT / "fbot"), git_sha=git_sha(), restart_no=restart_no)
+
+
 def main(argv):
     a = parse(argv)
     cfg, h = load_paper_config(a.config)
     run_id = a.run_id or time.strftime("paper-%Y%m%dT%H%M%SZ", time.gmtime())
     db = Path(a.db or (Path(cfg.recorder.out_dir) / run_id / "paper.db"))
-    store = PaperStore(db, run_id=run_id)
-    store.set_config({"config_path": a.config, "git_sha": git_sha(), **effective_config(cfg)}, config_hash=h)
-    print(json.dumps({"msg": "paper start", "run_id": run_id, "config_hash": h, "git_sha": git_sha(), "db": str(db),
+    ident = run_identity(cfg, h, run_id, "paper", Path(cfg.recorder.out_dir) / run_id)
+    store = AsyncStore(PaperStore(db, identity=ident, started_ns=time.time_ns()))
+    store.set_config({"config_path": a.config, "git_sha": git_sha(), **effective_config(cfg)},
+                     config_hash=h, config_semantic_hash=ident.config_semantic_hash)
+    print(json.dumps({"msg": "paper start", "db": str(db), **ident.as_dict(),
                       "cells": [c.key() for c in cfg.core.decision.allowed_cells],
                       "note": "allowed_cells boşsa giriş emri üretilmez (ADR 0010)"}), flush=True)
     asyncio.run(PaperRecorder(cfg, h, run_id, a.duration, store, config_path=a.config).main())
-    print(json.dumps({"msg": "paper stop", "summary": store.summary()}, default=str), flush=True)
+    print(json.dumps({"msg": "paper stop", "summary": store.summary(), "persist": store.stats}, default=str), flush=True)
     store.close()
 
 
