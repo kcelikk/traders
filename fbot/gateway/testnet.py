@@ -14,7 +14,7 @@ import json
 import socket
 from dataclasses import dataclass
 
-from fbot.core.rate_limit import Limits, RateLimiter
+from fbot.core.rate_limit import CONSERVATIVE, Limits, RateLimiter
 from fbot.gateway.signing import Credentials, sign_query
 
 BASE = "https://testnet.binancefuture.com"
@@ -57,11 +57,13 @@ class TestnetClient:
     timeout: float = 10.0
     reserve_orders: int = 3
     limiter: RateLimiter = None
+    limits: Limits = None          # `exchangeInfo`'dan verilir; verilmezse muhafazakâr varsayılan
 
     def __post_init__(self):
         if self.limiter is None:
-            # exchangeInfo'dan doğrulandı: testnet REQUEST_WEIGHT 6000/dk, ORDERS 300/10s ve 1200/dk
-            self.limiter = RateLimiter(Limits(weight_1m=6000, orders_10s=300, orders_1m=1200),
+            # Limit ortama göre değişir (mainnet 2400/dk, testnet 6000/dk — 2026-09-12 ölçümü).
+            # Verilmediyse **düşük** olan varsayılır: fazla sanmak 429 üretir.
+            self.limiter = RateLimiter(self.limits or CONSERVATIVE,
                                        backoff_ms=10_000, reserve_orders=self.reserve_orders)
 
     # ---------------- düşük seviye

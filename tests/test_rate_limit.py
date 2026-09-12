@@ -84,3 +84,34 @@ def test_418_bans_and_also_backs_off():
     assert r.on_response(418, now_ms=0, headers={"Retry-After": "120"}) == "kill_switch"
     assert r.banned and r.backoff_until_ms == 120_000
     assert not r.allow_order(now_ms=10**9), "ban elle sıfırlanmadan açılmaz"
+
+
+def test_limits_are_read_from_exchange_info_not_hard_coded():
+    """2026-09-12 ölçümü: mainnet REQUEST_WEIGHT 2400/dk, testnet 6000/dk. Sabit yazmak,
+    mainnet'te 2,5 kat fazla bütçe olduğunu sanmak demekti."""
+    from fbot.core.rate_limit import limits_from_exchange_info
+
+    payload = {"rateLimits": [{"rateLimitType": "REQUEST_WEIGHT", "interval": "MINUTE", "intervalNum": 1, "limit": 2400},
+                              {"rateLimitType": "ORDERS", "interval": "SECOND", "intervalNum": 10, "limit": 300},
+                              {"rateLimitType": "ORDERS", "interval": "MINUTE", "intervalNum": 1, "limit": 1200}]}
+    lim = limits_from_exchange_info(payload)
+    assert (lim.weight_1m, lim.orders_10s, lim.orders_1m) == (2400, 300, 1200)
+
+
+def test_missing_limits_fall_back_to_the_conservative_value():
+    """Borsanın söylemediği limiti yukarı yuvarlamak 429 üretmenin en kısa yoludur."""
+    from fbot.core.rate_limit import CONSERVATIVE, limits_from_exchange_info
+
+    lim = limits_from_exchange_info({"rateLimits": []})
+    assert lim == CONSERVATIVE and CONSERVATIVE.weight_1m == 2400
+    assert limits_from_exchange_info({}) == CONSERVATIVE
+    assert limits_from_exchange_info({"rateLimits": [{"rateLimitType": "REQUEST_WEIGHT", "interval": "MINUTE",
+                                                      "intervalNum": 1, "limit": "abc"}]}).weight_1m == 2400
+
+
+def test_client_without_explicit_limits_uses_the_conservative_default():
+    from fbot.gateway.signing import Credentials
+    from fbot.gateway.testnet import TestnetClient
+
+    c = TestnetClient(Credentials(api_key="K", api_secret="S"))
+    assert c.limiter.w.limit == 2400, "limit verilmediyse düşük olan varsayılır"

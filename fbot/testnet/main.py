@@ -22,6 +22,7 @@ from pathlib import Path
 from fbot.core.breaker import BreakerState, entry_blocked, on_trade
 from fbot.core.engine import Engine
 from fbot.core.order_state import OrderBook as OrderTracker
+from fbot.core.rate_limit import limits_from_exchange_info
 from fbot.core.risk import RunawayDetector
 from fbot.execution.exchange_state import ReconcileSupervisor
 from fbot.execution.queue import ExecutionQueue
@@ -172,6 +173,7 @@ class TestnetRecorder(PaperRecorder):
         self.userdata: UserDataConnection | None = None
         self._userdata_task = None
         self.exec_queue = None
+        self._limits = None
         self.breaker = BreakerState()
         self._breaker_seen: set = set()
 
@@ -181,6 +183,9 @@ class TestnetRecorder(PaperRecorder):
         ex = await asyncio.to_thread(exchange_info)
         core = self.pcfg.core
         core = type(core)(**{**core.__dict__, "filters": filters_from_exchange_info(ex, set(syms))})
+        # Rate limit değerleri borsadan okunur: ortama göre değişiyor (mainnet 2400/dk, testnet
+        # 6000/dk — 2026-09-12 ölçümü). Sabit yazmak mainnet'te fazla bütçe sanmak demekti.
+        self._limits = limits_from_exchange_info(ex)
         # Adapter borsa filtreleriyle çalışır (step_size / tick_size); pricePrecision kullanılmaz (Gate 2.0)
         # Silahsız doğar; anahtar dosyasını denetçi okur ve gerekirse çalışırken silahlandırır
         adapter = TestnetAdapter(None, armed=False, symbols=core.filters)
@@ -192,7 +197,9 @@ class TestnetRecorder(PaperRecorder):
                                     store=self.store, queue=self.exec_queue)
         self.arming = ArmingSupervisor(
             env_path=testnet_paths(ROOT), adapter=adapter,
-            make_client=lambda creds: TestnetClient(creds, http=self._transport(), reserve_orders=self.pcfg.core.risk.reserve_orders),
+            make_client=lambda creds: TestnetClient(creds, http=self._transport(),
+                                                   reserve_orders=self.pcfg.core.risk.reserve_orders,
+                                                   limits=self._limits),
             probe=self._probe_balance,
             open_positions=lambda: sum(1 for p in self.trader.engine_state.positions.values() if p.state.value != "CLOSED"))
         ev = self.arming.check()

@@ -1,0 +1,72 @@
+{
+ "kaynak": "fapi.binance.com (mainnet, imzasız)",
+ "zaman": 1789215633433,
+ "saat": {
+  "status": 200,
+  "sapma_ms": 77.7,
+  "rtt_ms": 421.7
+ },
+ "rate_limits": {
+  "REQUEST_WEIGHT_1M": 2400,
+  "ORDERS_1M": 1200,
+  "ORDERS_10S": 300
+ },
+ "rate_limit_karsilastirma": {
+  "REQUEST_WEIGHT_1M": {
+   "kodda": 6000,
+   "mainnet": 2400
+  },
+  "ORDERS_10S": {
+   "kodda": 300,
+   "mainnet": 300
+  },
+  "ORDERS_1M": {
+   "kodda": 1200,
+   "mainnet": 1200
+  }
+ },
+ "filtreler": {
+  "BTCUSDT": {
+   "tickSize": "0.10",
+   "stepSize": "0.001",
+   "minQty": "0.001",
+   "minNotional": "50",
+   "pricePrecision": 2,
+   "quantityPrecision": 3,
+   "tick_precision_uyusuyor": false,
+   "step_precision_uyusuyor": true,
+   "positionSide_destegi": "COIN",
+   "durum": "TRADING"
+  },
+  "ETHUSDT": {
+   "tickSize": "0.01",
+   "stepSize": "0.001",
+   "minQty": "0.001",
+   "minNotional": "20",
+   "pricePrecision": 2,
+   "quantityPrecision": 3,
+   "tick_precision_uyusuyor": true,
+   "step_precision_uyusuyor": true,
+   "positionSide_destegi": "COIN",
+   "durum": "TRADING"
+  },
+  "SOLUSDT": {
+   "tickSize": "0.0100",
+   "stepSize": "0.01",
+   "minQty": "0.01",
+   "minNotional": "5",
+   "pricePrecision": 4,
+   "quantityPrecision": 2,
+   "tick_precision_uyusuyor": false,
+   "step_precision_uyusuyor": true,
+   "positionSide_destegi": "COIN",
+   "durum": "TRADING"
+  }
+ },
+ "algo_ucu": {
+  "status": 401,
+  "code": -2014,
+  "msg": "API-key format invalid.",
+  "var_mi": true
+ }
+}

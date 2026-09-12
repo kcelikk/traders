@@ -18,6 +18,35 @@ class Limits:
     orders_1m: int
 
 
+# Borsa limitleri **ortama göre değişir**: 2026-09-12 ölçümünde mainnet REQUEST_WEIGHT 2400/dk,
+# testnet 6000/dk (`docs/mainnet-dogrulama.md`). Sabit yazmak, mainnet'te 2,5 kat fazla bütçe
+# olduğunu sanmak demekti. Bu yüzden limitler `exchangeInfo`'dan okunur.
+CONSERVATIVE = Limits(weight_1m=2400, orders_10s=300, orders_1m=1200)
+
+
+def limits_from_exchange_info(payload: dict, fallback: Limits = CONSERVATIVE) -> Limits:
+    """`exchangeInfo.rateLimits` → `Limits`. Saf. Eksik alan varsa **muhafazakâr** değer kalır:
+    borsanın söylemediği bir limiti yukarı yuvarlamak, 429 üretmenin en kısa yoludur."""
+    got = {"weight_1m": None, "orders_10s": None, "orders_1m": None}
+    for r in (payload or {}).get("rateLimits", []) or []:
+        t, iv, n, lim = r.get("rateLimitType"), r.get("interval"), r.get("intervalNum"), r.get("limit")
+        if lim is None:
+            continue
+        try:
+            lim = int(lim)
+        except (TypeError, ValueError):
+            continue
+        if t == "REQUEST_WEIGHT" and iv == "MINUTE" and n == 1:
+            got["weight_1m"] = lim
+        elif t == "ORDERS" and iv == "SECOND" and n == 10:
+            got["orders_10s"] = lim
+        elif t == "ORDERS" and iv == "MINUTE" and n == 1:
+            got["orders_1m"] = lim
+    return Limits(weight_1m=got["weight_1m"] or fallback.weight_1m,
+                  orders_10s=got["orders_10s"] or fallback.orders_10s,
+                  orders_1m=got["orders_1m"] or fallback.orders_1m)
+
+
 class _Window:
     def __init__(self, span_ms: int, limit: int):
         self.span_ms, self.limit = span_ms, limit
