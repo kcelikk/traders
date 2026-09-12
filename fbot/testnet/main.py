@@ -19,8 +19,10 @@ import tomllib
 from decimal import Decimal
 from pathlib import Path
 
+from fbot.core.breaker import BreakerState, entry_blocked, on_trade
 from fbot.core.engine import Engine
 from fbot.core.order_state import OrderBook as OrderTracker
+from fbot.core.risk import RunawayDetector
 from fbot.execution.exchange_state import ReconcileSupervisor
 from fbot.execution.queue import ExecutionQueue
 from fbot.execution.testnet_adapter import TestnetAdapter, TestnetDisarmed
@@ -52,6 +54,8 @@ class TestnetTrader(PaperTrader):
         self.errors = {"rejected": 0, "unknown": 0, "failed": 0, "dropped": 0}
         self.exec_queue = queue       # None → legacy: gönderim olay yolunda, senkron (geri alma yolu)
         self.rtt_ns: list[int] = []   # gönderim RTT ölçümü (Gate 2.1)
+        self.runaway: RunawayDetector | None = None   # arıza dedektörü (Gate 4c); dışarıdan verilir
+        self.on_runaway = None                        # (reason) -> None; kill switch tetikler
 
     def _step(self, ev, now_ns: int) -> None:
         self.engine_state, cmds = self.engine.step(self.engine_state, ev, now_ns)
@@ -74,6 +78,8 @@ class TestnetTrader(PaperTrader):
         cev = self.emit("ctrl", "command", json.dumps(payload, separators=(",", ":")).encode(), now_ns, now_ns)
         if self.store is not None:
             self.store.record_order({**payload, "seq": cev.seq, "t_ns": now_ns})
+        if self.runaway is not None:
+            self._runaway(self.runaway.on_order(now_ns // 1_000_000), now_ns)
         if self.exec_queue is not None:
             accepted, klass = self.exec_queue.put(c, now_ns)
             if not accepted:
@@ -110,13 +116,23 @@ class TestnetTrader(PaperTrader):
         kind = out.get("kind", "")
         if kind.endswith("_rejected"):
             self.errors["rejected"] += 1
+            self._runaway(self.runaway.on_reject(now_ns // 1_000_000) if self.runaway else None, now_ns)
         elif kind.endswith("_unknown"):
             self.errors["unknown"] += 1
+        elif kind.endswith("_ack") and self.runaway is not None:
+            self.runaway.on_ack(now_ns // 1_000_000)
         if kind.startswith("order"):
             self.stats["orders"] += 1
         elif kind.startswith("algo"):
             self.stats["algos"] += 1
         self.emit("exec", kind, json.dumps(out, separators=(",", ":"), default=str).encode(), now_ns, now_ns)
+
+    def _runaway(self, reason: str | None, now_ns: int) -> None:
+        """Arıza dedektörü tetiklendi: kalıcı kill switch. Bugüne kadar `RunawayDetector` hiçbir
+        yerde kurulmuyordu, yani bu yol ölü koddu."""
+        if reason and self.on_runaway is not None:
+            self.emit("ctrl", "runaway", json.dumps({"reason": reason}, separators=(",", ":")).encode(), now_ns, now_ns)
+            self.on_runaway(reason)
 
     def _send_now(self, c, payload: dict, now_ns: int) -> None:
         """Legacy yol: HTTP isteği olay işleme yolunun içinde (bloklar). `transport = "legacy"`."""
@@ -155,6 +171,8 @@ class TestnetRecorder(PaperRecorder):
         self.userdata: UserDataConnection | None = None
         self._userdata_task = None
         self.exec_queue = None
+        self.breaker = BreakerState()
+        self._breaker_seen: set = set()
 
     async def resolve_universe(self):
         syms = await asyncio.to_thread(lambda: list(self.pcfg.recorder.symbols))
@@ -195,6 +213,9 @@ class TestnetRecorder(PaperRecorder):
             from fbot.core.cost_drift import CostDriftMonitor
             self.trader.drift = CostDriftMonitor(self.pcfg.cost_drift)
         self.trader.engine_state.kill_switch = self.kill.active
+        # Arıza dedektörü (Gate 4c): bugüne kadar hiçbir yerde kurulmuyordu
+        self.trader.runaway = RunawayDetector(window_ms=60_000, max_orders=60, max_consecutive_rejects=5)
+        self.trader.on_runaway = lambda reason: self._trip_kill_switch(f"runaway:{reason}")
         self.ctrl("testnet_start", {"armed": armed, "why": why, "symbols": syms,
                                     "cells": [c.key() for c in core.decision.allowed_cells],
                                     "note": "testnet tesisat doğrulama ortamıdır; kârlılık kanıtı değildir (ADR 0015)"}, notify=False)
@@ -226,6 +247,29 @@ class TestnetRecorder(PaperRecorder):
         if getattr(self, "pool", None) is not None:
             out["pool"] = dict(self.pool.stats)
         return out
+
+    def _trip_kill_switch(self, reason: str) -> None:
+        """Kalıcı kill switch: restart'ı hayatta kalır, elle sıfırlanmadan açılmaz (CLAUDE.md).
+        418 ban ve arıza dedektörü buraya bağlanır; ikisi de bugüne kadar bağlı değildi."""
+        if not self.pcfg.breaker.kill_on_runaway:
+            return
+        self.kill.trigger(reason, now_ns=time.time_ns(), git_sha=git_sha())
+        if self.trader is not None:
+            self.trader.engine_state.kill_switch = True
+        self.ctrl("kill_switch", {"reason": reason, "source": "breaker"}, notify=False)
+        print(json.dumps({"msg": "kill_switch", "reason": reason}, ensure_ascii=False), flush=True)
+
+    def _check_ban(self) -> None:
+        """418 kalıcı bandır: `RateLimiter.on_response` bunu işaretliyordu ama kimse okumuyordu."""
+        cl = self.trader.adapter.client if self.trader is not None else None
+        if cl is not None and getattr(cl.limiter, "banned", False) and not self.kill.active:
+            self._trip_kill_switch("http_418_ban")
+
+    def _on_closed_trade(self, net_usdt, t_ms: int) -> None:
+        """Kapanan işlemi devre kesiciye verir. `alarm` modunda karar değişmez, olay üretilir."""
+        for ev in on_trade(self.pcfg.breaker, self.breaker, net_usdt, t_ms):
+            self.ctrl("breaker", ev, notify=False)
+            print(json.dumps({"msg": "breaker", **ev}, ensure_ascii=False, default=str), flush=True)
 
     def _arm_block(self, reason: str) -> None:
         """HEDGE modu gibi yapısal uyuşmazlıkta emir yolu **kapatılır**. Yalnız `reconciled=False`
@@ -325,6 +369,7 @@ class TestnetRecorder(PaperRecorder):
         """Silahlanma denetimi ve mutabakat **REST çağrısıdır**: olay döngüsünde çalışırsa loop lag
         dikeni üretir (Gate 1 ölçümünde en kötü p99 3,2 s). Thread'e taşınır; sonuçların akışa
         yazımı yine döngü thread'inde olur (tek sıralama noktası)."""
+        self._check_ban()
         try:
             ev = await asyncio.to_thread(self.arming.check)
             if ev:
@@ -356,6 +401,13 @@ class TestnetRecorder(PaperRecorder):
                                      "rejected": self.trader.errors["rejected"],
                                      "persist": self._persist_stats(),
                                      "execution": self._exec_stats(),
+                                     "breaker": {"mode": self.pcfg.breaker.mode,
+                                                 "day_net_usdt": str(self.breaker.day_net_usdt),
+                                                 "consecutive_losses": self.breaker.consecutive_losses,
+                                                 "tripped": list(self.breaker.tripped),
+                                                 "entry_blocked": entry_blocked(self.pcfg.breaker, self.breaker)},
+                                     "shadow_intents": self.trader.engine_state.shadow_intents,
+                                     "exit_mode": self.trader.engine_state.exit_mode,
                                      "reconciled": getattr(self, "_recon_state", {}).get("reconciled"),
                                      "reconcile_reason": getattr(self, "_recon_state", {}).get("reason"),
                                      "mismatches": getattr(self, "_recon_state", {}).get("mismatches") or []})

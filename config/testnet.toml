@@ -121,3 +121,13 @@ staleness_s = 3600               # private akışta sessizlik normaldir (emir yo
 [reconcile]                      # Gate 3 — sahipsiz koruma emri temizliği
 orphan_cancel = "dry_run"        # yalnız plan raporlanır; "apply" bir hafta gözlem + onay sonrası
 protect_repair = "dry_run"       # korumasız pozisyona koruma emri koyma: gözlem + onay sonrası "apply"
+
+[reactors]                       # Gate 4a — olay-tetiklemeli çıkış değerlendirmesi
+mode = "shadow"                  # shadow: niyet kaydedilir, emir GÖNDERİLMEZ. active ayrı onay kapısı.
+enabled = ["backup_stop"]        # sıra sabittir; bilinmeyen kimlik yükleme hatası
+
+[breaker]                        # Gate 4c — devre kesici
+mode = "alarm"                   # alarm: karar değişmez, yalnız olay üretilir (yanlış-pozitif sayımı)
+daily_net_loss_usdt = "40"       # 80 USDT notional × 5 pozisyon sınırının yarısı; ölçümle güncellenecek
+consecutive_loss_limit = 5
+kill_on_runaway = true           # arıza dedektörü (anormal emir/ret) kalıcı kill switch tetikler

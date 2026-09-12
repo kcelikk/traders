@@ -10,6 +10,7 @@ from decimal import Decimal
 from enum import Enum
 
 from fbot.core.commands import CancelAlgo, PlaceAlgo, PlaceOrder
+from fbot.core.health import FULL, HALTED, PROTECTION_ONLY
 from fbot.core.ids import algo_cid, exit_cid
 from fbot.core.rounding import floor_step, trigger_price
 
@@ -188,7 +189,16 @@ class PositionManager:
             pos.state = pos.prev_state or PosState.MANAGED
 
     # ---------------- tick: kurallar
-    def on_tick(self, pos: Position, now_ns: int, mark: Decimal, bid: Decimal, ask: Decimal, state_label: str | None) -> list:
+    def on_tick(self, pos: Position, now_ns: int, mark: Decimal, bid: Decimal, ask: Decimal, state_label: str | None,
+                mode: str = FULL) -> list:
+        """`mode` sağlık modelinden gelir (Gate 4b):
+
+        `PROTECTION_ONLY` → yalnız **borsa tarafı koruma eksikliğini** gideren kural çalışır.
+        Fiyata dayanan kurallar bekler; pozisyonun `closePosition` emri borsada zaten durur.
+        `HALTED` → hiçbir kural emir üretmez.
+        """
+        if mode == HALTED:
+            return []
         if pos.state == PosState.PROTECTING:
             if pos.protect_sent_ns is not None and now_ns - pos.protect_sent_ns > self.cfg.t_protect_ms * MS:
                 pos.state = PosState.EMERGENCY
@@ -197,8 +207,8 @@ class PositionManager:
                     return []
                 return [self._exit_order(pos, "EM", now_ns)]
             return []
-        if pos.state != PosState.MANAGED:
-            return []
+        if pos.state != PosState.MANAGED or mode == PROTECTION_ONLY:
+            return []       # bayat fiyatla stop/trail/kısmi değerlendirilmez; koruma borsada
         # R2 durum bozulması
         dm = self.cfg.degrade_map
         if dm and pos.entry_state in dm and state_label in dm[pos.entry_state]:

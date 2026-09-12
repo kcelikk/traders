@@ -77,7 +77,11 @@ def test_tick_without_market_view_is_noop_and_sequence_is_deterministic():
     assert a == b and len(a) == 2
 
 
-def test_staleness_freezes_positions_and_unfreezes():
+def test_staleness_limits_rules_instead_of_freezing_everything():
+    """Gate 4b: bayatlık artık pozisyonu donduramıyor. Eski davranışta tüm açık pozisyonlar FROZEN
+    oluyordu ve `_tick_positions` onları atlıyordu; korumasız bir pozisyonu kurtaracak kural
+    (koruma zaman aşımı → acil çıkış) da susuyordu. Yeni davranış: fiyata dayanan kurallar bekler,
+    pozisyon MANAGED kalır, borsadaki koruma emri zaten devrededir."""
     t = 10**12
     events = [
         market(1, t, "xusdt@aggTrade", {"e": "aggTrade", "s": "XUSDT", "a": 1, "p": "100", "q": "1", "T": 1, "E": 1}),
@@ -89,10 +93,13 @@ def test_staleness_freezes_positions_and_unfreezes():
         market(7, t + 31_001 * MS, "xusdt@bookTicker", {"e": "bookTicker", "s": "XUSDT", "u": 2, "b": "99", "B": "1", "a": "101", "A": "1", "E": 1}),
     ]
     st, out = run(events)
-    assert st.positions["p1"].state == PosState.FROZEN      # market kategorisi hâlâ bayat → donuk kalır
+    assert st.positions["p1"].state == PosState.MANAGED     # donmaz; yalnız kurallar kısıtlanır
+    assert st.exit_mode == "PROTECTION_ONLY"
     events.append(market(8, t + 31_002 * MS, "xusdt@aggTrade", {"e": "aggTrade", "s": "XUSDT", "a": 2, "p": "100", "q": "1", "T": 2, "E": 1}))
+    events.append(ev(9, t + 31_003 * MS, "ctrl", "tick", {"n": 2}))
     st, out = run(events)
-    assert st.positions["p1"].state == PosState.MANAGED     # iki kategori de taze → geri döndü
+    assert st.positions["p1"].state == PosState.MANAGED
+    assert st.exit_mode == "FULL"                          # iki kategori de taze → tüm kurallar
     assert any(getattr(c, "category", None) == "public" and c.stale for c in out[5])
 
 

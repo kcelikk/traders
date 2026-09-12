@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fbot.clock import ReplayClock
-from fbot.core.commands import canonical
+from fbot.core.commands import canonical, is_shadow
 from fbot.core.engine import CoreConfig, CoreState, Engine
 from fbot.events import decode
 
@@ -20,6 +20,8 @@ class ReplayResult:
     hash: str
     events: int
     commands: int
+    shadow_hash: str = ""
+    shadow_commands: int = 0
     by_kind: dict[str, int] = field(default_factory=dict)
     first_seq: int | None = None
     last_seq: int | None = None
@@ -46,6 +48,8 @@ def replay(run_dir: Path, cfg: CoreConfig = DEFAULT_CFG, max_files: int | None =
            adapter=None) -> ReplayResult:
     engine, state, clock = Engine(cfg), CoreState(), ReplayClock()
     h = hashlib.sha256()
+    hs = hashlib.sha256()      # shadow zinciri ayrı: gözlem çıktısı ana hash'i kirletmez
+    nshadow = 0
     n = ncmd = 0
     by_kind: dict[str, int] = {}
     first = last = None
@@ -58,15 +62,22 @@ def replay(run_dir: Path, cfg: CoreConfig = DEFAULT_CFG, max_files: int | None =
         first = first if first is not None else ev.seq
         last = ev.seq
         for c in cmds:
+            k = type(c).__name__
+            by_kind[k] = by_kind.get(k, 0) + 1
+            if is_shadow(c):
+                hs.update(b"%d|" % ev.seq)
+                hs.update(canonical(c))
+                hs.update(b"\n")
+                nshadow += 1
+                continue        # shadow emir üretmez: adapter'a da gitmez
             h.update(b"%d|" % ev.seq)
             h.update(canonical(c))
             h.update(b"\n")
             ncmd += 1
-            k = type(c).__name__
-            by_kind[k] = by_kind.get(k, 0) + 1
             if adapter is not None:
                 adapter.submit(c)
         if max_events and n >= max_events:
             break
     el = time.perf_counter() - t0
-    return ReplayResult(h.hexdigest(), n, ncmd, by_kind, first, last, el, n / el if el else 0.0, state.parse_errors)
+    return ReplayResult(h.hexdigest(), n, ncmd, hs.hexdigest() if nshadow else "", nshadow,
+                        by_kind, first, last, el, n / el if el else 0.0, state.parse_errors)

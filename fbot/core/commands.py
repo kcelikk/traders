@@ -74,12 +74,32 @@ class StateChanged:
 
 
 @dataclass(frozen=True, slots=True)
+class ShadowIntent:
+    """Reaktörün **göndermediği** niyet (Gate 4a shadow). Ana hash zincirine girmez: ayrı zincirde
+    tutulur ki shadow dağıtımı determinizm testini kırmasın. Emir üretmez, yalnız kaydedilir."""
+    reactor_id: str
+    pos_id: str
+    symbol: str
+    reason: str
+    reference: str        # MARK | BBO — fiyat referansı kural başına deklare edilir
+    price: Decimal
+    event_ns: int
+
+
+@dataclass(frozen=True, slots=True)
 class Alarm:
     kind: str
     detail: str
 
 
-Command = BarClosed | StalenessChanged | StateChanged | PlaceOrder | CancelOrder | PlaceAlgo | CancelAlgo | Alarm
+Command = BarClosed | StalenessChanged | StateChanged | PlaceOrder | CancelOrder | PlaceAlgo | CancelAlgo | Alarm | ShadowIntent
+
+# Ana determinizm zincirine girmeyen komutlar: gözlem çıktısıdır, karar değil.
+SHADOW_TYPES = ("ShadowIntent",)
+
+
+def is_shadow(cmd) -> bool:
+    return type(cmd).__name__ in SHADOW_TYPES
 
 
 def canonical(cmd) -> bytes:

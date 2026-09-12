@@ -8,10 +8,12 @@ from decimal import Decimal
 from pathlib import Path
 
 from fbot.config import RecorderConfig, load_recorder_config
+from fbot.core.breaker import ALARM, BreakerConfig
 from fbot.core.cost_drift import CostDriftConfig
 from fbot.core.decision import Cell, DecisionConfig
 from fbot.core.engine import CoreConfig
 from fbot.core.position import PositionConfig
+from fbot.core.reactors import OFF, ReactorConfig
 from fbot.core.risk import RiskConfig
 from fbot.core.state_engine import StateEngineConfig
 
@@ -62,6 +64,7 @@ class PaperConfig:
     sim_prob_fill_on_touch: float = 0.0
     sim_book_levels: int = 20
     cost_drift: CostDriftConfig | None = None
+    breaker: BreakerConfig = None
     strategy_id: str | None = None        # [run] bölümünden; Gate 5'te strateji kaydı bunu doldurur
     strategy_version: str | None = None
     execution: ExecutionConfig = None
@@ -120,10 +123,28 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                       cooldown_ms=risk.get("cooldown_ms"), cooldown_loss_ms=risk.get("cooldown_loss_ms"), cooldown_stp_ms=risk.get("cooldown_stp_ms"),
                       reserve_orders=int(risk.get("reserve_orders", 3)), backoff_ms=int(risk.get("backoff_ms", 10000)),
                       skew_max_ms=risk.get("skew_max_ms"), warmup_bars=int(risk.get("warmup_bars", 480)))
+    bk = t.get("breaker") or {}
+    bk_mode = str(bk.get("mode", ALARM))
+    if bk_mode not in ("alarm", "enforce"):
+        raise PaperConfigError(f"[breaker] mode 'alarm' veya 'enforce' olmalı: {bk_mode!r}")
+    bkcfg = BreakerConfig(mode=bk_mode, daily_net_loss_usdt=_dec(bk.get("daily_net_loss_usdt")),
+                          consecutive_loss_limit=bk.get("consecutive_loss_limit"),
+                          kill_on_runaway=bool(bk.get("kill_on_runaway", True)))
+    rx = t.get("reactors") or {}
+    rx_mode = str(rx.get("mode", OFF))
+    if rx_mode not in ("off", "shadow", "active"):
+        raise PaperConfigError(f"[reactors] mode 'off', 'shadow' veya 'active' olmalı: {rx_mode!r}")
+    if rx_mode == "active":
+        # Yarım implementasyon, hiç implementasyondan tehlikelidir (CLAUDE.md). Active yol Gate 4
+        # shadow gözlemi ve ayrı onay olmadan açılmaz.
+        raise PaperConfigError("[reactors] mode='active' henüz yok: shadow gözlemi ve onay gerekir")
+    rxcfg = ReactorConfig(mode=rx_mode, enabled=tuple(rx.get("enabled", ())))
     core = CoreConfig(bar_ms=int(t["core"]["bar_ms"]), staleness_ms={k: int(v * 1000) for k, v in rec.staleness_s.items()},
                       position=pcfg, filters={}, tick_ms=rec.tick_ms, state_engine=se, decision=dcfg, risk=rcfg,
                       account=dict(t["account"]),
-                      pending_entry_ttl_ms=int(t["core"].get("pending_entry_ttl_ms", 60_000)))
+                      pending_entry_ttl_ms=int(t["core"].get("pending_entry_ttl_ms", 60_000)),
+                      user_stream_staleness_ms=int((t.get("userdata") or {}).get("staleness_s", 3600)) * 1000,
+                      reactors=rxcfg)
     cd = t.get("cost_drift")
     drift = CostDriftConfig(window_ms=int(cd["window_ms"]), capital_usdt=Decimal(str(cd["capital_usdt"])),
                             commission_to_gross_max=_dec(cd.get("commission_to_gross_max")),
@@ -170,4 +191,4 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                        sim_prob_fill_on_touch=float(sim.get("prob_fill_on_touch", 0.0)),
                        sim_book_levels=book_levels, cost_drift=drift,
                        strategy_id=t["run"].get("strategy_id"), strategy_version=t["run"].get("strategy_version"),
-                       execution=ecfg, userdata=ucfg, reconcile=rccfg), h
+                       execution=ecfg, userdata=ucfg, reconcile=rccfg, breaker=bkcfg), h

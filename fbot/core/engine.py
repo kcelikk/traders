@@ -8,9 +8,11 @@ from decimal import Decimal
 from fbot.core.beta_tracker import BetaTracker
 from fbot.core.commands import BarClosed, PlaceOrder, StalenessChanged
 from fbot.core.decision import DecisionConfig, decide_explain
+from fbot.core.health import HALTED, HealthFacts, entry_allowed, exit_mode
 from fbot.core.ids import pos_id_of
 from fbot.core.market import SymbolMarket
 from fbot.core.oms import ENTRY, EXIT, PARTIAL, PROTECTIVE, OrderRegistry
+from fbot.core.reactors import OFF, ReactorConfig, enabled_reactors, react
 from fbot.core.position import Filters, Position, PositionConfig, PositionManager, PosState
 from fbot.core.risk import EntryIntent as RiskIntent, RiskConfig, RiskInputs, assess
 from fbot.core.state_engine import StateEngineConfig, SymbolStateEngine
@@ -26,6 +28,8 @@ class CoreConfig:
     tick_ms: int = 1000
     pending_entry_ttl_ms: int = 60_000   # giriş emri dolum/ret bildirmezse sembol bu süre sonunda serbest kalır
     order_ack_ttl_ms: int = 30_000       # emir bu süre içinde cevap vermezse UNKNOWN (mutabakat çözer)
+    user_stream_staleness_ms: int = 3_600_000   # private akış sessizliği eşiği (emir yoksa olay da yok)
+    reactors: ReactorConfig = field(default_factory=ReactorConfig)   # varsayılan: off
     state_engine: StateEngineConfig | None = None
     beta_ref: str = "BTCUSDT"
     beta_window: int = 240
@@ -63,12 +67,17 @@ class CoreState:
     last_seq: int = 0
     last_data: dict | None = None      # son market olayının çözülmüş `data` sözlüğü (tüketiciler yeniden parse etmesin)
     last_staleness_check_ns: int = 0
+    user_stream_age_s: float | None = None   # I/O kenarından beslenir (private akış yaşı)
+    exit_mode: str = "FULL"                  # sağlık modelinden türetilen son değer (görünürlük)
+    by_symbol: dict = field(default_factory=dict)   # sembol → açık pos_id kümesi (olay başına tarama olmasın)
+    shadow_intents: int = 0
 
 
 class Engine:
     def __init__(self, cfg: CoreConfig):
         self.cfg = cfg
         self.pm = PositionManager(cfg.position) if cfg.position else None
+        self.reactors = enabled_reactors(cfg.reactors) if cfg.reactors.mode != OFF else []
 
     def step(self, state: CoreState, ev: RawEvent, now_ns: int) -> tuple[CoreState, list]:
         state.events += 1
@@ -87,7 +96,6 @@ class Engine:
                 self._sweep_pending(state, now_ns)
                 state.orders.sweep(now_ns, self.cfg.order_ack_ttl_ms * 1_000_000)
                 cmds += self._staleness(state, now_ns)
-                self._apply_freeze(state)
                 cmds += self._tick_positions(state, now_ns)
                 return state, cmds
         elif ev.cat == "private":
@@ -108,8 +116,9 @@ class Engine:
             state.last_data = d
             if d is not None:
                 cmds += self._route(state, d, now_ns)
+                if self.reactors and d.get("s"):
+                    cmds += self._react(state, d["s"], d.get("e") or "", now_ns)
         cmds += self._staleness(state, now_ns)
-        self._apply_freeze(state)
         self._register_orders(state, cmds, now_ns)
         return state, cmds
 
@@ -169,6 +178,7 @@ class Engine:
             pos = Position.new(d["pos_id"], sym, d["side"], f)
             self.pm.restore_versions(pos, state.orders)   # restart sonrası sürüm 1'e dönmesin
             state.positions[pos.pos_id] = pos
+            state.by_symbol.setdefault(sym, set()).add(pos.pos_id)
             state.pending_entries.pop(sym, None)
             return self.pm.on_entry_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), Decimal(d["sl"]), Decimal(d["tp"]), now_ns,
                                          is_maker=bool(d.get("is_maker", False)), entry_state=d.get("entry_state"))
@@ -238,29 +248,54 @@ class Engine:
         for sym in [s for s, deadline in state.pending_entries.items() if deadline <= now_ns]:
             del state.pending_entries[sym]
 
-    def _apply_freeze(self, state: CoreState) -> None:
-        """Herhangi bir kategori bayatsa açık pozisyonlar FROZEN; hepsi tazeyse geri döner."""
-        if self.pm is None:
-            return
-        any_stale = any(state.stale.values())
-        for pos in state.positions.values():
-            if any_stale:
-                self.pm.freeze(pos)
+    def health(self, state: CoreState) -> HealthFacts:
+        """Ortogonal sağlık gerçekleri (Gate 4b). Karar bunlardan türetilir, tek bayrağa bakılmaz."""
+        return HealthFacts(stale=dict(state.stale), reconciled=state.reconciled,
+                           kill_switch=state.kill_switch,
+                           user_stream_age_s=state.user_stream_age_s,
+                           user_stream_limit_s=self.cfg.user_stream_staleness_ms / 1000 if self.cfg.user_stream_staleness_ms else None)
+
+    @staticmethod
+    def _reindex(state: CoreState) -> None:
+        """Kapanan pozisyon sembol indeksinden düşer: reaktör O(1) karar versin."""
+        for sym in list(state.by_symbol):
+            live = {pid for pid in state.by_symbol[sym]
+                    if pid in state.positions and state.positions[pid].state != PosState.CLOSED}
+            if live:
+                state.by_symbol[sym] = live
             else:
-                self.pm.unfreeze(pos)
+                del state.by_symbol[sym]
+
+    def _react(self, state: CoreState, sym: str, e: str, now_ns: int) -> list:
+        """Olay-tetiklemeli çıkış değerlendirmesi (Gate 4a). Açık pozisyon yoksa O(1) döner."""
+        if not self.reactors:
+            return []
+        pos_ids = state.by_symbol.get(sym)
+        if not pos_ids:
+            return []
+        out = react(self.cfg.reactors, self.reactors, state.positions, pos_ids, sym,
+                    state.markets.get(sym), now_ns, e, self.pm)
+        state.shadow_intents += len(out)
+        return out
 
     def _tick_positions(self, state: CoreState, now_ns: int) -> list:
         if self.pm is None:
             return []
+        self._reindex(state)
+        mode = exit_mode(self.health(state))
+        state.exit_mode = mode
+        if mode == HALTED:
+            return []      # iç durum borsayla mutabık değil: kural emri üretilmez, koruma borsada
         out = []
         for pid in sorted(state.positions):
             pos = state.positions[pid]
-            if pos.state in (PosState.CLOSED, PosState.FROZEN):
+            if pos.state == PosState.CLOSED:
                 continue
             m = state.markets.get(pos.symbol)
             if m is None or m.mark_price is None or m.best_bid is None or m.best_ask is None:
                 continue   # görünüm eksik: kural değerlendirilmez (koruma borsada)
-            out += self.pm.on_tick(pos, now_ns, m.mark_price, m.best_bid, m.best_ask, state.market_state_label.get(pos.symbol))
+            out += self.pm.on_tick(pos, now_ns, m.mark_price, m.best_bid, m.best_ask,
+                                   state.market_state_label.get(pos.symbol), mode=mode)
         return out
 
     def _route(self, state: CoreState, d: dict, now_ns: int) -> list:
