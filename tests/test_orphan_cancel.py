@@ -65,6 +65,9 @@ class FakeClient:
         return [{"symbol": s, "clientAlgoId": a, "algoStatus": "NEW"}
                 for s, ids in self.snapshot.items() for a in ids]
 
+    def balance(self, now_ms):
+        return [{"asset": "USDT", "balance": "4208.4", "availableBalance": "4100.0"}]
+
     def cancel_algo(self, params, now_ms):
         self.cancels.append(params)
         return {}

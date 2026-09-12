@@ -32,9 +32,10 @@ class ExecutionConfig:
 
 @dataclass(frozen=True)
 class ReconcileConfig:
-    """Sahipsiz koruma emri temizliği. `dry_run`: yalnız plan raporlanır, borsaya dokunulmaz.
-    `apply` bir hafta gözlemden sonra ve proje sahibi onayıyla açılır (ADR 0020)."""
+    """Sahipsiz koruma emri temizliği ve korumasız pozisyon onarımı. `dry_run`: yalnız plan
+    raporlanır, borsaya dokunulmaz. `apply` gözlem sonrası ve proje sahibi onayıyla açılır (ADR 0020)."""
     orphan_cancel: str = "dry_run"     # dry_run | apply
+    protect_repair: str = "dry_run"    # dry_run | apply
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,10 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
     oc = str(rc_sec.get("orphan_cancel", "dry_run"))
     if oc not in ("dry_run", "apply"):
         raise PaperConfigError(f"[reconcile] orphan_cancel 'dry_run' veya 'apply' olmalı: {oc!r}")
-    rccfg = ReconcileConfig(orphan_cancel=oc)
+    pr = str(rc_sec.get("protect_repair", "dry_run"))
+    if pr not in ("dry_run", "apply"):
+        raise PaperConfigError(f"[reconcile] protect_repair 'dry_run' veya 'apply' olmalı: {pr!r}")
+    rccfg = ReconcileConfig(orphan_cancel=oc, protect_repair=pr)
     ud = t.get("userdata") or {}
     ud_mode = str(ud.get("mode", "shadow"))
     if ud_mode not in ("shadow", "active"):

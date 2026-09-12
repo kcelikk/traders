@@ -120,3 +120,4 @@ staleness_s = 3600               # private akışta sessizlik normaldir (emir yo
 
 [reconcile]                      # Gate 3 — sahipsiz koruma emri temizliği
 orphan_cancel = "dry_run"        # yalnız plan raporlanır; "apply" bir hafta gözlem + onay sonrası
+protect_repair = "dry_run"       # korumasız pozisyona koruma emri koyma: gözlem + onay sonrası "apply"

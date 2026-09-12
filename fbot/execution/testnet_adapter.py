@@ -48,16 +48,43 @@ class TestnetAdapter:
         if isinstance(cmd, PlaceAlgo):
             return self._algo(cmd, now_ms)
         if isinstance(cmd, CancelAlgo):
-            self.client.cancel_algo({"symbol": cmd.symbol, "clientAlgoId": cmd.client_algo_id}, now_ms)
-            return {"kind": "algo_canceled", "client_algo_id": cmd.client_algo_id, "symbol": cmd.symbol}
+            return self._cancel_algo(cmd, now_ms)
         if isinstance(cmd, CancelOrder):
-            self.client.cancel_order({"symbol": cmd.symbol, "origClientOrderId": cmd.client_id}, now_ms)
-            return {"kind": "order_canceled", "client_id": cmd.client_id, "symbol": cmd.symbol}
+            return self._cancel_order(cmd, now_ms)
         raise TypeError(f"desteklenmeyen komut: {type(cmd).__name__}")
+
+    # İptal cevabı **doğrulanır**: "istek gitti" ile "emir gerçekten iptal oldu" aynı şey değildir.
+    # Doğrulanmamış iptal, koruma emrinin borsada durduğu hâlde iç durumda yok sayılmasına yol açar.
+    CANCEL_OK = ("CANCELED", "FINISHED", "EXPIRED")
+
+    def _cancel_algo(self, c: CancelAlgo, now_ms: int) -> dict:
+        base = {"client_algo_id": c.client_algo_id, "symbol": c.symbol}
+        try:
+            r = self.client.cancel_algo({"symbol": c.symbol, "clientAlgoId": c.client_algo_id}, now_ms) or {}
+        except TestnetError as e:
+            return self._error_event(e, {"kind": "algo_cancel", **base})
+        status = r.get("algoStatus") or r.get("status")
+        if status is not None and status not in self.CANCEL_OK:
+            # Borsa iptali onaylamadı: emir hâlâ duruyor olabilir → mutabakat çözsün
+            return {"kind": "algo_cancel_unknown", **base, "status": status, "needs_reconcile": True}
+        return {"kind": "algo_canceled", **base, "status": status}
+
+    def _cancel_order(self, c: CancelOrder, now_ms: int) -> dict:
+        base = {"client_id": c.client_id, "symbol": c.symbol}
+        try:
+            r = self.client.cancel_order({"symbol": c.symbol, "origClientOrderId": c.client_id}, now_ms) or {}
+        except TestnetError as e:
+            return self._error_event(e, {"kind": "order_cancel", **base})
+        status = r.get("status")
+        if status is not None and status not in self.CANCEL_OK:
+            return {"kind": "order_cancel_unknown", **base, "status": status, "needs_reconcile": True}
+        return {"kind": "order_canceled", **base, "status": status}
 
     def _order(self, c: PlaceOrder, now_ms: int) -> dict:
         f = self._filters(c.symbol)
-        p = {"symbol": c.symbol, "side": c.side, "type": c.type,
+        # `positionSide` açıkça gönderilir: hesap HEDGE'e alınmışsa varsayılana güvenmek yanlış
+        # tarafa emir yazar (kilitli karar: ONE-WAY, ADR 0004).
+        p = {"symbol": c.symbol, "side": c.side, "type": c.type, "positionSide": "BOTH",
              "quantity": fmt_qty(c.qty, f.step_size),
              "newClientOrderId": c.client_id}
         if c.reduce_only:
@@ -75,7 +102,7 @@ class TestnetAdapter:
 
     def _algo(self, c: PlaceAlgo, now_ms: int) -> dict:
         # closePosition=true ile quantity ve reduceOnly gönderilemez (hata -4137/-4138)
-        p = {"symbol": c.symbol, "side": c.side, "type": c.type,
+        p = {"symbol": c.symbol, "side": c.side, "type": c.type, "positionSide": "BOTH",
              "triggerPrice": fmt_price(c.trigger_price, self._filters(c.symbol).tick_size),
              "closePosition": "true" if c.close_position else "false",
              "workingType": c.working_type, "priceProtect": "true" if c.price_protect else "false",

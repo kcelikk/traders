@@ -14,6 +14,8 @@ class ExchangeSnapshot:
     open_orders: dict        # sembol → {clientOrderId}
     leverage: dict           # sembol → int
     position_mode: str       # ONE_WAY | HEDGE
+    balance: dict = field(default_factory=dict)   # {"wallet","available"} USDT; borsa doğruluğu
+    margin: dict = field(default_factory=dict)    # sembol → {"maint","initial"}
 
 
 @dataclass
@@ -23,6 +25,8 @@ class ReconcileResult:
     unprotected: list = field(default_factory=list)   # borsada pozisyon var, koruma emri yok
     actions: list = field(default_factory=list)       # sahipsiz algo iptalleri (dry-run'da uygulanmaz)
     foreign: list = field(default_factory=list)       # bizim gramerimize uymayan algo'lar: dokunulmaz
+    repairs: list = field(default_factory=list)       # korumasız pozisyona koruma emri (dry-run'da uygulanmaz)
+    arm_block: str | None = None                      # doluysa emir yolu açılmaz (HEDGE gibi)
 
 
 def is_ours(client_algo_id: str, tags: set[str]) -> bool:
@@ -45,8 +49,11 @@ def reconcile(internal: dict, snap: ExchangeSnapshot, expected_leverage: dict,
     actions: list = []
     foreign: list[str] = []
     tags = set(strategy_tags or ())
+    arm_block = None
     if snap.position_mode != "ONE_WAY":
         mism.append(f"position_mode:{snap.position_mode}")
+        # HEDGE'te `positionSide` semantiği değişir: emir yolu **açılmaz**, yalnız kilitlenmez.
+        arm_block = f"position_mode={snap.position_mode}: ONE-WAY kilitli karardır (ADR 0004)"
     by_sym = {p["symbol"]: (pid, p) for pid, p in internal.get("positions", {}).items()}
     for sym in sorted(set(by_sym) | set(snap.positions)):
         ours = by_sym.get(sym)
@@ -83,4 +90,18 @@ def reconcile(internal: dict, snap: ExchangeSnapshot, expected_leverage: dict,
                     actions.append(CancelAlgo(sym, aid))
                 else:
                     foreign.append(f"{sym}:{aid}")
-    return ReconcileResult(ok=not mism, mismatches=mism, unprotected=unprotected, actions=actions, foreign=foreign)
+    # Korumasız pozisyon onarımı: yalnız **bizim bildiğimiz** pozisyon için üretilir. Borsada olup
+    # bizde olmayan pozisyona koruma seviyesi uyduramayız; o durum kilitli kalır (K2).
+    repairs = []
+    for sym in unprotected:
+        ours_pos = by_sym.get(sym)
+        if ours_pos is None:
+            continue
+        pid, p = ours_pos
+        for role, price in (("SL", p.get("sl")), ("TP", p.get("tp"))):
+            if price is None:
+                continue
+            repairs.append({"pos_id": pid, "symbol": sym, "role": role, "trigger_price": str(price),
+                            "side": "SELL" if p["side"] == "long" else "BUY"})
+    return ReconcileResult(ok=not mism, mismatches=mism, unprotected=unprotected, actions=actions,
+                           foreign=foreign, repairs=repairs, arm_block=arm_block)

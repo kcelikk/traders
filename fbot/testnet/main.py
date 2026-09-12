@@ -186,7 +186,10 @@ class TestnetRecorder(PaperRecorder):
                                          positions=lambda: self.trader.engine_state.positions,
                                          expected_leverage=lev,
                                          strategy_tags={core.decision.strategy_tag} if core.decision else set(),
-                                         orphan_cancel=self.pcfg.reconcile.orphan_cancel)
+                                         orphan_cancel=self.pcfg.reconcile.orphan_cancel,
+                                         protect_repair=self.pcfg.reconcile.protect_repair,
+                                         on_arm_block=self._arm_block,
+                                         on_balance=self._on_balance)
         self._reconcile(lambda: int(time.time() * 1000))
         if self.pcfg.cost_drift is not None:
             from fbot.core.cost_drift import CostDriftMonitor
@@ -223,6 +226,20 @@ class TestnetRecorder(PaperRecorder):
         if getattr(self, "pool", None) is not None:
             out["pool"] = dict(self.pool.stats)
         return out
+
+    def _arm_block(self, reason: str) -> None:
+        """HEDGE modu gibi yapısal uyuşmazlıkta emir yolu **kapatılır**. Yalnız `reconciled=False`
+        yapmak yetmez: K2 girişleri durdurur ama çıkış/koruma emirleri yine gider ve HEDGE'te
+        `positionSide` semantiği farklıdır."""
+        if self.trader is not None and self.trader.adapter.armed:
+            self.trader.adapter.rearm(None, False)
+            self.ctrl("arming_changed", {"kind": "arming_changed", "armed": False, "reason": reason}, notify=False)
+            print(json.dumps({"msg": "arming_blocked", "reason": reason}, ensure_ascii=False), flush=True)
+
+    def _on_balance(self, balance: dict) -> None:
+        """Hesap görünümü borsadan beslenir: K11 teminat kontrolünün girdisi budur."""
+        self.pcfg.core.account["available_balance"] = str(balance.get("available") or balance.get("wallet") or 0)
+        self.pcfg.core.account["wallet_balance"] = str(balance.get("wallet") or 0)
 
     def _probe_balance(self, client) -> float:
         """Silahlanma kanıtı: yeni anahtarla bakiye okunabiliyor mu? Hesap görünümünü de günceller."""

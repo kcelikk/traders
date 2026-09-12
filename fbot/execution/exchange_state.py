@@ -45,12 +45,20 @@ def fetch_snapshot(client, symbols: set[str], now_ms) -> ExchangeSnapshot:
         rows = client.positions(tick())
         orders = client.open_orders(tick())
         algos = client.open_algos(tick())
+        bal = client.balance(tick())
     except SnapshotError:
         raise
     except Exception as e:  # noqa: BLE001 — her hata mutabakatsızlık demektir
         raise SnapshotError(f"borsa durumu okunamadı: {e}") from e
 
-    positions, leverage = {}, {}
+    # Bakiye borsadan gelir: iç muhasebe değil, borsa doğruluk kaynağıdır (CLAUDE.md).
+    balance = {}
+    for b in bal or []:
+        if b.get("asset") == "USDT":
+            balance = {"wallet": _dec(b.get("balance", 0)), "available": _dec(b.get("availableBalance", b.get("balance", 0)))}
+            break
+
+    positions, leverage, margin = {}, {}, {}
     for r in rows or []:
         sym = r.get("symbol")
         if sym not in symbols:
@@ -58,6 +66,8 @@ def fetch_snapshot(client, symbols: set[str], now_ms) -> ExchangeSnapshot:
         amt = _dec(r.get("positionAmt", 0))
         if r.get("leverage") is not None:
             leverage[sym] = int(_dec(r["leverage"]))
+        if r.get("maintMargin") is not None or r.get("initialMargin") is not None:
+            margin[sym] = {"maint": _dec(r.get("maintMargin", 0)), "initial": _dec(r.get("initialMargin", 0))}
         if amt == 0:
             continue
         positions[sym] = {"side": "long" if amt > 0 else "short", "qty": abs(amt)}
@@ -74,7 +84,8 @@ def fetch_snapshot(client, symbols: set[str], now_ms) -> ExchangeSnapshot:
 
     dual = (mode or {}).get("dualSidePosition")
     return ExchangeSnapshot(positions=positions, open_algos=open_algos, open_orders=open_orders,
-                            leverage=leverage, position_mode="HEDGE" if dual else "ONE_WAY")
+                            leverage=leverage, position_mode="HEDGE" if dual else "ONE_WAY",
+                            balance=balance, margin=margin)
 
 
 def internal_view(positions: dict) -> dict:
@@ -83,7 +94,8 @@ def internal_view(positions: dict) -> dict:
     for pid, p in positions.items():
         if getattr(p.state, "value", p.state) == "CLOSED":
             continue
-        out[pid] = {"symbol": p.symbol, "side": p.side, "qty": p.qty, "algos": set(p.active_algos)}
+        out[pid] = {"symbol": p.symbol, "side": p.side, "qty": p.qty, "algos": set(p.active_algos),
+                    "sl": p.sl_price, "tp": p.tp_price}
     return {"positions": out}
 
 
@@ -95,14 +107,19 @@ class ReconcileSupervisor:
     """
 
     def __init__(self, client, symbols: set[str], positions, expected_leverage: dict,
-                 strategy_tags: set[str] | None = None, orphan_cancel: str = "dry_run"):
+                 strategy_tags: set[str] | None = None, orphan_cancel: str = "dry_run",
+                 protect_repair: str = "dry_run", on_arm_block=None, on_balance=None):
         self.client = client
         self.symbols = set(symbols)
         self.positions = positions              # () -> {pos_id: Position}
         self.expected_leverage = dict(expected_leverage)
         self.strategy_tags = set(strategy_tags or ())
         self.orphan_cancel = orphan_cancel      # dry_run | apply — varsayılan dry_run (ADR 0020)
+        self.protect_repair = protect_repair    # dry_run | apply — korumasız pozisyona koruma koyma
+        self.on_arm_block = on_arm_block        # (reason) -> None; emir yolunu kapatır
+        self.on_balance = on_balance            # (dict) -> None; hesap görünümünü borsadan besler
         self.cancelled = 0
+        self.repaired = 0
         self.last: tuple | None = None
 
     def check(self, now_ms) -> dict | None:
@@ -125,6 +142,10 @@ class ReconcileSupervisor:
             return {"kind": "reconcile", "reconciled": False, "mismatches": [], "unprotected": [],
                     "reason": str(e)}
         r = reconcile(internal_view(self.positions()), snap, self.expected_leverage, self.strategy_tags)
+        if r.arm_block and self.on_arm_block is not None:
+            self.on_arm_block(r.arm_block)      # HEDGE: kilitlemek yetmez, emir yolu kapanır
+        if snap.balance and self.on_balance is not None:
+            self.on_balance(snap.balance)       # hesap görünümü borsadan beslenir (K11 girdisi)
         ok = r.ok and not r.unprotected
         plan = [{"symbol": c.symbol, "client_algo_id": c.client_algo_id} for c in r.actions]
         applied = self._apply_orphans(r.actions, now_ms) if plan else []
@@ -132,9 +153,34 @@ class ReconcileSupervisor:
                 "unprotected": r.unprotected,
                 "orphan_cancel": {"mode": self.orphan_cancel, "planned": plan, "applied": applied,
                                   "foreign_untouched": r.foreign},
+                "protect_repair": {"mode": self.protect_repair, "planned": r.repairs,
+                                   "applied": self._apply_repairs(r.repairs, now_ms) if r.repairs else []},
+                "arm_block": r.arm_block,
+                "balance": {k: str(v) for k, v in (snap.balance or {}).items()},
                 "reason": "tamam" if ok else ("korumasız pozisyon: " + ", ".join(r.unprotected)
                                               if r.unprotected and not r.mismatches
                                               else "; ".join(r.mismatches[:6]))}
+
+    def _apply_repairs(self, repairs: list, now_ms) -> list:
+        """Korumasız pozisyona koruma emri **koymak** riski azaltır, artırmaz; yine de varsayılan
+        `dry_run`: yanlış seviyeden konan bir stop, olmayan stoptan daha kötü olabilir."""
+        if self.protect_repair != "apply":
+            return []
+        tick = now_ms if callable(now_ms) else (lambda: now_ms)
+        done = []
+        for rp in repairs:
+            try:
+                self.client.place_algo({"symbol": rp["symbol"], "side": rp["side"],
+                                        "type": "STOP_MARKET" if rp["role"] == "SL" else "TAKE_PROFIT_MARKET",
+                                        "positionSide": "BOTH", "triggerPrice": rp["trigger_price"],
+                                        "closePosition": "true", "workingType": "MARK_PRICE",
+                                        "priceProtect": "true",
+                                        "clientAlgoId": f"{rp['pos_id']}-{rp['role']}-r1"}, tick())
+                self.repaired += 1
+                done.append({**rp, "ok": True})
+            except Exception as e:  # noqa: BLE001 — onarım hatası mutabakatı durdurmaz, kayda geçer
+                done.append({**rp, "ok": False, "err": repr(e)[:150]})
+        return done
 
     def _apply_orphans(self, actions: list, now_ms) -> list:
         """`dry_run`: yalnız planı raporlar, borsaya dokunmaz. Bir hafta gözlemden sonra `apply`

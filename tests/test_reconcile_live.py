@@ -35,6 +35,11 @@ class FakeClient:
     def open_algos(self, now_ms):
         return self._algo
 
+    def balance(self, now_ms):
+        if self._fail == "balance":
+            raise RuntimeError("HTTP 500")
+        return [{"asset": "USDT", "balance": "4208.4", "availableBalance": "4100.0"}]
+
 
 def prow(sym, amt, lev=5):
     return {"symbol": sym, "positionAmt": amt, "leverage": str(lev), "positionSide": "BOTH"}
@@ -104,6 +109,7 @@ def test_internal_view_extracts_open_positions_only():
         def __init__(self, sym, side, qty, state, algos):
             self.symbol, self.side, self.qty, self.state = sym, side, qty, state
             self.active_algos = algos
+            self.sl_price, self.tp_price = Decimal("99"), Decimal("101")   # onarım planı bunları okur
 
     class S:
         value = "MANAGED"
@@ -115,7 +121,8 @@ def test_internal_view_extracts_open_positions_only():
                  "p2": P("ETHUSDT", "short", Decimal("2"), C(), {"b"})}
     v = internal_view(positions)
     assert list(v["positions"]) == ["p1"]
-    assert v["positions"]["p1"] == {"symbol": "BTCUSDT", "side": "long", "qty": Decimal("1"), "algos": {"a"}}
+    assert v["positions"]["p1"] == {"symbol": "BTCUSDT", "side": "long", "qty": Decimal("1"), "algos": {"a"},
+                                    "sl": Decimal("99"), "tp": Decimal("101")}
 
 
 class FakeAdapter:
@@ -191,16 +198,20 @@ class ClockClient(FakeClient):
         self.seen.append(now_ms)
         return []
 
+    def balance(self, now_ms):
+        self.seen.append(now_ms)
+        return []
+
 
 def test_each_request_gets_a_fresh_timestamp():
-    """Tek damga dört isteğe paylaştırılınca sonuncular recvWindow'u aşıyor (-1021)."""
-    ticks = iter([1000, 2000, 8000, 9000])
+    """Tek damga tüm isteklere paylaştırılınca sonuncular recvWindow'u aşıyor (-1021)."""
+    ticks = iter([1000, 2000, 8000, 9000, 10000])
     c = ClockClient()
     fetch_snapshot(c, UNIVERSE, now_ms=lambda: next(ticks))
-    assert c.seen == [1000, 2000, 8000, 9000]
+    assert c.seen == [1000, 2000, 8000, 9000, 10000]
 
 
 def test_fixed_timestamp_still_accepted_for_tests():
     c = ClockClient()
     fetch_snapshot(c, UNIVERSE, now_ms=42)
-    assert c.seen == [42, 42, 42, 42]
+    assert c.seen == [42, 42, 42, 42, 42]

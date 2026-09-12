@@ -136,3 +136,34 @@ def test_unknown_symbol_is_fail_closed():
     with pytest.raises(MissingFilters):
         a.submit(PlaceOrder("ETHUSDT", "BUY", "MARKET", D("1"), None, False, "e1", None), now_ms=0)
     assert a.client.http.calls == []
+
+
+def test_orders_send_position_side_explicitly():
+    """Kilitli karar ONE-WAY (ADR 0004). Hesap HEDGE'e alınmışsa varsayılana güvenmek yanlış tarafa
+    emir yazar; `positionSide` her emirde açıkça gönderilir."""
+    a = adapter([(200, {}, b'{"orderId":1,"status":"NEW"}'), (200, {}, b'{"algoId":2,"algoStatus":"NEW"}')])
+    a.submit(PlaceOrder("BTCUSDT", "BUY", "MARKET", D("0.001"), None, False, "e1", None), now_ms=0)
+    a.submit(PlaceAlgo("BTCUSDT", "SELL", "STOP_MARKET", D("74960.70"), True, "MARK_PRICE", True, "p1-SL-v1"), now_ms=0)
+    for _, _, q, _ in a.client.http.calls:
+        assert "positionSide=BOTH" in q
+
+
+def test_algo_cancel_is_verified_not_assumed():
+    """"İstek gitti" ile "emir iptal oldu" aynı şey değil: doğrulanmamış iptal, borsada duran bir
+    koruma emrini iç durumda yok sayar."""
+    a = adapter([(200, {}, b'{"algoStatus":"CANCELED","clientAlgoId":"p1-SL-v1"}')])
+    out = a.submit(CancelAlgo("BTCUSDT", "p1-SL-v1"), now_ms=0)
+    assert out["kind"] == "algo_canceled" and out["status"] == "CANCELED"
+
+
+def test_algo_cancel_with_a_non_terminal_status_asks_for_reconciliation():
+    a = adapter([(200, {}, b'{"algoStatus":"NEW","clientAlgoId":"p1-SL-v1"}')])
+    out = a.submit(CancelAlgo("BTCUSDT", "p1-SL-v1"), now_ms=0)
+    assert out["kind"] == "algo_cancel_unknown" and out["needs_reconcile"] is True
+
+
+def test_algo_cancel_of_a_vanished_order_is_an_expected_rejection():
+    """-2011: emir zaten yok. Yarış durumunun normal sonucu, alarm değil."""
+    a = adapter([(400, {}, b'{"code":-2011,"msg":"Unknown order sent."}')])
+    out = a.submit(CancelAlgo("BTCUSDT", "p1-SL-v1"), now_ms=0)
+    assert out["kind"] == "algo_cancel_rejected" and out["expected"] is True
