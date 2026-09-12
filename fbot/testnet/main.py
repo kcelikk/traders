@@ -118,10 +118,9 @@ class TestnetRecorder(PaperRecorder):
         ex = await asyncio.to_thread(exchange_info)
         core = self.pcfg.core
         core = type(core)(**{**core.__dict__, "filters": filters_from_exchange_info(ex, set(syms))})
-        prec = {s["symbol"]: {"pricePrecision": s["pricePrecision"], "quantityPrecision": s["quantityPrecision"]}
-                for s in ex["symbols"] if s["symbol"] in set(syms)}
-        # Adapter silahsız doğar; anahtar dosyasını denetçi okur ve gerekirse çalışırken silahlandırır
-        adapter = TestnetAdapter(None, armed=False, symbols=prec)
+        # Adapter borsa filtreleriyle çalışır (step_size / tick_size); pricePrecision kullanılmaz (Gate 2.0)
+        # Silahsız doğar; anahtar dosyasını denetçi okur ve gerekirse çalışırken silahlandırır
+        adapter = TestnetAdapter(None, armed=False, symbols=core.filters)
         self.trader = TestnetTrader(Engine(core), adapter,
                                     lambda cat, stream, raw, recv_ns=None, mono_ns=None: self.emit(cat, stream, raw, recv_ns, mono_ns, notify=False),
                                     store=self.store)

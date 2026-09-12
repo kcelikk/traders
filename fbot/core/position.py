@@ -10,6 +10,8 @@ from decimal import Decimal
 from enum import Enum
 
 from fbot.core.commands import CancelAlgo, PlaceAlgo, PlaceOrder
+from fbot.core.ids import algo_cid, exit_cid
+from fbot.core.rounding import floor_step, trigger_price
 
 MS = 1_000_000
 HUNDRED = Decimal(100)
@@ -87,19 +89,15 @@ class Position:
 
     @property
     def sl_id(self) -> str:
-        return f"{self.pos_id}-SL-v{self.sl_version}"
+        return algo_cid(self.pos_id, "SL", self.sl_version)
 
     @property
     def tp_id(self) -> str:
-        return f"{self.pos_id}-TP-v{self.tp_version}"
+        return algo_cid(self.pos_id, "TP", self.tp_version)
 
     @property
     def exit_side(self) -> str:
         return "SELL" if self.side == "long" else "BUY"
-
-
-def _floor_step(qty: Decimal, step: Decimal) -> Decimal:
-    return (qty // step) * step
 
 
 class PositionManager:
@@ -124,12 +122,15 @@ class PositionManager:
         pos.entry_price, pos.qty, pos.entry_time_ns, pos.entry_is_maker = price, qty, now_ns, is_maker
         pos.entry_qty = qty
         pos.entry_state = entry_state
-        pos.sl_price, pos.tp_price = sl, tp
+        tick = pos.filters.tick_size
+        pos.sl_price = trigger_price(sl, tick, pos.side, "SL")
+        pos.tp_price = trigger_price(tp, tick, pos.side, "TP")
         pos.sl_version = pos.tp_version = 1
         pos.protect_sent_ns = now_ns
         pos.state = PosState.PROTECTING
         pos.active_algos = {pos.sl_id, pos.tp_id}
-        return [self._algo(pos, "STOP_MARKET", sl, pos.sl_id), self._algo(pos, "TAKE_PROFIT_MARKET", tp, pos.tp_id)]
+        return [self._algo(pos, "STOP_MARKET", pos.sl_price, pos.sl_id),
+                self._algo(pos, "TAKE_PROFIT_MARKET", pos.tp_price, pos.tp_id)]
 
     def on_algo_ack(self, pos: Position, client_algo_id: str, now_ns: int) -> list:
         pos.acked.add(client_algo_id)
@@ -192,11 +193,11 @@ class PositionManager:
             return self._close(pos, "timeout")
         # R4 kısmi azaltma
         if self.cfg.tp1_pct is not None and not pos.tp1_done and net >= self.cfg.tp1_pct:
-            q = _floor_step(pos.qty * self.cfg.tp1_frac, pos.filters.step_size)
+            q = floor_step(pos.qty * self.cfg.tp1_frac, pos.filters.step_size)
             if q >= pos.filters.min_qty and q * mark >= pos.filters.min_notional:
                 pos.tp1_done = True
                 pos.exit_seq += 1
-                cmds.append(PlaceOrder(pos.symbol, pos.exit_side, "MARKET", q, None, True, f"{pos.pos_id}-TP1-v{pos.exit_seq}", None))
+                cmds.append(PlaceOrder(pos.symbol, pos.exit_side, "MARKET", q, None, True, exit_cid(pos.pos_id, "TP1", pos.exit_seq), None))
         # R3 kâr kilidi / trail (yalnızca lehte, aralık kısıtlı)
         if self.cfg.lock_trigger_pct is not None and net >= self.cfg.lock_trigger_pct:
             desired = None
@@ -212,7 +213,7 @@ class PositionManager:
             favorable = desired is not None and ((pos.side == "long" and desired > pos.sl_price) or (pos.side == "short" and desired < pos.sl_price))
             interval_ok = pos.last_replace_ns is None or now_ns - pos.last_replace_ns >= self.cfg.min_replace_interval_ms * MS
             if favorable and interval_ok:
-                desired = self._round_tick(desired, pos.filters.tick_size, pos.side)
+                desired = trigger_price(desired, pos.filters.tick_size, pos.side, "SL")
                 old_id = pos.sl_id
                 pos.sl_version += 1
                 pos.sl_price = desired
@@ -229,7 +230,7 @@ class PositionManager:
 
     def _exit_order(self, pos: Position, tag: str) -> PlaceOrder:
         pos.exit_seq += 1
-        return PlaceOrder(pos.symbol, pos.exit_side, "MARKET", pos.qty, None, True, f"{pos.pos_id}-{tag}-v{pos.exit_seq}", None)
+        return PlaceOrder(pos.symbol, pos.exit_side, "MARKET", pos.qty, None, True, exit_cid(pos.pos_id, tag, pos.exit_seq), None)
 
     def _close(self, pos: Position, reason: str) -> list:
         pos.state = PosState.CLOSING
@@ -241,9 +242,3 @@ class PositionManager:
         pos.active_algos = set()
         return [CancelAlgo(pos.symbol, i) for i in ids]
 
-    @staticmethod
-    def _round_tick(price: Decimal, tick: Decimal, side: str) -> Decimal:
-        # long SL aşağı, short SL yukarı yuvarlanır (koruma daha muhafazakâr)
-        q = price / tick
-        n = q.to_integral_value(rounding="ROUND_FLOOR" if side == "long" else "ROUND_CEILING")
-        return n * tick

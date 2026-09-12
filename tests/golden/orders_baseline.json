@@ -1,0 +1,1308 @@
+{
+ "scenario": "tests/scenario.py::live_run(discovered_cells())",
+ "hash": "9a3b062396ffc46196f3b27b8e31a61ae2818c981cadace71070de9b193bebe5",
+ "commands": 140,
+ "by_kind": {
+  "CancelAlgo": 36,
+  "PlaceAlgo": 55,
+  "PlaceOrder": 19,
+  "StateChanged": 30
+ },
+ "rows": [
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 599999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=0.00"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 719999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=1.00"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S1",
+   "bar_end_ms": 899999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=1.00 pct_rv_long=0.40 pct_rv_short=0.40 pct_vol_ratio=None",
+   "counter": "pct_spread=0.40 imb_short=1.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.816",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Ledd0ff2338",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "97.51",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Ledd0ff2338-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "99.00",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Ledd0ff2338-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "98.15",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Ledd0ff2338-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Ledd0ff2338-SL-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S1",
+   "to_state": "S0",
+   "bar_end_ms": 959999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.80 pct_rv_long=0.20 pct_rv_short=0.20 pct_vol_ratio=None",
+   "counter": "pct_spread=0.20 imb_short=0.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Ledd0ff2338-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 1019999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.60 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.792",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L5ef849f229",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "100.50",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L5ef849f229-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "102.03",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L5ef849f229-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "101.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L5ef849f229-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L5ef849f229-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L5ef849f229-SL-v2"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.769",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Lc910019117",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "103.48",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc910019117-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "105.06",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc910019117-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "104.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc910019117-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lc910019117-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lc910019117-TP-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 1379999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=0.00"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S1",
+   "bar_end_ms": 1559999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=1.00 pct_rv_long=0.40 pct_rv_short=0.40 pct_vol_ratio=None",
+   "counter": "pct_spread=0.40 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.816",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L074ab56c0a",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "97.51",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L074ab56c0a-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "99.00",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L074ab56c0a-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "98.15",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L074ab56c0a-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L074ab56c0a-SL-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S1",
+   "to_state": "S0",
+   "bar_end_ms": 1619999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.80 pct_rv_long=0.20 pct_rv_short=0.20 pct_vol_ratio=None",
+   "counter": "pct_spread=0.20 imb_short=1.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L074ab56c0a-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 1679999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.60 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.784",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Lc6c15a7050",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "101.49",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc6c15a7050-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "103.04",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc6c15a7050-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "102.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc6c15a7050-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lc6c15a7050-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lc6c15a7050-SL-v2"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.761",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0La09b2dc797",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "104.48",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0La09b2dc797-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "106.07",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0La09b2dc797-TP-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 2039999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=0.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0La09b2dc797-TP-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S1",
+   "bar_end_ms": 2219999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=1.00 pct_rv_long=0.40 pct_rv_short=0.40 pct_vol_ratio=None",
+   "counter": "pct_spread=0.40 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.816",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L6dc5ddc101",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "97.51",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L6dc5ddc101-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "99.00",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L6dc5ddc101-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "98.15",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L6dc5ddc101-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L6dc5ddc101-SL-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S1",
+   "to_state": "S0",
+   "bar_end_ms": 2279999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.80 pct_rv_long=0.20 pct_rv_short=0.20 pct_vol_ratio=None",
+   "counter": "pct_spread=0.20 imb_short=0.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L6dc5ddc101-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 2339999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.60 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=1.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.776",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L736d664fea",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "102.49",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L736d664fea-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "104.05",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L736d664fea-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "103.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L736d664fea-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L736d664fea-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L736d664fea-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 2699999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=1.00"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S1",
+   "bar_end_ms": 2879999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=1.00 pct_rv_long=0.40 pct_rv_short=0.40 pct_vol_ratio=None",
+   "counter": "pct_spread=0.40 imb_short=1.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.816",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L7f61238fe8",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "97.51",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L7f61238fe8-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "99.00",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L7f61238fe8-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "98.15",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L7f61238fe8-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L7f61238fe8-SL-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S1",
+   "to_state": "S0",
+   "bar_end_ms": 2939999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.80 pct_rv_long=0.20 pct_rv_short=0.20 pct_vol_ratio=None",
+   "counter": "pct_spread=0.20 imb_short=0.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L7f61238fe8-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 2999999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.60 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.792",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Lee192f4130",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "100.50",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lee192f4130-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "102.03",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lee192f4130-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "101.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lee192f4130-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lee192f4130-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lee192f4130-SL-v2"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.769",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0La099a2c0ff",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "103.48",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0La099a2c0ff-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "105.06",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0La099a2c0ff-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "104.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0La099a2c0ff-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0La099a2c0ff-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0La099a2c0ff-TP-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 3359999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=0.00"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S1",
+   "bar_end_ms": 3539999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=1.00 pct_rv_long=0.40 pct_rv_short=0.40 pct_vol_ratio=None",
+   "counter": "pct_spread=0.40 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.816",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L6af7a25c6e",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "97.51",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L6af7a25c6e-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "99.00",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L6af7a25c6e-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "98.15",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L6af7a25c6e-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L6af7a25c6e-SL-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S1",
+   "to_state": "S0",
+   "bar_end_ms": 3599999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.80 pct_rv_long=0.20 pct_rv_short=0.20 pct_vol_ratio=None",
+   "counter": "pct_spread=0.20 imb_short=1.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L6af7a25c6e-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 3659999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.60 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.784",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Lda9cd2f7d7",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "101.49",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lda9cd2f7d7-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "103.04",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lda9cd2f7d7-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "102.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lda9cd2f7d7-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lda9cd2f7d7-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lda9cd2f7d7-SL-v2"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.761",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L7870905596",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "104.48",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L7870905596-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "106.07",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L7870905596-TP-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 4019999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=0.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L7870905596-TP-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S1",
+   "bar_end_ms": 4199999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=1.00 pct_rv_long=0.40 pct_rv_short=0.40 pct_vol_ratio=None",
+   "counter": "pct_spread=0.40 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.816",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Lacfcb2d38d",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "97.51",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lacfcb2d38d-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "99.00",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lacfcb2d38d-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "98.15",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lacfcb2d38d-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lacfcb2d38d-SL-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S1",
+   "to_state": "S0",
+   "bar_end_ms": 4259999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.80 pct_rv_long=0.20 pct_rv_short=0.20 pct_vol_ratio=None",
+   "counter": "pct_spread=0.20 imb_short=0.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lacfcb2d38d-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 4319999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.60 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=1.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.776",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L70a6784e8a",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "102.49",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L70a6784e8a-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "104.05",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L70a6784e8a-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "103.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L70a6784e8a-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L70a6784e8a-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L70a6784e8a-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 4679999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=1.00"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S1",
+   "bar_end_ms": 4859999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=1.00 pct_rv_long=0.40 pct_rv_short=0.40 pct_vol_ratio=None",
+   "counter": "pct_spread=0.40 imb_short=1.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.816",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0L037468ae3d",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "97.51",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L037468ae3d-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "99.00",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L037468ae3d-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "98.15",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0L037468ae3d-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L037468ae3d-SL-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S1",
+   "to_state": "S0",
+   "bar_end_ms": 4919999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.80 pct_rv_long=0.20 pct_rv_short=0.20 pct_vol_ratio=None",
+   "counter": "pct_spread=0.20 imb_short=0.00"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0L037468ae3d-SL-v2"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S0",
+   "to_state": "S3",
+   "bar_end_ms": 4979999,
+   "confidence": 0.2,
+   "evidence": "pct_ret_long=0.60 pct_rv_long=0.00 pct_rv_short=0.00 pct_vol_ratio=None",
+   "counter": "pct_spread=0.00 imb_short=0.00"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.792",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Lc6afb6bfa6",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "100.50",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc6afb6bfa6-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "102.03",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc6afb6bfa6-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "101.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lc6afb6bfa6-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lc6afb6bfa6-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lc6afb6bfa6-SL-v2"
+  },
+  {
+   "cmd": "PlaceOrder",
+   "symbol": "XUSDT",
+   "side": "BUY",
+   "type": "MARKET",
+   "qty": "0.769",
+   "price": null,
+   "reduce_only": false,
+   "client_id": "f0Lf7ef980216",
+   "time_in_force": null
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "103.48",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lf7ef980216-SL-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "TAKE_PROFIT_MARKET",
+   "trigger_price": "105.06",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lf7ef980216-TP-v1"
+  },
+  {
+   "cmd": "PlaceAlgo",
+   "symbol": "XUSDT",
+   "side": "SELL",
+   "type": "STOP_MARKET",
+   "trigger_price": "104.16",
+   "close_position": true,
+   "working_type": "MARK_PRICE",
+   "price_protect": true,
+   "client_algo_id": "f0Lf7ef980216-SL-v2"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lf7ef980216-SL-v1"
+  },
+  {
+   "cmd": "CancelAlgo",
+   "symbol": "XUSDT",
+   "client_algo_id": "f0Lf7ef980216-TP-v1"
+  },
+  {
+   "cmd": "StateChanged",
+   "symbol": "XUSDT",
+   "from_state": "S3",
+   "to_state": "S0",
+   "bar_end_ms": 5339999,
+   "confidence": null,
+   "evidence": "pct_ret_long=0.00 pct_rv_long=1.00 pct_rv_short=1.00 pct_vol_ratio=None",
+   "counter": "pct_spread=1.00 imb_short=0.00"
+  }
+ ],
+ "not": "Emir düzeyi davranış baseline'ı. Değişirse davranış değişmiştir; planlı re-baseline dışında değişmesi bugdur. Güncelleme bir ADR ve komut düzeyi diff tablosu gerektirir."
+}

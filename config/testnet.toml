@@ -34,6 +34,7 @@ backoff_max_s = 30.0
 
 [core]
 bar_ms = 60000
+pending_entry_ttl_ms = 60000   # giriş emrinden dolum/ret gelmezse sembol rezervasyonu bu sürede bırakılır (Gate 2.0)
 
 [state_engine]
 W = 240
@@ -43,6 +44,7 @@ p_lo = 0.2
 p_hi = 0.8
 
 [decision]
+strategy_tag = "t0"           # clientOrderId öneki (fbot/core/ids.py); ortamlar birbirinin emrini sahiplenmesin
 notional_usdt = "80"
 max_state_age_bars = 3
 spread_mult = "2"

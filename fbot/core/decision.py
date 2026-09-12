@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from fbot.core.ids import entry_cid
 from fbot.research.states import directions
 
 
@@ -32,6 +33,7 @@ class DecisionConfig:
     sl_pct: dict
     tp_pct: dict
     report_hash: str | None = None
+    strategy_tag: str = "f0"      # kimlik grameri öneki; Gate 5'te strateji kaydından gelecek
 
 
 @dataclass(frozen=True)
@@ -90,7 +92,7 @@ def decide_explain(v: dict, cfg: DecisionConfig) -> tuple[EntryIntent | None, st
     if sl is None or tp is None:
         return None, "sl_tp_yok"   # ölçülmemiş eşikle pozisyon açılmaz
     price = v["best_ask"] if cell.dir == "long" else v["best_bid"]
-    cid = f"e{sym}{v['bar_end_ms']}{'L' if cell.dir == 'long' else 'S'}"
+    cid = entry_cid(cfg.strategy_tag, sym, v["bar_end_ms"], cell.dir)
     return EntryIntent(symbol=sym, side=cell.dir, notional=cfg.notional_usdt, price=price, horizon_min=cell.h,
-                       sl_pct=sl, tp_pct=tp, entry_state=state, cell=cell.key(), client_order_id=cid[:36],
+                       sl_pct=sl, tp_pct=tp, entry_state=state, cell=cell.key(), client_order_id=cid,
                        explain=" · ".join((d1, d2, d3)), report_hash=cfg.report_hash), None

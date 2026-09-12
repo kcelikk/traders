@@ -5,9 +5,9 @@ Beklenen retler (yarış durumu sonuçları) olay olarak döner, istisna fırlat
 """
 from __future__ import annotations
 
-from decimal import Decimal
 
 from fbot.core.commands import CancelAlgo, CancelOrder, PlaceAlgo, PlaceOrder
+from fbot.core.rounding import fmt_price, fmt_qty
 from fbot.gateway.testnet import TestnetClient, TestnetError
 
 
@@ -15,14 +15,14 @@ class TestnetDisarmed(RuntimeError):
     pass
 
 
-def _fmt(v: Decimal, precision: int | None) -> str:
-    if precision is None:
-        return format(v.normalize(), "f")
-    q = Decimal(1).scaleb(-precision)
-    return format(v.quantize(q).normalize(), "f")
+class MissingFilters(RuntimeError):
+    """Sembolün borsa filtresi yoksa emir gönderilmez (fail-closed). Precision'a düşmek tick'e
+    oturmayan fiyat üretir (Gate 0 §4: BTCUSDT tickSize 0,10 · pricePrecision 2)."""
 
 
 class TestnetAdapter:
+    """`symbols`: sembol → `Filters` (step_size / tick_size). `pricePrecision` **kullanılmaz**."""
+
     def __init__(self, client: TestnetClient, armed: bool, symbols: dict | None = None):
         self.client = client
         self.armed = armed
@@ -34,8 +34,11 @@ class TestnetAdapter:
         self.client = client
         self.armed = bool(armed and client is not None)
 
-    def _prec(self, symbol: str, key: str) -> int | None:
-        return (self.symbols.get(symbol) or {}).get(key)
+    def _filters(self, symbol: str):
+        f = self.symbols.get(symbol)
+        if f is None:
+            raise MissingFilters(f"{symbol} için borsa filtresi yok: emir gönderilmez (fail-closed)")
+        return f
 
     def submit(self, cmd, now_ms: int) -> dict:
         if not self.armed:
@@ -53,13 +56,14 @@ class TestnetAdapter:
         raise TypeError(f"desteklenmeyen komut: {type(cmd).__name__}")
 
     def _order(self, c: PlaceOrder, now_ms: int) -> dict:
+        f = self._filters(c.symbol)
         p = {"symbol": c.symbol, "side": c.side, "type": c.type,
-             "quantity": _fmt(c.qty, self._prec(c.symbol, "quantityPrecision")),
+             "quantity": fmt_qty(c.qty, f.step_size),
              "newClientOrderId": c.client_id}
         if c.reduce_only:
             p["reduceOnly"] = "true"
         if c.price is not None:
-            p["price"] = _fmt(c.price, self._prec(c.symbol, "pricePrecision"))
+            p["price"] = fmt_price(c.price, f.tick_size)
         if c.time_in_force:
             p["timeInForce"] = c.time_in_force
         try:
@@ -72,7 +76,7 @@ class TestnetAdapter:
     def _algo(self, c: PlaceAlgo, now_ms: int) -> dict:
         # closePosition=true ile quantity ve reduceOnly gönderilemez (hata -4137/-4138)
         p = {"symbol": c.symbol, "side": c.side, "type": c.type,
-             "triggerPrice": _fmt(c.trigger_price, self._prec(c.symbol, "pricePrecision")),
+             "triggerPrice": fmt_price(c.trigger_price, self._filters(c.symbol).tick_size),
              "closePosition": "true" if c.close_position else "false",
              "workingType": c.working_type, "priceProtect": "true" if c.price_protect else "false",
              "clientAlgoId": c.client_algo_id}

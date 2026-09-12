@@ -22,6 +22,7 @@ class CoreConfig:
     position: PositionConfig | None = None
     filters: dict[str, Filters] = field(default_factory=dict)
     tick_ms: int = 1000
+    pending_entry_ttl_ms: int = 60_000   # giriş emri dolum/ret bildirmezse sembol bu süre sonunda serbest kalır
     state_engine: StateEngineConfig | None = None
     beta_ref: str = "BTCUSDT"
     beta_window: int = 240
@@ -49,7 +50,7 @@ class CoreState:
     verdicts_total: int = 0
     no_intent: dict = field(default_factory=dict)
     last_verdicts: list = field(default_factory=list)
-    pending_entries: set = field(default_factory=set)
+    pending_entries: dict = field(default_factory=dict)   # sembol → son geçerlilik (ns). TTL ile süpürülür
     kill_switch: bool = False
     reconciled: bool = True
     events: int = 0
@@ -78,6 +79,7 @@ class Engine:
                 if cat in self.cfg.staleness_ms:
                     state.last_recv_ns[cat] = ev.recv_ns
             elif ev.stream == "tick":
+                self._sweep_pending(state, now_ns)
                 cmds += self._staleness(state, now_ns)
                 self._apply_freeze(state)
                 cmds += self._tick_positions(state, now_ns)
@@ -94,21 +96,29 @@ class Engine:
                 d = None
             state.last_data = d
             if d is not None:
-                cmds += self._route(state, d)
+                cmds += self._route(state, d, now_ns)
         cmds += self._staleness(state, now_ns)
         self._apply_freeze(state)
         return state, cmds
 
     # ---------------- pozisyonlar (Faz 4)
     def _exec(self, state: CoreState, ev: RawEvent, now_ns: int) -> list:
-        if self.pm is None:
-            return []
         try:
             d = json.loads(ev.raw.decode())
         except ValueError:
             state.parse_errors += 1
             return []
         kind = ev.stream
+        if kind in ("order_rejected", "order_unknown"):
+            # Giriş emri borsaya ulaşmadı ya da sonucu bilinmiyor: sembolü kilitli tutmak sızıntıdır.
+            # `unknown` durumunda güvenlik mutabakattadır (K2 kilidi), rezervasyonun kendisi değil.
+            # Pozisyon yönetimi kapalı olsa da (`pm is None`) rezervasyon bırakılır.
+            sym = d.get("symbol")
+            if sym:
+                state.pending_entries.pop(sym, None)
+            return []
+        if self.pm is None:
+            return []
         pos = state.positions.get(d.get("pos_id"))
         if kind == "entry_fill":
             d = self._entry_from_meta(state, d)
@@ -118,7 +128,7 @@ class Engine:
                 return []   # filtre bilinmeyen sembolde pozisyon yönetilemez (fail-closed)
             pos = Position.new(d["pos_id"], sym, d["side"], f)
             state.positions[pos.pos_id] = pos
-            state.pending_entries.discard(sym)
+            state.pending_entries.pop(sym, None)
             return self.pm.on_entry_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), Decimal(d["sl"]), Decimal(d["tp"]), now_ns,
                                          is_maker=bool(d.get("is_maker", False)), entry_state=d.get("entry_state"))
         if pos is None:
@@ -150,6 +160,13 @@ class Engine:
             d["tp"] = str(px * (1 + tp_pct) if meta["side"] == "long" else px * (1 - tp_pct))
         return d
 
+    @staticmethod
+    def _sweep_pending(state: CoreState, now_ns: int) -> None:
+        """Süresi dolan giriş rezervasyonlarını bırakır. Tek silme noktasına güvenmek sızıntı üretiyordu:
+        emir reddedilir, `order_rejected` gelmez ya da dolum hiç gelmezse sembol sonsuza kadar kilitli kalıyordu."""
+        for sym in [s for s, deadline in state.pending_entries.items() if deadline <= now_ns]:
+            del state.pending_entries[sym]
+
     def _apply_freeze(self, state: CoreState) -> None:
         """Herhangi bir kategori bayatsa açık pozisyonlar FROZEN; hepsi tazeyse geri döner."""
         if self.pm is None:
@@ -175,7 +192,7 @@ class Engine:
             out += self.pm.on_tick(pos, now_ns, m.mark_price, m.best_bid, m.best_ask, state.market_state_label.get(pos.symbol))
         return out
 
-    def _route(self, state: CoreState, d: dict) -> list:
+    def _route(self, state: CoreState, d: dict, now_ns: int) -> list:
         e = d.get("e")
         sym = d.get("s")
         if not sym:
@@ -189,7 +206,7 @@ class Engine:
                 extra = []
                 for c in out:
                     if isinstance(c, BarClosed):
-                        extra += self._on_bar_state(state, c, m)
+                        extra += self._on_bar_state(state, c, m, now_ns)
                 out = out + extra
             return out
         if e == "bookTicker":
@@ -205,7 +222,7 @@ class Engine:
             return out
         return []  # depthUpdate, forceOrder: Faz 2'de görünüme dahil değil
 
-    def _on_bar_state(self, state: CoreState, bar: BarClosed, m: SymbolMarket) -> list:
+    def _on_bar_state(self, state: CoreState, bar: BarClosed, m: SymbolMarket, now_ns: int) -> list:
         """Bar kapanışında durum etiketi (Faz 6). Spread bar kapanışındaki bookTicker'dan."""
         se = state.state_engines.get(bar.symbol)
         if se is None:
@@ -221,11 +238,11 @@ class Engine:
         state.beta.on_bar(bar.symbol, bar.start_ms, float(bar.close))
         label, feats, cmds = se.on_bar_cmds(row)
         state.market_state_label[bar.symbol] = label
-        cmds += self._decide(state, bar, m, se, label, feats)
+        cmds += self._decide(state, bar, m, se, label, feats, now_ns)
         return cmds
 
     # ---------------- giriş zinciri (Faz 6): karar → risk → emir
-    def _decide(self, state: CoreState, bar: BarClosed, m: SymbolMarket, se: SymbolStateEngine, label: str, feats: dict) -> list:
+    def _decide(self, state: CoreState, bar: BarClosed, m: SymbolMarket, se: SymbolStateEngine, label: str, feats: dict, now_ns: int) -> list:
         if self.cfg.decision is None or self.cfg.risk is None:
             return []
         sym = bar.symbol
@@ -257,7 +274,7 @@ class Engine:
             state.intents_rejected += 1
             return []
         state.intents_made += 1
-        state.pending_entries.add(sym)
+        state.pending_entries[sym] = now_ns + self.cfg.pending_entry_ttl_ms * 1_000_000
         state.entry_meta[intent.client_order_id] = {"symbol": sym, "side": intent.side, "sl_pct": str(intent.sl_pct),
                                                     "tp_pct": str(intent.tp_pct), "state": label, "cell": intent.cell, "explain": intent.explain}
         return [PlaceOrder(sym, "BUY" if intent.side == "long" else "SELL", "MARKET", verdict.qty, None, False, intent.client_order_id, None)]

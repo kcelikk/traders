@@ -66,7 +66,8 @@ def test_allowed_cell_produces_entry_order_then_protection():
     entries = [c for c in cmds if isinstance(c, PlaceOrder) and not c.reduce_only]
     assert entries, "giriş emri üretilmedi"
     e = entries[0]
-    assert e.symbol == "XUSDT" and e.client_id.startswith("eXUSDT") and e.qty > 0
+    # Gate 2.0 grameri: {tag}{L|S}{hash}; sembol adı kimliğe girmez, uzunluk sabittir
+    assert e.symbol == "XUSDT" and e.client_id.startswith("f0L") and len(e.client_id) <= 36 and e.qty > 0
     assert st.intents_made >= 1
     # emir dolduğunda koruma emirleri gelir
     eng, st2 = Engine(cfg(cells)), CoreState()
@@ -107,15 +108,17 @@ def test_entry_fill_uses_intent_sl_tp_and_clears_pending():
         entry = next((x for x in cmds if isinstance(x, PlaceOrder) and not x.reduce_only), None)
         if entry:
             break
-    assert entry and st.pending_entries == {"XUSDT"}
+    # Gate 2.0: rezervasyon artık sembol → son geçerlilik anı (TTL); set değil
+    assert entry and set(st.pending_entries) == {"XUSDT"}
     fill = json.dumps({"client_id": entry.client_id, "symbol": "XUSDT", "price": "100", "qty": str(entry.qty)}).encode()
     st, cmds = eng.step(st, RawEvent(10**6, t + 10**9, 1, "exec", "entry_fill", fill), t + 10**9)
     algos = [x for x in cmds if isinstance(x, PlaceAlgo)]
     assert len(algos) == 2
     sl = next(a for a in algos if a.type == "STOP_MARKET")
-    assert sl.trigger_price == Decimal("100") * (1 - Decimal("0.5") / 100)
+    # Gate 2.0: tetik tick'e oturur (filtre tick_size=0.01), long SL aşağı yuvarlanır
+    assert sl.trigger_price == Decimal("99.50") and sl.trigger_price % Decimal("0.01") == 0
     assert sl.close_position and sl.working_type == "MARK_PRICE"
-    assert st.pending_entries == set()
+    assert st.pending_entries == {}
     pos = list(st.positions.values())[0]
     assert pos.entry_state in labels and pos.symbol == "XUSDT"
 

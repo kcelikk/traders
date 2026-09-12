@@ -7,7 +7,8 @@ from decimal import Decimal as D
 import pytest
 
 from fbot.core.commands import CancelAlgo, PlaceAlgo, PlaceOrder
-from fbot.execution.testnet_adapter import TestnetAdapter, TestnetDisarmed
+from fbot.core.position import Filters
+from fbot.execution.testnet_adapter import MissingFilters, TestnetAdapter, TestnetDisarmed
 from fbot.gateway.signing import Credentials
 from fbot.gateway.testnet import TestnetClient, TestnetError
 from tests.fake import FakeHTTP
@@ -15,7 +16,10 @@ from tests.fake import FakeHTTP
 
 def adapter(responses, armed=True):
     c = TestnetClient(Credentials(api_key="K", api_secret="S"), http=FakeHTTP(responses))
-    return TestnetAdapter(c, armed=armed, symbols={"BTCUSDT": {"pricePrecision": 2, "quantityPrecision": 3}})
+    # Gate 2.0: kaynak borsa filtresi; BTCUSDT'de tickSize 0,10 · pricePrecision 2 uyuşmuyor
+    return TestnetAdapter(c, armed=armed,
+                          symbols={"BTCUSDT": Filters(step_size=D("0.001"), min_qty=D("0.001"),
+                                                      min_notional=D("5"), tick_size=D("0.10"))})
 
 
 def test_disarmed_adapter_refuses_every_command():
@@ -94,3 +98,34 @@ def test_rearm_swaps_client_and_disarm_blocks_orders():
     assert a.armed is False and a.client is None
     with pytest.raises(TestnetDisarmed):
         a.submit(PlaceOrder("BTCUSDT", "BUY", "MARKET", D("1"), None, False, "x", None), 0)
+
+
+def test_trigger_price_is_formatted_from_the_tick_not_the_precision():
+    """Gate 0 §4: BTCUSDT testnet'te tickSize 0,10 · pricePrecision 2. Precision'a biçimlendirmek
+    tick'e oturmayan tetik üretiyordu."""
+    a = adapter([(200, {}, b'{"algoId":9,"algoStatus":"NEW"}')])
+    a.submit(PlaceAlgo("BTCUSDT", "SELL", "STOP_MARKET", D("74960.70"), True, "MARK_PRICE", True, "p1-SL-v1"), now_ms=0)
+    _, _, q, _ = a.client.http.calls[0]
+    assert "triggerPrice=74960.7" in q
+
+
+def test_trigger_price_off_the_tick_is_refused_before_it_reaches_the_exchange():
+    """Yuvarlama çekirdeğin işi; adapter sessizce düzeltmez, hata verir."""
+    a = adapter([(200, {}, b'{"algoId":9}')])
+    with pytest.raises(ValueError, match="tick"):
+        a.submit(PlaceAlgo("BTCUSDT", "SELL", "STOP_MARKET", D("74960.75"), True, "MARK_PRICE", True, "p1-SL-v1"), now_ms=0)
+    assert a.client.http.calls == []
+
+
+def test_quantity_is_floored_to_the_step():
+    a = adapter([(200, {}, b'{"orderId":1,"status":"NEW"}')])
+    a.submit(PlaceOrder("BTCUSDT", "BUY", "MARKET", D("0.0019"), None, False, "e1", None), now_ms=0)
+    _, _, q, _ = a.client.http.calls[0]
+    assert "quantity=0.001" in q
+
+
+def test_unknown_symbol_is_fail_closed():
+    a = adapter([])
+    with pytest.raises(MissingFilters):
+        a.submit(PlaceOrder("ETHUSDT", "BUY", "MARKET", D("1"), None, False, "e1", None), now_ms=0)
+    assert a.client.http.calls == []

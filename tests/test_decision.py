@@ -1,6 +1,7 @@
 """Faz 6 Decision Engine: D1 ∧ D2 ∧ D3, açıklanabilir intent, ağırlıklı skorlama yok."""
 from decimal import Decimal
 
+from fbot.core.ids import entry_cid
 from fbot.core.decision import Cell, DecisionConfig, decide
 from fbot.core.state_engine import StateEngineConfig, SymbolStateEngine
 
@@ -23,7 +24,9 @@ def test_approved_intent_is_explainable():
     assert i is not None
     assert i.symbol == "BTCUSDT" and i.side == "long" and i.horizon_min == 15
     assert i.notional == Decimal("80") and i.sl_pct == Decimal("0.5") and i.tp_pct == Decimal("1.0")
-    assert i.client_order_id == "eBTCUSDT999000L" and len(i.client_order_id) <= 36
+    # Gate 2.0: kimlik grameri sabit uzunlukta (fbot/core/ids.py); sembol/zaman uzunluğu taşırmaz
+    assert i.client_order_id == entry_cid(CFG.strategy_tag, "BTCUSDT", 999_000, "long")
+    assert i.client_order_id.startswith(CFG.strategy_tag + "L") and len(i.client_order_id) <= 36
     assert i.cell == "S1/long/15" and i.report_hash == "a693aa07"
     assert "D1" in i.explain and "D2" in i.explain and "D3" in i.explain
 

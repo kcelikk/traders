@@ -69,7 +69,8 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
     dcfg = DecisionConfig(allowed_cells=cells, notional_usdt=Decimal(str(d["notional_usdt"])),
                           max_state_age_bars=d.get("max_state_age_bars"), spread_mult=Decimal(str(d["spread_mult"])),
                           research_spread_bps={k: Decimal(str(v)) for k, v in (d.get("research_spread_bps") or {}).items()},
-                          funding_guard_ms=d.get("funding_guard_ms"), sl_pct=sl, tp_pct=tp, report_hash=d.get("report_hash"))
+                          funding_guard_ms=d.get("funding_guard_ms"), sl_pct=sl, tp_pct=tp, report_hash=d.get("report_hash"),
+                          strategy_tag=str(d.get("strategy_tag", "f0")))
     pcfg = PositionConfig(t_protect_ms=int(pos["t_protect_ms"]), t_backup_ms=int(pos["t_backup_ms"]),
                           working_type=pos["working_type"], price_protect=bool(pos["price_protect"]),
                           min_replace_interval_ms=int(pos["min_replace_interval_ms"]),
@@ -87,7 +88,8 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                       skew_max_ms=risk.get("skew_max_ms"), warmup_bars=int(risk.get("warmup_bars", 480)))
     core = CoreConfig(bar_ms=int(t["core"]["bar_ms"]), staleness_ms={k: int(v * 1000) for k, v in rec.staleness_s.items()},
                       position=pcfg, filters={}, tick_ms=rec.tick_ms, state_engine=se, decision=dcfg, risk=rcfg,
-                      account=dict(t["account"]))
+                      account=dict(t["account"]),
+                      pending_entry_ttl_ms=int(t["core"].get("pending_entry_ttl_ms", 60_000)))
     cd = t.get("cost_drift")
     drift = CostDriftConfig(window_ms=int(cd["window_ms"]), capital_usdt=Decimal(str(cd["capital_usdt"])),
                             commission_to_gross_max=_dec(cd.get("commission_to_gross_max")),
