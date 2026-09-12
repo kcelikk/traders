@@ -12,6 +12,7 @@ import json
 from decimal import Decimal
 
 from fbot.core.commands import CancelAlgo, CancelOrder, PlaceAlgo, PlaceOrder, StateChanged, canonical
+from fbot.core.telemetry import Telemetry
 from fbot.core.cost_drift import CostDriftMonitor
 from fbot.core.engine import CoreState
 from fbot.core.position import PosState as PosStateEnum
@@ -53,6 +54,7 @@ class PaperTrader:
         self.books: dict[str, LocalOrderBook] = {}   # sembol → L2 defter (dolum simülasyonu, ADR 0013)
         self.book_levels = 20
         self._pos_sig: dict = {}            # pos_id → son yazılan durum imzası (kirli-bayrak)
+        self.telemetry = Telemetry()        # sabit bellekli histogramlar (Gate 4d)
 
     # ---------------- akış
     def on_event(self, ev: RawEvent, now_ns: int) -> None:

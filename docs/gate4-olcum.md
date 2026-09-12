@@ -61,6 +61,33 @@ havuz    : 158 istek · 1 bağlantı · 0 timeout · 0 retry
 Shadow niyet sayısı 0, çünkü açık pozisyon yok (`allowed_cells` boş). Reaktör açık pozisyon
 olmadan O(1) dönüyor.
 
+## 5. Telemetri (4d)
+
+`fbot/core/telemetry.py`: sabit kovalı histogram (25 kova, 1 µs → 16,7 s). Örnek biriktirmez,
+p99 için sıralama yapmaz; bellek örnek sayısıyla **büyümez** (test ile kilitlendi: 100.000 örnek
+sonrası kova sayısı aynı).
+
+Persentiller kova sınırından okunur, yani **yaklaşıktır** ve rapor bunu `approx: true` ile söyler.
+100 örnekte tek bir aykırı değer p99'a girmez, yalnız `max`'ta görünür — test bunu da sabitliyor.
+
+Bağlanan ölçümler: gönderim RTT'si (emir sınıfı başına) ve user data teslim gecikmesi (olay tipi
+başına, borsa damgası → alım damgası). Saat kayması ya da bozuk damgadan gelen absürt değerler
+histograma yazılmaz.
+
+`Engine.step` toplamı telemetriden sonra: p50 7,12 µs · p99 17,79 µs — baseline (6,9 / 15,1)
+ile aynı aralıkta, ölçülebilir bir regresyon yok.
+
+## 6. Re-baseline raporu (4e)
+
+`scripts/rebaseline_report.py` + `make rebaseline`. Gerçek kayıt üzerinde iki kod sürümünün komut
+düzeyi farkını çıkarır ve farkı **karar tipine göre** ayırır:
+
+- **Giriş kararı farkı sıfır olmalıdır**; sıfır değilse betik hata koduyla çıkar (bug, re-baseline değil).
+- Çıkış farkları beklenir: eklenen/silinen/değişen komut sayısı, alan bazlı sayaç, ilk 20 fark,
+  etkilenen semboller ve shadow komut sayısı ayrı ayrı raporlanır.
+
+`rec-mini` üzerinde aynı sürümle çalıştırıldığında fark sıfır çıkıyor (araç kendi kendini doğruladı).
+
 ## BU ÖLÇÜMDE YAPILMAYANLAR
 
 - **Reactor'ün shadow gözlemi yapılmadı.** Plan bir hafta gözlem ve "reactor'ün üreteceği çıkış ile
@@ -68,7 +95,10 @@ olmadan O(1) dönüyor.
 - **Devre kesici hiç tetiklenmedi.** Kapanan işlem yok; yanlış-pozitif oranı ölçülemedi. `alarm`
   modunda kalması bu yüzden doğru.
 - **`RunawayDetector` ve 418 yolu canlıda tetiklenmedi**; birim testleriyle doğrulandı.
-- **Telemetri (4d) ve genişletilmiş re-baseline raporu (4e) yazılmadı.**
+- **Telemetri canlı veri toplamadı**: emir gönderilmediği için `send_rtt` histogramı boş, user data
+  gecikmesi yalnız Gate 3'teki iki çerçeveden biliniyor (140 ms).
+- **Re-baseline raporu iki farklı kod sürümü arasında çalıştırılmadı**; bugünkü sürümle kendi
+  kendine doğrulandı. Gerçek kullanımı bir sonraki davranış değişikliğinde olacak.
 - `active` reactor modu **yok**: yapılandırmada seçilirse yükleme hata veriyor.
 - Günlük zarar eşiği (40 USDT) **ölçülmüş bir değer değil**, 80 USDT × 5 pozisyon sınırının yarısı
   olarak seçildi; paper/testnet verisi biriktikçe güncellenecek.

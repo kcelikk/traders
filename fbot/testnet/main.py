@@ -94,6 +94,7 @@ class TestnetTrader(PaperTrader):
         """Kuyruk işçisinden gelen sonuç; döngü thread'inde çalışır ve tek sıralama noktasına yazar."""
         self.rtt_ns.append(rtt_ns)
         del self.rtt_ns[10_000:]
+        self.telemetry.observe(f"send_rtt.{klass}", rtt_ns)
         now_ns = queued_ns
         if err is not None:
             self._send_error(err, _cmd_payload(c), now_ns)
@@ -359,11 +360,19 @@ class TestnetRecorder(PaperRecorder):
         """Tek sıralama noktası (Rule Zero #1): private çerçeve de `emit` üzerinden akışa girer."""
         self.frames["private"] = self.frames.get("private", 0) + 1
         self.emit("private", "user", raw, recv_ns, mono_ns, notify=False)
-        if shadow:
+        mapped = None
+        try:
+            mapped = map_user_event(json.loads(raw))
+        except ValueError:
+            pass
+        if mapped is not None and mapped.get("t_ms") and self.trader is not None:
+            # Borsa olay damgası → bizim alım damgamız: "dolum → çekirdek" gecikmesinin ilk yarısı
+            lag_ns = recv_ns - int(mapped["t_ms"]) * 1_000_000
+            if 0 <= lag_ns < 60 * 10**9:
+                self.trader.telemetry.observe(f"userdata_lag.{mapped['kind']}", lag_ns)
+        if shadow or mapped is None:
             return
-        mapped = map_user_event(json.loads(raw))
-        if mapped is not None:
-            self.trader.on_user_event(mapped, recv_ns)
+        self.trader.on_user_event(mapped, recv_ns)
 
     async def _pre_beat(self) -> None:
         """Silahlanma denetimi ve mutabakat **REST çağrısıdır**: olay döngüsünde çalışırsa loop lag
@@ -408,6 +417,7 @@ class TestnetRecorder(PaperRecorder):
                                                  "entry_blocked": entry_blocked(self.pcfg.breaker, self.breaker)},
                                      "shadow_intents": self.trader.engine_state.shadow_intents,
                                      "exit_mode": self.trader.engine_state.exit_mode,
+                                     "telemetry": self.trader.telemetry.view(),
                                      "reconciled": getattr(self, "_recon_state", {}).get("reconciled"),
                                      "reconcile_reason": getattr(self, "_recon_state", {}).get("reason"),
                                      "mismatches": getattr(self, "_recon_state", {}).get("mismatches") or []})
