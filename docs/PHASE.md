@@ -74,6 +74,23 @@ muhafazakâra çekildi; mainnet hesabının modu **proje sahibi kararı**.
 **Gate 3'te onay bekleyen kapılar:** `[userdata] mode = "active"` (çekirdeğin tüketmesi),
 `orphan_cancel = "apply"`, `protect_repair = "apply"`. Üçü de bugün kapalı.
 
+## Gate 4 teslimi (2026-09-12)
+
+| Teslim | Durum |
+|---|---|
+| `fbot/core/health.py` — ortogonal gerçekler, `exit_mode` FULL/PROTECTION_ONLY/HALTED | tamam; `FROZEN` blanket kalktı |
+| `fbot/core/reactors.py` — olay-tetiklemeli değerlendirme, **shadow**, ayrı hash zinciri | tamam; `active` yapılandırma hatası veriyor |
+| `CoreState.by_symbol` indeksi | tamam; açık pozisyon yoksa reactor O(1) |
+| Reactor bütçesi (`make bench-reactors`) | **medyan +%8,8**, bütçe +%20 (6 koşu, 1.048 niyetle doğrulandı) |
+| `fbot/core/breaker.py` — günlük net zarar, ardışık zarar, `alarm` modu | tamam; eşik ölçülmüş değil, seçilmiş |
+| `RunawayDetector` kurulumu + 418 → kalıcı kill switch | tamam; ikisi de ölü yoldu |
+| `fbot/core/telemetry.py` — sabit kovalı histogram, yaklaşık persentil | tamam; RTT ve user data gecikmesi bağlı |
+| `scripts/rebaseline_report.py` (`make rebaseline`) — giriş farkı sıfır kapısı | tamam |
+| Test | 661 → 675 |
+
+**Gate 4'te onay bekleyen kapı:** `[reactors] mode = "active"`. Shadow gözlemi pozisyon açılmadığı
+için henüz veri toplayamadı.
+
 **Gate 0 bulgusu (açık, Gate 2/3):** aynı yönde ikinci `closePosition` koruma emri `-4130` ile
 reddediliyor; R3 trailing kuralı gerçek borsada önce yeni SL gönderip sonra eskisini iptal ettiği
 için pozisyonu **korumasız bırakır**. `allowed_cells` boş olduğu için bugün tetiklenmiyor.
