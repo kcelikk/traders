@@ -27,7 +27,7 @@ değişmez.
 | 2 | 2.0 çekirdek doğruluk düzeltmeleri (**re-baseline #1**) + 2.1 bloklamayan execution transport | **teslim edildi 2026-09-12, onay bekliyor** (ADR 0018, ADR 0019; ölçüm `docs/gate2-olcum.md`) | re-baseline farkı yalnız `trigger_price` / `client_id` / `client_algo_id` ✓ |
 | 3 | Exchange truth: user data akışı (shadow), emir kaydı, çıkış kilidi, orphan/koruma onarımı (dry-run), balance mutabakatı | **teslim edildi 2026-09-12, onay bekliyor** (ADR 0020; gözlem `docs/gate3-userdata-gozlem.md`) | **hash-nötr** ✓ (iki golden de değişmedi) |
 | 4 | Reactor, güvenlik katmanları, metrikler | bekliyor | re-baseline #2 (bayatlıkta çıkış kuralları) + shadow→active ayrı onay |
-| 5 | Strateji platformu: kayıt, versiyonlama, replay→paper→testnet→live terfi | bekliyor | — |
+| 5 | Strateji platformu: manifest, terfi zinciri, sembol kirası, iki katmanlı risk | **teslim edildi 2026-09-12, onay bekliyor** (ADR 0022) | **parite**: plugin yolu gömülü mantıkla bit-eşit ✓ (`make parity`) |
 
 ## Gate 2 teslimi (2026-09-12)
 
@@ -90,6 +90,26 @@ muhafazakâra çekildi; mainnet hesabının modu **proje sahibi kararı**.
 
 **Gate 4'te onay bekleyen kapı:** `[reactors] mode = "active"`. Shadow gözlemi pozisyon açılmadığı
 için henüz veri toplayamadı.
+
+## Gate 5 teslimi (2026-09-12)
+
+| Teslim | Durum |
+|---|---|
+| `fbot/strategy/base.py` — saf sözleşme (I/O yok, saat yok, emir yok) | tamam |
+| `fbot/strategy/manifest.py` — terfi zinciri, `allowed_modes`, fail-closed live izni | tamam |
+| `fbot/strategy/registry.py` — kimlik, `code_hash`, mod zorlaması, engel gerekçesi | tamam |
+| `fbot/strategy/v1_state_cell.py` — mevcut mantığı **sarmalar** | tamam |
+| `fbot/core/lease.py` — sembol kirası; kira pozisyona bağlı, koruma terminal olunca bırakılır | tamam |
+| İki katmanlı risk (K19 strateji bütçesi, global her zaman kazanır) | tamam |
+| `scripts/parity_check.py` (`make parity`) | **bit-eşit**: 228 komut, aynı hash |
+| `strategies/v1_state_cell/manifest.toml` + Dockerfile'a kopyalama | tamam |
+| Test | 675 → 707 |
+
+**Gate 5'te çıkan canlı hata:** manifest dizini image'a kopyalanmıyordu, testnet açılışta düştü.
+Dockerfile düzeltildi, iki regresyon testi eklendi.
+
+`v1_state_cell` bugün `replay_ok`: replay ve paper'da çalışabilir, **testnet'te kayıt defteri onu
+engelliyor** ve nedenini yazıyor. `paper_ok`'a terfi paper kanıtı ister (proje sahibi kararı).
 
 **Gate 0 bulgusu (açık, Gate 2/3):** aynı yönde ikinci `closePosition` koruma emri `-4130` ile
 reddediliyor; R3 trailing kuralı gerçek borsada önce yeni SL gönderip sonra eskisini iptal ettiği

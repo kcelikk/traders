@@ -110,6 +110,8 @@ PROCESS 2 recorder | PROCESS 3 persistence | PROCESS 4 api/metrics
 
 - **Fast Path (P0):** açık pozisyonu yönetir. Yeni pozisyon açma kararı bu yolda değildir.
 - **Kalıcılık hot path'te yok:** `AsyncStore` (sınırlı kuyruk + yazıcı görevi) yazımı `to_thread`'e taşır; kuyruk dolarsa düşürülür ve **sayılır** (ADR 0017).
+- **Strateji bir plugin'dir:** `strategies/<id>/manifest.toml` + `fbot/strategy/`. Terfi zinciri `draft → replay_ok → paper_ok → testnet_ok → live`; yetkisiz strateji gömülü motora **düşmez** (ADR 0022). Geri alma: `[strategy] enabled = []`.
+- **Sembol kirası:** aynı sembolde tek sahip; kira pozisyona bağlanır ve koruma emirleri terminal olunca bırakılır.
 - **Bayatlık kuralları susturmaz:** sağlık modeli (`fbot/core/health.py`) `exit_mode` türetir — FULL / PROTECTION_ONLY / HALTED. Borsa tarafı koruma her hâlükârda devrededir (ADR 0021).
 - **Reaktörler shadow:** olay-tetiklemeli çıkış değerlendirmesi niyet üretir, emir üretmez; `active` ayrı onay kapısıdır.
 - **Devre kesici `alarm` modunda:** günlük net zarar ve ardışık zarar sayılır, karar değiştirilmez. Arıza dedektörü ve 418 kalıcı kill switch'e bağlı.
@@ -193,13 +195,14 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 make setup
 
 # testler
-make test              # birim (675 test)
+make test              # birim (707 test)
 make test-determinism  # Rule Zero doğrulaması (saflık + iki process + golden hash)
 make golden            # sabitlenmiş davranış baseline'ları (replay + emir düzeyi)
 make golden-orders-diff               # emir düzeyi fark tablosu (re-baseline raporu için)
 make bench             # Engine.step mikro-ölçümü; make bench-guard regresyon kapısı (slow)
 make bench-reactors    # reactor kapalı vs shadow (bütçe: bookTicker +%20)
 make rebaseline REC=<run> [OLD=<baseline.json>]   # komut düzeyi re-baseline raporu
+make parity            # strateji plugin yolu gömülü mantıkla bit-eşit mi (Gate 5 kapısı)
 make determinism-report REC=<run_id>  # gerçek kayıtla iki process; konsolun determinizm kutusunu besler
 make trader-load F=<dosya.jsonl.gz>   # bir koşunun yük profili: olay/s, stream kırılımı, loop lag
 make bench-transport N=30             # legacy vs kalıcı bağlantı RTT'si (testnet'e imzalı OKUMA)
