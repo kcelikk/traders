@@ -135,3 +135,32 @@ def test_repair_in_apply_mode_places_protection_with_position_side():
     sl = next(p for p in c.algo_calls if p["type"] == "STOP_MARKET")
     assert sl["positionSide"] == "BOTH" and sl["closePosition"] == "true" and sl["triggerPrice"] == "99"
     assert all(a["ok"] for a in ev["protect_repair"]["applied"])
+
+
+def test_multi_asset_margin_is_reported_and_sizing_stays_conservative():
+    """Testnet hesabında ölçüldü: çoklu varlık modu açıkken `availableBalance` USDT dışı bakiyeyi
+    de içeriyor (USDT cüzdan 4208, available 9892; fark USDC'den). Kilitli kararlar USDT büyüklüğü
+    varsaydığı için büyüklük hesabında iki değerin küçüğü kullanılır."""
+    class Multi(Client):
+        def signed(self, m, p, params, now_ms):
+            if p.endswith("multiAssetsMargin"):
+                return {"multiAssetsMargin": True}
+            return {"dualSidePosition": False}
+
+    seen = []
+    c = Multi(balance=[{"asset": "USDT", "balance": "4208.4", "availableBalance": "9892.5"}])
+    sup = ReconcileSupervisor(client=c, symbols=UNIVERSE, positions=lambda: {}, expected_leverage={},
+                              on_balance=seen.append)
+    ev = sup.check(now_ms=1)
+    assert ev["multi_assets_margin"] is True
+    assert ev["balance"]["available"] == "9892.5", "ham değer olduğu gibi raporlanır"
+    assert seen[0]["available"] == D("4208.4") and seen[0]["multi_assets_capped"] is True
+
+
+def test_single_asset_margin_passes_the_available_balance_through():
+    seen = []
+    sup = ReconcileSupervisor(client=Client(), symbols=UNIVERSE, positions=lambda: {},
+                              expected_leverage={}, on_balance=seen.append)
+    ev = sup.check(now_ms=1)
+    assert ev["multi_assets_margin"] is None
+    assert seen[0]["available"] == D("4100.0") and "multi_assets_capped" not in seen[0]

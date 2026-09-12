@@ -46,10 +46,16 @@ def fetch_snapshot(client, symbols: set[str], now_ms) -> ExchangeSnapshot:
         orders = client.open_orders(tick())
         algos = client.open_algos(tick())
         bal = client.balance(tick())
+        multi = client.signed("GET", "/fapi/v1/multiAssetsMargin", {}, tick())
     except SnapshotError:
         raise
     except Exception as e:  # noqa: BLE001 — her hata mutabakatsızlık demektir
         raise SnapshotError(f"borsa durumu okunamadı: {e}") from e
+
+    # Çoklu varlık teminatı açıksa `availableBalance` **USDT dışı bakiyeyi de** içerir: testnet
+    # hesabında ölçüldü (USDT cüzdan 4208, available 9892; fark USDC'den geliyor). Bu bir hata
+    # değil, hesap ayarıdır — ama kilitli kararlar USDT büyüklüğü varsayıyor, o yüzden raporlanır.
+    multi_assets = (multi or {}).get("multiAssetsMargin")
 
     # Bakiye borsadan gelir: iç muhasebe değil, borsa doğruluk kaynağıdır (CLAUDE.md).
     balance = {}
@@ -85,7 +91,7 @@ def fetch_snapshot(client, symbols: set[str], now_ms) -> ExchangeSnapshot:
     dual = (mode or {}).get("dualSidePosition")
     return ExchangeSnapshot(positions=positions, open_algos=open_algos, open_orders=open_orders,
                             leverage=leverage, position_mode="HEDGE" if dual else "ONE_WAY",
-                            balance=balance, margin=margin)
+                            balance=balance, margin=margin, multi_assets=multi_assets)
 
 
 def internal_view(positions: dict) -> dict:
@@ -145,7 +151,13 @@ class ReconcileSupervisor:
         if r.arm_block and self.on_arm_block is not None:
             self.on_arm_block(r.arm_block)      # HEDGE: kilitlemek yetmez, emir yolu kapanır
         if snap.balance and self.on_balance is not None:
-            self.on_balance(snap.balance)       # hesap görünümü borsadan beslenir (K11 girdisi)
+            # Çoklu varlık modunda `available` USDT dışı teminatı da içerir; büyüklük hesabında
+            # **muhafazakâr** olan kullanılır: iki değerin küçüğü.
+            b = dict(snap.balance)
+            if snap.multi_assets and b.get("wallet") is not None and b.get("available") is not None:
+                b["available"] = min(b["available"], b["wallet"])
+                b["multi_assets_capped"] = True
+            self.on_balance(b)                  # hesap görünümü borsadan beslenir (K11 girdisi)
         ok = r.ok and not r.unprotected
         plan = [{"symbol": c.symbol, "client_algo_id": c.client_algo_id} for c in r.actions]
         applied = self._apply_orphans(r.actions, now_ms) if plan else []
@@ -157,6 +169,7 @@ class ReconcileSupervisor:
                                    "applied": self._apply_repairs(r.repairs, now_ms) if r.repairs else []},
                 "arm_block": r.arm_block,
                 "balance": {k: str(v) for k, v in (snap.balance or {}).items()},
+                "multi_assets_margin": snap.multi_assets,
                 "reason": "tamam" if ok else ("korumasız pozisyon: " + ", ".join(r.unprotected)
                                               if r.unprotected and not r.mismatches
                                               else "; ".join(r.mismatches[:6]))}

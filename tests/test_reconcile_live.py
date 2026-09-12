@@ -205,13 +205,13 @@ class ClockClient(FakeClient):
 
 def test_each_request_gets_a_fresh_timestamp():
     """Tek damga tüm isteklere paylaştırılınca sonuncular recvWindow'u aşıyor (-1021)."""
-    ticks = iter([1000, 2000, 8000, 9000, 10000])
+    ticks = iter([1000, 2000, 8000, 9000, 10000, 11000])
     c = ClockClient()
     fetch_snapshot(c, UNIVERSE, now_ms=lambda: next(ticks))
-    assert c.seen == [1000, 2000, 8000, 9000, 10000]
+    assert c.seen == [1000, 2000, 8000, 9000, 10000, 11000]
 
 
 def test_fixed_timestamp_still_accepted_for_tests():
     c = ClockClient()
     fetch_snapshot(c, UNIVERSE, now_ms=42)
-    assert c.seen == [42, 42, 42, 42, 42]
+    assert c.seen == [42, 42, 42, 42, 42, 42]

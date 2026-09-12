@@ -16,6 +16,7 @@ class ExchangeSnapshot:
     position_mode: str       # ONE_WAY | HEDGE
     balance: dict = field(default_factory=dict)   # {"wallet","available"} USDT; borsa doğruluğu
     margin: dict = field(default_factory=dict)    # sembol → {"maint","initial"}
+    multi_assets: bool | None = None              # çoklu varlık teminatı: USDT dışı bakiye de teminat
 
 
 @dataclass

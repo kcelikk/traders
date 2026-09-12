@@ -89,11 +89,36 @@ yalnız bizimki iptal edilir, iptal hatası yutulmaz).
 | `order_fill` → çekirdek gecikmesi | dolum yok | aynı koşu |
 | dup `tradeId` sayısı | dolum yok | aynı koşu |
 
+## 6. Ölçülen bulgu: hesap **çoklu varlık teminat** modunda
+
+Mutabakata bakiye eklenince ortaya çıktı ve doğrulandı:
+
+| alan | değer |
+|---|---|
+| USDT `balance` (cüzdan) | 4.208,36 |
+| USDT `availableBalance` | 9.892,57 |
+| USDC `balance` | 5.000,00 |
+| `GET /fapi/v1/multiAssetsMargin` | `{"multiAssetsMargin": true}` |
+
+Yani `availableBalance` **USDT dışı teminatı da** içeriyor; bu bir hata değil, hesap ayarı. Ama
+kilitli kararlar (80 USDT notional, kaldıraç, teminat tamponu) USDT büyüklüğü varsayıyor ve çoklu
+varlık modunda USDC tarafındaki bir zarar USDT pozisyonunun teminatını etkileyebilir.
+
+**Yapılan:** mod snapshot'a ve mutabakat olayına yazıldı; büyüklük hesabına giden `available`
+değeri **iki değerin küçüğüyle sınırlandı** (muhafazakâr taraf). Ham değerler raporda olduğu gibi
+duruyor.
+
+**Karar gerekiyor:** mainnet hesabı hangi modda olacak? Tek varlık modu kilitli kararlara daha
+uygun görünüyor ama bu proje sahibinin kararıdır ve borsa hesabında değişiklik demektir.
+
 ## BU ADIMDA YAPILMAYANLAR
 
 - **Çekirdek user data tüketmiyor.** `OrderRegistry` (`cid → pos_id`), `exit_in_flight`,
   `UNKNOWN` durumu ve `-2022` politikası Gate 3c/3d işidir; shadow adımının amacı buydu.
-- `unprotected` onarımı (koruma yeniden koyma) yazılmadı.
-- Balance/margin snapshot'a eklenmedi; HEDGE'te ARM reddi hâlâ yok.
+- `unprotected` onarımı **yazıldı ama `dry_run`**: yalnız plan raporlanıyor, borsaya emir gitmiyor.
+  Yalnız bizim bildiğimiz pozisyon için üretiliyor; borsada olup bizde olmayan pozisyona koruma
+  seviyesi uydurulmuyor.
+- Koruma onarımının ve sahipsiz emir iptalinin `apply` modu **hiç çalıştırılmadı**; gözlem ve onay
+  bekliyor.
 - `income()` çağrılmıyor: gerçek komisyon ve funding iç muhasebeye aktarılmıyor (Gate 4).
 - Paper servisinde user data kapalı (`enabled = false`); orada borsa hesabı yok.
