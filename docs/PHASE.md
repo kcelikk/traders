@@ -111,9 +111,11 @@ Dockerfile düzeltildi, iki regresyon testi eklendi.
 `v1_state_cell` bugün `replay_ok`: replay ve paper'da çalışabilir, **testnet'te kayıt defteri onu
 engelliyor** ve nedenini yazıyor. `paper_ok`'a terfi paper kanıtı ister (proje sahibi kararı).
 
-**Gate 0 bulgusu (açık, Gate 2/3):** aynı yönde ikinci `closePosition` koruma emri `-4130` ile
-reddediliyor; R3 trailing kuralı gerçek borsada önce yeni SL gönderip sonra eskisini iptal ettiği
-için pozisyonu **korumasız bırakır**. `allowed_cells` boş olduğu için bugün tetiklenmiyor.
+**Gate 0 bulgusu — KAPANDI 2026-09-12 (ADR 0023).** Aynı yönde ikinci `closePosition` koruma emri
+`-4130` ile reddediliyor ve R3 kuralı gerçek borsada pozisyonu korumasız bırakacaktı. Testnet'te
+üç koşuyla ölçüldü (`docs/measure-4130.json`): kısıt **tür başına**; miktar tabanlı emir kısıtın
+dışında ve `closePosition` emriyle yan yana durabiliyor. Yer değiştirme miktar tabanlı yapıldı,
+sıra korundu, korumasız pencere (ölçülen 817–861 ms) ortadan kalktı.
 
 ## Gate 1 teslimi (2026-09-12)
 

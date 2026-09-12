@@ -111,6 +111,7 @@ PROCESS 2 recorder | PROCESS 3 persistence | PROCESS 4 api/metrics
 - **Fast Path (P0):** açık pozisyonu yönetir. Yeni pozisyon açma kararı bu yolda değildir.
 - **Kalıcılık hot path'te yok:** `AsyncStore` (sınırlı kuyruk + yazıcı görevi) yazımı `to_thread`'e taşır; kuyruk dolarsa düşürülür ve **sayılır** (ADR 0017).
 - **Strateji bir plugin'dir:** `strategies/<id>/manifest.toml` + `fbot/strategy/`. Terfi zinciri `draft → replay_ok → paper_ok → testnet_ok → live`; yetkisiz strateji gömülü motora **düşmez** (ADR 0022). Geri alma: `[strategy] enabled = []`.
+- **Koruma yer değiştirmesi miktar tabanlıdır:** ikinci `closePosition` emri `-4130` ile reddedilir. İlk koruma `closePosition=true`, yer değiştirme `closePosition=false` + miktar + `reduceOnly` (ADR 0023). Sıra "önce yeni, sonra iptal" olarak kalır.
 - **Sembol kirası:** aynı sembolde tek sahip; kira pozisyona bağlanır ve koruma emirleri terminal olunca bırakılır.
 - **Bayatlık kuralları susturmaz:** sağlık modeli (`fbot/core/health.py`) `exit_mode` türetir — FULL / PROTECTION_ONLY / HALTED. Borsa tarafı koruma her hâlükârda devrededir (ADR 0021).
 - **Reaktörler shadow:** olay-tetiklemeli çıkış değerlendirmesi niyet üretir, emir üretmez; `active` ayrı onay kapısıdır.
@@ -195,7 +196,7 @@ Sürekli ölçülen: komisyon/brüt kâr oranı, toplam maliyet/sermaye oranı, 
 make setup
 
 # testler
-make test              # birim (707 test)
+make test              # birim (714 test)
 make test-determinism  # Rule Zero doğrulaması (saflık + iki process + golden hash)
 make golden            # sabitlenmiş davranış baseline'ları (replay + emir düzeyi)
 make golden-orders-diff               # emir düzeyi fark tablosu (re-baseline raporu için)
