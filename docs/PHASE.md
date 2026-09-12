@@ -412,3 +412,48 @@ Açık fazlar ve bekledikleri:
 | 8 | Konsol var; metrik toplayıcı ve alarm kanalı yok | Prometheus/Grafana veya eşdeğeri; stratejiden bağımsız ilerleyebilir |
 | 9 | Testnet silahlı, borsa erişimi doğrulandı, emir göndermedi | Giriş kuralı; "2 hafta hatasız" saati başlamadı |
 | 10 | Bekliyor | Faz 9 sonucu ve proje sahibi onayı; `LiveExecutionAdapter` korumalı stub |
+
+---
+
+## Sonraki oturum — kaldığımız yer (2026-09-12)
+
+Bu oturumda **Gate 1–5 teslim edildi** ve Gate 0'dan kalan `-4130` bulgusu kapandı. Plan dosyası
+repo dışında (`/root/.claude/plans/woolly-juggling-nova.md`); özeti yukarıdaki gate tablosunda.
+
+### Durum özeti
+
+| | |
+|---|---|
+| Test | **717 geçiyor**, 1 atlandı |
+| Kapılar | `make test-determinism` yeşil · `make parity` bit-eşit · iki golden pinli |
+| Servisler | `fbot-recorder` 45 saat kesintisiz · `fbot-paper` ve `fbot-testnet` son imajla ayakta · `fbot-console` aktif |
+| Çalışma ağacı | temiz, her şey commit'li |
+
+### Proje sahibi kararı bekleyen kapılar (hepsi bugün **kapalı**)
+
+1. `[userdata] mode = "active"` — çekirdeğin borsa dolum olaylarını gerçekten tüketmesi. Kod hazır,
+   shadow'da çalışıyor. Gözlem verisi yok çünkü pozisyon açılmıyor.
+2. `[reconcile] orphan_cancel = "apply"` — sahipsiz koruma emrinin gerçekten iptal edilmesi.
+3. `[reconcile] protect_repair = "apply"` — korumasız pozisyona koruma emri konması.
+4. `[reactors] mode = "active"` — olay-tetiklemeli çıkışın emir üretmesi (bugün yapılandırma
+   hatası veriyor, bilinçli).
+5. `v1_state_cell` stratejisinin `paper_ok`'a terfisi — paper kanıtı ister.
+6. Mainnet okuma anahtarı: private WS biçimi, listenKey keepalive, pozisyon modu, çoklu varlık
+   teminatı ve bakiye alanları **para riski olmadan** doğrulanabilir (`docs/mainnet-dogrulama.md` §4).
+7. Mainnet `-4130` doğrulaması: gerçek pozisyon gerektirir, ~77 USDT notional / ~8 USDT teminat,
+   birkaç saniye. Faz 10 açılmadı; ölçülmüş risk belgede.
+
+### Ölçülemeyenler (hepsinin tek nedeni aynı: `allowed_cells` boş, pozisyon açılmıyor)
+
+- Reactor shadow gözlemi (bir hafta karşılaştırma planlanmıştı)
+- Devre kesicinin yanlış-pozitif oranı
+- Telemetri histogramları (canlıda boş)
+- Strateji × versiyon bazında PnL atfı, kira çakışma sayısı
+- Dolum çerçevesinden çekirdeğe gecikme, dup `tradeId`
+
+### Bir sonraki oturumda ilk yapılacaklar
+
+1. `docker ps` · `systemctl is-active fbot-console` · bu tablo.
+2. Yukarıdaki kapılardan hangisinin açılacağını proje sahibine sor.
+3. Açılacak kapı yoksa: Faz 7 paper trading gözlemi ve Faz 3 araştırması (allowed_cells arayışı)
+   paralelde sürüyor; kârlılık hâlâ **gösterilmedi** (ADR 0010).
