@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: golden golden-orders-diff golden-orders-baseline bench trader-load bench-guard ui-build determinism-report barrier-scan shuffle-control verify-exchange setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down testnet-up testnet-down testnet-logs testnet-summary test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: golden golden-orders-diff golden-orders-baseline bench bench-transport trader-load bench-guard ui-build determinism-report barrier-scan shuffle-control verify-exchange setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down testnet-up testnet-down testnet-logs testnet-summary test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -57,6 +57,9 @@ bench-guard:             # performans regresyon kapısı (yavaş testler)
 
 test-determinism:        # Rule Zero: saflık + iki process bit-eşitliği + sabitlenmiş golden hash
 	$(PYTEST) -q tests/test_replay_determinism.py tests/test_purity.py tests/test_golden_replay.py tests/test_golden_orders.py
+
+bench-transport:         # Gate 2.1: legacy vs kalıcı bağlantı RTT'si (testnet'e imzalı OKUMA atar, emir yok)
+	PYTHONPATH=. $(PY) -m scripts.bench_transport --n $(or $(N),30) $(if $(OUT),--out $(OUT),)
 
 verify-exchange:         # Gate 0: testnet'e karşı API davranış doğrulaması (GERÇEK testnet emri gönderir)
 	PYTHONPATH=. $(PY) -m scripts.verify_exchange_behavior $(if $(DRY),--dry-run,)

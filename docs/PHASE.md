@@ -24,10 +24,31 @@ değişmez.
 |---|---|---|---|
 | 0 | Test harness, golden baseline, benchmark kapısı, testnet davranış doğrulaması | **KAPANDI** 2026-09-12 (`docs/binance-api-gate0-dogrulama.md`) | golden + bench baseline sabitlendi; `fbot/` değişmedi |
 | 1 | Veri yolu ve kimlik: koşu kimliği, asenkron kalıcılık, rol bazlı stream profilleri | **teslim edildi 2026-09-12, proje sahibi onayı bekliyor** (ADR 0017, ölçüm `docs/gate1-olcum.md`) | **hash-nötr**: golden hash değişmedi ✓ |
-| 2 | 2.0 çekirdek doğruluk düzeltmeleri (**re-baseline #1**) + 2.1 bloklamayan execution transport | bekliyor | golden bilerek güncellenir; fark yalnız yuvarlama/CID/TTL alanlarında |
+| 2 | 2.0 çekirdek doğruluk düzeltmeleri (**re-baseline #1**) + 2.1 bloklamayan execution transport | **teslim edildi 2026-09-12, onay bekliyor** (ADR 0018, ADR 0019; ölçüm `docs/gate2-olcum.md`) | re-baseline farkı yalnız `trigger_price` / `client_id` / `client_algo_id` ✓ |
 | 3 | Exchange truth: user data akışının tüketilmesi, orphan algo, balance mutabakatı | bekliyor | **hash-nötr** |
 | 4 | Reactor, güvenlik katmanları, metrikler | bekliyor | re-baseline #2 (bayatlıkta çıkış kuralları) + shadow→active ayrı onay |
 | 5 | Strateji platformu: kayıt, versiyonlama, replay→paper→testnet→live terfi | bekliyor | — |
+
+## Gate 2 teslimi (2026-09-12)
+
+| Teslim | Durum |
+|---|---|
+| `fbot/core/rounding.py` — tek yuvarlama noktası, kaynak `Filters` (pricePrecision değil) | tamam |
+| `fbot/core/ids.py` — kimlik grameri, uzunluk girdiden bağımsız (`-4015` kapandı) | tamam |
+| `pending_entries` TTL + ret/bilinmeyen sonuçta bırakma | tamam |
+| `testnet_adapter` — `_fmt` ve `ROUND_HALF_EVEN` gitti; filtresiz sembolde fail-closed | tamam |
+| Emir düzeyi golden (`tests/golden/orders_baseline.json`) + fark tablosu | tamam; **re-baseline #1** yapıldı |
+| `fbot/gateway/http_pool.py` — kalıcı bağlantı, ayrı connect/read bütçesi, kör retry yok | tamam; canlıda 1 bağlantı / 9 istek |
+| `fbot/execution/queue.py` — sınırlı kuyruk, sınıf bazlı rezerv, FIFO | tamam |
+| Taşıma hatası sınıflandırması (POST timeout → UNKNOWN + mutabakat) | tamam |
+| 429 `Retry-After`, 418 ban + geri çekilme | tamam |
+| Periyodik silahlanma/mutabakat `to_thread`'e taşındı | tamam |
+| `[execution] transport` anahtarı (geri alma: `legacy`) | tamam |
+| Test | 527 → 557 |
+
+**Gate 2'de çıkan canlı hata:** gönderim kuyruğu `Recorder.queue`'yu (olay yazım kuyruğu)
+gölgeliyordu; testnet süreci açılışta düştü. Testler yakalamıyordu çünkü `TestnetRecorder` hiçbir
+testte kurulmuyor. Alan adı `exec_queue` oldu, regresyon testi eklendi.
 
 **Gate 0 bulgusu (açık, Gate 2/3):** aynı yönde ikinci `closePosition` koruma emri `-4130` ile
 reddediliyor; R3 trailing kuralı gerçek borsada önce yeni SL gönderip sonra eskisini iptal ettiği
