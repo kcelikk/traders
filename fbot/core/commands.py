@@ -54,6 +54,7 @@ class PlaceAlgo:
     working_type: str    # MARK_PRICE | CONTRACT_PRICE
     price_protect: bool
     client_algo_id: str
+    qty: Decimal | None = None   # `close_position=False` ise zorunlu: miktar tabanlı koruma (ADR 0023)
 
 
 @dataclass(frozen=True, slots=True)

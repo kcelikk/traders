@@ -257,12 +257,20 @@ class PositionManager:
                 pos.last_replace_ns = now_ns
                 pos.active_algos.add(pos.sl_id)
                 pos.active_algos.discard(old_id)
-                cmds += [self._algo(pos, "STOP_MARKET", desired, pos.sl_id), CancelAlgo(pos.symbol, old_id)]
+                # Sıra korunur (önce yeni, sonra iptal): korumasız pencere yok. Yeni emir miktar
+                # tabanlıdır, çünkü ikinci `closePosition` stop'u -4130 ile reddedilir (ADR 0023).
+                cmds += [self._algo(pos, "STOP_MARKET", desired, pos.sl_id, close_position=False),
+                         CancelAlgo(pos.symbol, old_id)]
         return cmds
 
     # ---------------- yardımcılar
-    def _algo(self, pos: Position, typ: str, trigger: Decimal, cid: str) -> PlaceAlgo:
-        return PlaceAlgo(pos.symbol, pos.exit_side, typ, trigger, True, self.cfg.working_type, self.cfg.price_protect, cid)
+    def _algo(self, pos: Position, typ: str, trigger: Decimal, cid: str, close_position: bool = True) -> PlaceAlgo:
+        """`close_position=False` → miktar tabanlı koruma. Borsa aynı yönde **ikinci**
+        `closePosition` emrini `-4130` ile reddediyor (ADR 0023, testnet'te üç kez ölçüldü); miktar
+        tabanlı emir ise hem kendi türüyle hem `closePosition` emriyle yan yana durabiliyor."""
+        qty = None if close_position else floor_step(pos.qty, pos.filters.step_size)
+        return PlaceAlgo(pos.symbol, pos.exit_side, typ, trigger, close_position, self.cfg.working_type,
+                         self.cfg.price_protect, cid, qty)
 
     def exit_qty(self, pos: Position) -> Decimal:
         """Tam çıkış miktarı da borsa filtresine uymak zorundadır: step'e yuvarlanmamış miktar

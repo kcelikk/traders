@@ -42,7 +42,12 @@ def test_orders_fills_and_protection_are_recorded_as_events():
     sl = [p for p in payloads if p["cmd"] == "PlaceAlgo" and p["type"] == "STOP_MARKET"]
     tp = [p for p in payloads if p["cmd"] == "PlaceAlgo" and p["type"] == "TAKE_PROFIT_MARKET"]
     assert sl and tp, "koruma emri yok"
-    assert all(p["close_position"] and p["working_type"] == "MARK_PRICE" for p in sl + tp)
+    assert all(p["working_type"] == "MARK_PRICE" for p in sl + tp)
+    # ADR 0023: ilk koruma `closePosition`, yer değiştirme miktar tabanlı (ikinci closePosition -4130)
+    first = [p for p in sl + tp if p["client_algo_id"].endswith("-v1")]
+    replaced = [p for p in sl if not p["client_algo_id"].endswith("-v1")]
+    assert first and all(p["close_position"] and p["qty"] is None for p in first)
+    assert all(not p["close_position"] and p["qty"] is not None for p in replaced)
     assert any(p["cmd"] == "CancelAlgo" for p in payloads), "tetik sonrası iptal yok"
     assert {e.stream for e in execs} >= {"entry_fill", "algo_ack", "algo_triggered", "exit_fill"}
     assert trader.stats["orders"] > 0 and trader.stats["fills"] > 0

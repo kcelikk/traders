@@ -1,0 +1,132 @@
+{
+ "symbol": "BTCUSDT",
+ "sonuc": {
+  "A_ikinci_closePosition": "RET",
+  "A_take_profit_yanyana": "KABUL",
+  "B_closePosition_false_ilk": "KABUL",
+  "B_closePosition_false_ikinci": "KABUL",
+  "C_korumasiz_pencere_ms": 860.8,
+  "D_karisik_tip_yanyana": "KABUL",
+  "D_closePosition_ilk": "KABUL"
+ },
+ "temiz": {
+  "algos": 0,
+  "orders": 0,
+  "positions": 0
+ },
+ "adimlar": [
+  {
+   "adim": "baslangic",
+   "sonuc": "TAMAM",
+   "kanit": {
+    "price": "77279.70",
+    "qty": "0.002",
+    "sl1": "69551.70",
+    "sl2": "71097.30"
+   }
+  },
+  {
+   "adim": "pozisyon açıldı",
+   "sonuc": "TAMAM",
+   "kanit": {
+    "qty": "0.002"
+   }
+  },
+  {
+   "adim": "A1 ilk closePosition stop",
+   "sonuc": "KABUL",
+   "kanit": {
+    "algoId": 1000000202691635,
+    "status": "NEW",
+    "rtt_ms": 840.0
+   }
+  },
+  {
+   "adim": "A2 ikinci closePosition stop (eskisi dururken)",
+   "sonuc": "RET",
+   "kanit": {
+    "code": -4130,
+    "msg": "HTTP 400 code=-4130 An open stop or take profit order with GTE and closePosition in the direction is existing.",
+    "rtt_ms": 383.3
+   }
+  },
+  {
+   "adim": "A3 take profit (stop dururken)",
+   "sonuc": "KABUL",
+   "kanit": {
+    "algoId": 1000000202691647,
+    "status": "NEW",
+    "rtt_ms": 381.8
+   }
+  },
+  {
+   "adim": "C yeni stop (iptalden sonra)",
+   "sonuc": "KABUL",
+   "kanit": {
+    "algoId": 1000000202691667,
+    "status": "NEW",
+    "rtt_ms": 453.3
+   }
+  },
+  {
+   "adim": "C korumasız pencere",
+   "sonuc": "ÖLÇÜLDÜ",
+   "kanit": {
+    "ms": 860.8,
+    "yeni_stop": "KABUL"
+   }
+  },
+  {
+   "adim": "algolar temizlendi",
+   "sonuc": "TAMAM",
+   "kanit": {
+    "kalan": 0
+   }
+  },
+  {
+   "adim": "B1 closePosition=false + miktar",
+   "sonuc": "KABUL",
+   "kanit": {
+    "algoId": 1000000202691713,
+    "status": "NEW",
+    "rtt_ms": 608.2
+   }
+  },
+  {
+   "adim": "B2 ikinci closePosition=false stop",
+   "sonuc": "KABUL",
+   "kanit": {
+    "algoId": 1000000202691718,
+    "status": "NEW",
+    "rtt_ms": 392.1
+   }
+  },
+  {
+   "adim": "D1 closePosition=true stop",
+   "sonuc": "KABUL",
+   "kanit": {
+    "algoId": 1000000202691746,
+    "status": "NEW",
+    "rtt_ms": 838.2
+   }
+  },
+  {
+   "adim": "D2 miktar tabanlı stop (closePosition stop dururken)",
+   "sonuc": "KABUL",
+   "kanit": {
+    "algoId": 1000000202691754,
+    "status": "NEW",
+    "rtt_ms": 410.5
+   }
+  },
+  {
+   "adim": "temizlik",
+   "sonuc": "TAMAM",
+   "kanit": {
+    "algos": 0,
+    "orders": 0,
+    "positions": 0
+   }
+  }
+ ]
+}

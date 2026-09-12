@@ -1,6 +1,6 @@
 {
  "scenario": "tests/scenario.py::live_run(discovered_cells())",
- "hash": "9a3b062396ffc46196f3b27b8e31a61ae2818c981cadace71070de9b193bebe5",
+ "hash": "64bcbbe7bb21a7de78c984e63f0ec84f374965d830982791efcbafc1926747b0",
  "commands": 140,
  "by_kind": {
   "CancelAlgo": 36,
@@ -59,7 +59,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Ledd0ff2338-SL-v1"
+   "client_algo_id": "f0Ledd0ff2338-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -70,7 +71,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Ledd0ff2338-TP-v1"
+   "client_algo_id": "f0Ledd0ff2338-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -78,10 +80,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "98.15",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Ledd0ff2338-SL-v2"
+   "client_algo_id": "f0Ledd0ff2338-SL-v2",
+   "qty": "0.816"
   },
   {
    "cmd": "CancelAlgo",
@@ -133,7 +136,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L5ef849f229-SL-v1"
+   "client_algo_id": "f0L5ef849f229-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -144,7 +148,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L5ef849f229-TP-v1"
+   "client_algo_id": "f0L5ef849f229-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -152,10 +157,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "101.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L5ef849f229-SL-v2"
+   "client_algo_id": "f0L5ef849f229-SL-v2",
+   "qty": "0.792"
   },
   {
    "cmd": "CancelAlgo",
@@ -187,7 +193,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc910019117-SL-v1"
+   "client_algo_id": "f0Lc910019117-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -198,7 +205,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc910019117-TP-v1"
+   "client_algo_id": "f0Lc910019117-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -206,10 +214,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "104.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc910019117-SL-v2"
+   "client_algo_id": "f0Lc910019117-SL-v2",
+   "qty": "0.769"
   },
   {
    "cmd": "CancelAlgo",
@@ -261,7 +270,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L074ab56c0a-SL-v1"
+   "client_algo_id": "f0L074ab56c0a-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -272,7 +282,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L074ab56c0a-TP-v1"
+   "client_algo_id": "f0L074ab56c0a-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -280,10 +291,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "98.15",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L074ab56c0a-SL-v2"
+   "client_algo_id": "f0L074ab56c0a-SL-v2",
+   "qty": "0.816"
   },
   {
    "cmd": "CancelAlgo",
@@ -335,7 +347,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc6c15a7050-SL-v1"
+   "client_algo_id": "f0Lc6c15a7050-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -346,7 +359,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc6c15a7050-TP-v1"
+   "client_algo_id": "f0Lc6c15a7050-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -354,10 +368,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "102.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc6c15a7050-SL-v2"
+   "client_algo_id": "f0Lc6c15a7050-SL-v2",
+   "qty": "0.784"
   },
   {
    "cmd": "CancelAlgo",
@@ -389,7 +404,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0La09b2dc797-SL-v1"
+   "client_algo_id": "f0La09b2dc797-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -400,7 +416,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0La09b2dc797-TP-v1"
+   "client_algo_id": "f0La09b2dc797-TP-v1",
+   "qty": null
   },
   {
    "cmd": "StateChanged",
@@ -447,7 +464,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L6dc5ddc101-SL-v1"
+   "client_algo_id": "f0L6dc5ddc101-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -458,7 +476,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L6dc5ddc101-TP-v1"
+   "client_algo_id": "f0L6dc5ddc101-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -466,10 +485,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "98.15",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L6dc5ddc101-SL-v2"
+   "client_algo_id": "f0L6dc5ddc101-SL-v2",
+   "qty": "0.816"
   },
   {
    "cmd": "CancelAlgo",
@@ -521,7 +541,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L736d664fea-SL-v1"
+   "client_algo_id": "f0L736d664fea-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -532,7 +553,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L736d664fea-TP-v1"
+   "client_algo_id": "f0L736d664fea-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -540,10 +562,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "103.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L736d664fea-SL-v2"
+   "client_algo_id": "f0L736d664fea-SL-v2",
+   "qty": "0.776"
   },
   {
    "cmd": "CancelAlgo",
@@ -595,7 +618,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L7f61238fe8-SL-v1"
+   "client_algo_id": "f0L7f61238fe8-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -606,7 +630,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L7f61238fe8-TP-v1"
+   "client_algo_id": "f0L7f61238fe8-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -614,10 +639,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "98.15",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L7f61238fe8-SL-v2"
+   "client_algo_id": "f0L7f61238fe8-SL-v2",
+   "qty": "0.816"
   },
   {
    "cmd": "CancelAlgo",
@@ -669,7 +695,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lee192f4130-SL-v1"
+   "client_algo_id": "f0Lee192f4130-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -680,7 +707,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lee192f4130-TP-v1"
+   "client_algo_id": "f0Lee192f4130-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -688,10 +716,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "101.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lee192f4130-SL-v2"
+   "client_algo_id": "f0Lee192f4130-SL-v2",
+   "qty": "0.792"
   },
   {
    "cmd": "CancelAlgo",
@@ -723,7 +752,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0La099a2c0ff-SL-v1"
+   "client_algo_id": "f0La099a2c0ff-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -734,7 +764,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0La099a2c0ff-TP-v1"
+   "client_algo_id": "f0La099a2c0ff-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -742,10 +773,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "104.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0La099a2c0ff-SL-v2"
+   "client_algo_id": "f0La099a2c0ff-SL-v2",
+   "qty": "0.769"
   },
   {
    "cmd": "CancelAlgo",
@@ -797,7 +829,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L6af7a25c6e-SL-v1"
+   "client_algo_id": "f0L6af7a25c6e-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -808,7 +841,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L6af7a25c6e-TP-v1"
+   "client_algo_id": "f0L6af7a25c6e-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -816,10 +850,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "98.15",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L6af7a25c6e-SL-v2"
+   "client_algo_id": "f0L6af7a25c6e-SL-v2",
+   "qty": "0.816"
   },
   {
    "cmd": "CancelAlgo",
@@ -871,7 +906,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lda9cd2f7d7-SL-v1"
+   "client_algo_id": "f0Lda9cd2f7d7-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -882,7 +918,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lda9cd2f7d7-TP-v1"
+   "client_algo_id": "f0Lda9cd2f7d7-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -890,10 +927,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "102.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lda9cd2f7d7-SL-v2"
+   "client_algo_id": "f0Lda9cd2f7d7-SL-v2",
+   "qty": "0.784"
   },
   {
    "cmd": "CancelAlgo",
@@ -925,7 +963,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L7870905596-SL-v1"
+   "client_algo_id": "f0L7870905596-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -936,7 +975,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L7870905596-TP-v1"
+   "client_algo_id": "f0L7870905596-TP-v1",
+   "qty": null
   },
   {
    "cmd": "StateChanged",
@@ -983,7 +1023,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lacfcb2d38d-SL-v1"
+   "client_algo_id": "f0Lacfcb2d38d-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -994,7 +1035,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lacfcb2d38d-TP-v1"
+   "client_algo_id": "f0Lacfcb2d38d-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1002,10 +1044,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "98.15",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lacfcb2d38d-SL-v2"
+   "client_algo_id": "f0Lacfcb2d38d-SL-v2",
+   "qty": "0.816"
   },
   {
    "cmd": "CancelAlgo",
@@ -1057,7 +1100,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L70a6784e8a-SL-v1"
+   "client_algo_id": "f0L70a6784e8a-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1068,7 +1112,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L70a6784e8a-TP-v1"
+   "client_algo_id": "f0L70a6784e8a-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1076,10 +1121,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "103.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L70a6784e8a-SL-v2"
+   "client_algo_id": "f0L70a6784e8a-SL-v2",
+   "qty": "0.776"
   },
   {
    "cmd": "CancelAlgo",
@@ -1131,7 +1177,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L037468ae3d-SL-v1"
+   "client_algo_id": "f0L037468ae3d-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1142,7 +1189,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L037468ae3d-TP-v1"
+   "client_algo_id": "f0L037468ae3d-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1150,10 +1198,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "98.15",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0L037468ae3d-SL-v2"
+   "client_algo_id": "f0L037468ae3d-SL-v2",
+   "qty": "0.816"
   },
   {
    "cmd": "CancelAlgo",
@@ -1205,7 +1254,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc6afb6bfa6-SL-v1"
+   "client_algo_id": "f0Lc6afb6bfa6-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1216,7 +1266,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc6afb6bfa6-TP-v1"
+   "client_algo_id": "f0Lc6afb6bfa6-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1224,10 +1275,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "101.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lc6afb6bfa6-SL-v2"
+   "client_algo_id": "f0Lc6afb6bfa6-SL-v2",
+   "qty": "0.792"
   },
   {
    "cmd": "CancelAlgo",
@@ -1259,7 +1311,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lf7ef980216-SL-v1"
+   "client_algo_id": "f0Lf7ef980216-SL-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1270,7 +1323,8 @@
    "close_position": true,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lf7ef980216-TP-v1"
+   "client_algo_id": "f0Lf7ef980216-TP-v1",
+   "qty": null
   },
   {
    "cmd": "PlaceAlgo",
@@ -1278,10 +1332,11 @@
    "side": "SELL",
    "type": "STOP_MARKET",
    "trigger_price": "104.16",
-   "close_position": true,
+   "close_position": false,
    "working_type": "MARK_PRICE",
    "price_protect": true,
-   "client_algo_id": "f0Lf7ef980216-SL-v2"
+   "client_algo_id": "f0Lf7ef980216-SL-v2",
+   "qty": "0.769"
   },
   {
    "cmd": "CancelAlgo",

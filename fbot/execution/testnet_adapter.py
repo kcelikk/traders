@@ -101,12 +101,19 @@ class TestnetAdapter:
                 "order_id": r.get("orderId"), "status": r.get("status")}
 
     def _algo(self, c: PlaceAlgo, now_ms: int) -> dict:
-        # closePosition=true ile quantity ve reduceOnly gönderilemez (hata -4137/-4138)
+        # closePosition=true ile quantity ve reduceOnly gönderilemez (hata -4137/-4138);
+        # closePosition=false ise ikisi de **zorunludur** (miktar tabanlı koruma, ADR 0023).
+        f = self._filters(c.symbol)
         p = {"symbol": c.symbol, "side": c.side, "type": c.type, "positionSide": "BOTH",
-             "triggerPrice": fmt_price(c.trigger_price, self._filters(c.symbol).tick_size),
+             "triggerPrice": fmt_price(c.trigger_price, f.tick_size),
              "closePosition": "true" if c.close_position else "false",
              "workingType": c.working_type, "priceProtect": "true" if c.price_protect else "false",
              "clientAlgoId": c.client_algo_id}
+        if not c.close_position:
+            if c.qty is None:
+                raise ValueError(f"{c.client_algo_id}: closePosition=false ise miktar zorunlu")
+            p["quantity"] = fmt_qty(c.qty, f.step_size)
+            p["reduceOnly"] = "true"
         try:
             r = self.client.place_algo(p, now_ms)
         except TestnetError as e:

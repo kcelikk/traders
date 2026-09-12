@@ -2,6 +2,8 @@
 
 Tarih: 2026-09-12. HEAD: `14782f7dfcc3`; değerlendirme mevcut çalışma ağacı üzerindedir. Başlangıçta `fbot/core/risk.py` değişik, `fbot/core/lease.py`, `fbot/strategy/`, `tests/test_lease.py`, `tests/test_strategy_platform.py` izlenmeyen dosyalardı; bu çalışmada bunlara dokunulmadı.
 
+Son kontrolde çalışma alanının HEAD'i eşzamanlı başka çalışma sonucunda `d9a09c4` olmuştu. `14782f7dfcc3..d9a09c4` karşılaştırmasında incelenen `fbot/api`, `ui`, build betiği ve ilgili sağlık/heartbeat kaynaklarında değişiklik yoktu; endpoint bulguları geçerliliğini koruyor. Bu inceleme sırasında commit komutu çalıştırılmadı.
+
 ## Sonuç
 
 Backend **7**, frontend **6** API işlemi içeriyor. Frontend'in kullandığı altı yöntem/yol çiftinin tamamının backend karşılığı var. Backend'deki `GET /api/health` frontend tarafından kullanılmıyor; bu tek başına eksiklik değildir. **Adres eşleşmesi tamam; veri anlamı, tazelik, hata yönetimi ve ekran doğruluğu bakımından tam uyum yok.**
@@ -97,7 +99,7 @@ Frontend'de gerçek veriye bağlanmamış rakam ve durumlar **var**. Özellikle 
 
 ### EP19 — Orta — Bilinmeyen net değerler özetlerde sıfır sayılıyor
 
-**Kanıt:** [history:22](../fbot/api/history.py:22) null neti `0.0`, [66](../fbot/api/history.py:66) equity'de sıfır kabul eder; grup `n` tüm satırları sayar. Buna karşılık [paper_summary:16](../scripts/paper_summary.py:16) null netli kapanışları dışlar. **Doğrulandı:** aynı DB için özetlerin örneklem sözleşmesi farklı. **Koşula bağlı etki:** eski/eksik kayıtta kazanma oranı ve ortalama net aşağı çekilir; bilinmeyen sonuç sıfır sonuç sanılır. **Öneri:** toplam/bilinen/eksik işlem adetleri ve yalnız bilinen sonuçlarla hesap; kısmi USDT toplamını etiketle. **Kapanış:** pozitif, negatif ve null netli karışık veriyle iki ekranın tutarlı özeti.
+**Kanıt:** [history:22](../fbot/api/history.py:22) null neti `0.0`, [66](../fbot/api/history.py:66) equity'de sıfır kabul eder; grup `n` tüm satırları sayar. Buna karşılık [paper_summary:16](../scripts/paper_summary.py:16) null netli kapanışları dışlar. **Doğrulandı:** aynı DB için özetlerin örneklem sözleşmesi farklı. **Koşula bağlı etki:** eski/eksik kayıtta kazanma oranının paydası büyür ve ortalama net sıfıra yaklaşır; bilinmeyen sonuç sıfır sonuç sanılır. **Öneri:** toplam/bilinen/eksik işlem adetleri ve yalnız bilinen sonuçlarla hesap; kısmi USDT toplamını etiketle. **Kapanış:** pozitif, negatif ve null netli karışık veriyle iki ekranın tutarlı özeti.
 
 ### EP20 — Orta — Test kapsamı endpoint tüketimini ve gerçek render'ı korumuyor
 
