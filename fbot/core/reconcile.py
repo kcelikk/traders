@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from fbot.core.commands import CancelAlgo
+from fbot.core.ids import SEP
+
 
 @dataclass(frozen=True)
 class ExchangeSnapshot:
@@ -18,11 +21,30 @@ class ReconcileResult:
     ok: bool
     mismatches: list = field(default_factory=list)
     unprotected: list = field(default_factory=list)   # borsada pozisyon var, koruma emri yok
+    actions: list = field(default_factory=list)       # sahipsiz algo iptalleri (dry-run'da uygulanmaz)
+    foreign: list = field(default_factory=list)       # bizim gramerimize uymayan algo'lar: dokunulmaz
 
 
-def reconcile(internal: dict, snap: ExchangeSnapshot, expected_leverage: dict) -> ReconcileResult:
+def is_ours(client_algo_id: str, tags: set[str]) -> bool:
+    """Yalnız **bizim** kimlik gramerimize uyan algo'ya dokunulur (`{tag}{L|S}{hash}-{SL|TP}-v{n}`).
+    Hesapta başka bir aracın ya da elle konmuş emirler olabilir; onları iptal etmek borsada
+    bizim olmayan bir değişikliktir."""
+    head, sep, tail = str(client_algo_id).partition(SEP)
+    if not sep or not tail:
+        return False
+    role = tail.partition(SEP)[0]
+    return role in ("SL", "TP") and any(head.startswith(t) for t in tags if t)
+
+
+def reconcile(internal: dict, snap: ExchangeSnapshot, expected_leverage: dict,
+              strategy_tags: set[str] | None = None) -> ReconcileResult:
+    """`strategy_tags`: bu koşuya ait kimlik önekleri. Verilmezse hiçbir iptal komutu üretilmez
+    (fail-closed: sahibini bilmediğimiz emre dokunmayız)."""
     mism: list[str] = []
     unprotected: list[str] = []
+    actions: list = []
+    foreign: list[str] = []
+    tags = set(strategy_tags or ())
     if snap.position_mode != "ONE_WAY":
         mism.append(f"position_mode:{snap.position_mode}")
     by_sym = {p["symbol"]: (pid, p) for pid, p in internal.get("positions", {}).items()}
@@ -57,4 +79,8 @@ def reconcile(internal: dict, snap: ExchangeSnapshot, expected_leverage: dict) -
         for aid in sorted(snap.open_algos[sym]):
             if aid not in known_algos:
                 mism.append(f"algo_orphan:{sym}:{aid}")
-    return ReconcileResult(ok=not mism, mismatches=mism, unprotected=unprotected)
+                if is_ours(aid, tags):
+                    actions.append(CancelAlgo(sym, aid))
+                else:
+                    foreign.append(f"{sym}:{aid}")
+    return ReconcileResult(ok=not mism, mismatches=mism, unprotected=unprotected, actions=actions, foreign=foreign)

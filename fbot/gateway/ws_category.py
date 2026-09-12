@@ -17,11 +17,25 @@ OnFrame = Callable[[bytes, int, int], None]
 OnCtrl = Callable[[str, dict], None]
 
 
+def _safe_url(url: str) -> str:
+    """listenKey URL yolunda taşınır ve gizlidir: kayda, log'a, ctrl olayına maskeli girer."""
+    head, sep, tail = url.rpartition("/")
+    if sep and len(tail) > 8 and "?" not in url:
+        return f"{head}/…{tail[-4:]}"
+    return url
+
+
 class CategoryConnection:
+    """`url_factory` verilirse **her bağlanmada** çağrılır (private akış: listenKey her seferinde
+    yenilenebilir). Böylece backoff, `force_reconnect` ve ctrl olayları yeniden kullanılır; private
+    için ayrı bir bağlantı sınıfı yazılmaz."""
+
     def __init__(self, name: str, url: str, on_frame: OnFrame, on_ctrl: OnCtrl,
-                 backoff_initial_s: float = 1.0, backoff_max_s: float = 30.0, max_queue: int = 4096):
+                 backoff_initial_s: float = 1.0, backoff_max_s: float = 30.0, max_queue: int = 4096,
+                 url_factory=None):
         self.name = name
         self.url = url
+        self.url_factory = url_factory
         self.on_frame = on_frame
         self.on_ctrl = on_ctrl
         self.backoff_initial_s = backoff_initial_s
@@ -50,11 +64,14 @@ class CategoryConnection:
         while not self._stop.is_set():
             t0 = time.monotonic_ns()
             try:
+                if self.url_factory is not None:
+                    self.url = await self.url_factory()
                 async with connect(self.url, max_queue=self.max_queue, ping_interval=20, ping_timeout=20) as ws:
                     self._ws = ws
                     self.connects += 1
                     backoff = self.backoff_initial_s
-                    self.on_ctrl("connect", {"cat": self.name, "url": self.url, "connect_ms": (time.monotonic_ns() - t0) // 10**6, "n": self.connects})
+                    self.on_ctrl("connect", {"cat": self.name, "url": _safe_url(self.url),
+                                             "connect_ms": (time.monotonic_ns() - t0) // 10**6, "n": self.connects})
                     async for raw in ws:
                         recv_ns = time.time_ns()
                         mono_ns = time.monotonic_ns()

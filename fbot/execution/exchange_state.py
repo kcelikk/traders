@@ -94,16 +94,22 @@ class ReconcileSupervisor:
     Aynı sonuç tekrar tekrar olay üretmez; yalnızca durum değişince bildirilir.
     """
 
-    def __init__(self, client, symbols: set[str], positions, expected_leverage: dict):
+    def __init__(self, client, symbols: set[str], positions, expected_leverage: dict,
+                 strategy_tags: set[str] | None = None, orphan_cancel: str = "dry_run"):
         self.client = client
         self.symbols = set(symbols)
         self.positions = positions              # () -> {pos_id: Position}
         self.expected_leverage = dict(expected_leverage)
+        self.strategy_tags = set(strategy_tags or ())
+        self.orphan_cancel = orphan_cancel      # dry_run | apply — varsayılan dry_run (ADR 0020)
+        self.cancelled = 0
         self.last: tuple | None = None
 
     def check(self, now_ms) -> dict | None:
         ev = self._evaluate(now_ms)
-        key = (ev["reconciled"], tuple(ev["mismatches"]), tuple(ev["unprotected"]), ev["reason"])
+        oc = ev.get("orphan_cancel") or {}
+        key = (ev["reconciled"], tuple(ev["mismatches"]), tuple(ev["unprotected"]), ev["reason"],
+               len(oc.get("applied") or ()))
         if key == self.last:
             return None
         self.last = key
@@ -118,10 +124,30 @@ class ReconcileSupervisor:
         except SnapshotError as e:
             return {"kind": "reconcile", "reconciled": False, "mismatches": [], "unprotected": [],
                     "reason": str(e)}
-        r = reconcile(internal_view(self.positions()), snap, self.expected_leverage)
+        r = reconcile(internal_view(self.positions()), snap, self.expected_leverage, self.strategy_tags)
         ok = r.ok and not r.unprotected
+        plan = [{"symbol": c.symbol, "client_algo_id": c.client_algo_id} for c in r.actions]
+        applied = self._apply_orphans(r.actions, now_ms) if plan else []
         return {"kind": "reconcile", "reconciled": ok, "mismatches": r.mismatches,
                 "unprotected": r.unprotected,
+                "orphan_cancel": {"mode": self.orphan_cancel, "planned": plan, "applied": applied,
+                                  "foreign_untouched": r.foreign},
                 "reason": "tamam" if ok else ("korumasız pozisyon: " + ", ".join(r.unprotected)
                                               if r.unprotected and not r.mismatches
                                               else "; ".join(r.mismatches[:6]))}
+
+    def _apply_orphans(self, actions: list, now_ms) -> list:
+        """`dry_run`: yalnız planı raporlar, borsaya dokunmaz. Bir hafta gözlemden sonra `apply`
+        yapılır (ADR 0020). Yabancı algo'lar buraya hiç gelmez: `reconcile` onları ayırır."""
+        if self.orphan_cancel != "apply":
+            return []
+        tick = now_ms if callable(now_ms) else (lambda: now_ms)
+        done = []
+        for c in actions:
+            try:
+                self.client.cancel_algo({"symbol": c.symbol, "clientAlgoId": c.client_algo_id}, tick())
+                self.cancelled += 1
+                done.append({"symbol": c.symbol, "client_algo_id": c.client_algo_id, "ok": True})
+            except Exception as e:  # noqa: BLE001 — iptal hatası mutabakatı durdurmaz, kayda geçer
+                done.append({"symbol": c.symbol, "client_algo_id": c.client_algo_id, "ok": False, "err": repr(e)[:150]})
+        return done

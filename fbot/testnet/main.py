@@ -27,7 +27,9 @@ from fbot.execution.testnet_adapter import TestnetAdapter, TestnetDisarmed
 from fbot.gateway.killswitch import KillSwitch
 from fbot.gateway.testnet import _HOST as TESTNET_HOST, TestnetClient, TestnetError, _http as default_http
 from fbot.gateway.credfile import testnet_paths
+from fbot.gateway.userdata_map import map_user_event
 from fbot.gateway.http_pool import HTTPPool
+from fbot.gateway.userdata import UserDataConnection
 from fbot.testnet.arming import ArmingSupervisor
 from fbot.paper.config import load_paper_config
 from fbot.paper.main import PaperRecorder, filters_from_exchange_info, run_identity
@@ -148,6 +150,12 @@ class _NullSim:
 
 
 class TestnetRecorder(PaperRecorder):
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.userdata: UserDataConnection | None = None
+        self._userdata_task = None
+        self.exec_queue = None
+
     async def resolve_universe(self):
         syms = await asyncio.to_thread(lambda: list(self.pcfg.recorder.symbols))
         from fbot.gateway.rest import exchange_info
@@ -176,7 +184,9 @@ class TestnetRecorder(PaperRecorder):
         lev = {s2: core.risk.leverage.get(s2, core.risk.default_leverage) for s2 in syms}
         self.recon = ReconcileSupervisor(client=adapter.client, symbols=set(syms),
                                          positions=lambda: self.trader.engine_state.positions,
-                                         expected_leverage=lev)
+                                         expected_leverage=lev,
+                                         strategy_tags={core.decision.strategy_tag} if core.decision else set(),
+                                         orphan_cancel=self.pcfg.reconcile.orphan_cancel)
         self._reconcile(lambda: int(time.time() * 1000))
         if self.pcfg.cost_drift is not None:
             from fbot.core.cost_drift import CostDriftMonitor
@@ -205,6 +215,11 @@ class TestnetRecorder(PaperRecorder):
         def pct(q):
             return round(r[min(len(r) - 1, int(q * (len(r) - 1) + 0.5))] / 1e6, 1) if r else None
         out = {**self.exec_queue.stats, "rtt_ms": {"n": len(r), "p50": pct(0.5), "p95": pct(0.95), "p99": pct(0.99)}}
+        if self.userdata is not None:
+            age = self.userdata.age_s()
+            out["userdata"] = {**self.userdata.stats, "mode": self.pcfg.userdata.mode,
+                               "age_s": round(age, 1) if age is not None else None,
+                               "stale": age is not None and age > self.pcfg.userdata.staleness_s}
         if getattr(self, "pool", None) is not None:
             out["pool"] = dict(self.pool.stats)
         return out
@@ -238,17 +253,56 @@ class TestnetRecorder(PaperRecorder):
 
     async def main(self):
         await super().main()
+        if self.userdata is not None:
+            self.userdata.stop()
+            if self._userdata_task is not None:
+                await asyncio.gather(self._userdata_task, return_exceptions=True)
         if getattr(self, "exec_queue", None) is not None:
             await self.exec_queue.aclose()
         if getattr(self, "pool", None) is not None:
             self.pool.close()
 
     async def paper_status_task(self):
-        """Kuyruk işçisi ilk durum turunda başlatılır: trader o an hazırdır."""
+        """Kuyruk işçisi ve user data akışı ilk durum turunda başlatılır: trader o an hazırdır."""
         if getattr(self, "exec_queue", None) is not None and self.trader is not None:
             self.exec_queue.start(lambda c, now_ns: self.trader.adapter.submit(c, now_ms=now_ns // 1_000_000),
-                             self.trader.on_send_result)
+                                  self.trader.on_send_result)
+        self._start_userdata()
         await super().paper_status_task()
+
+    def _start_userdata(self) -> None:
+        """Private akış: yalnız silahlıyken kurulur (listenKey imzalı istek gerektirir).
+        `mode="shadow"`: çerçeveler tek sıralama noktasından kayda girer, çekirdeğe **verilmez**."""
+        ud = self.pcfg.userdata
+        if not ud.enabled or self.userdata is not None or self.trader is None:
+            return
+        client = self.trader.adapter.client
+        if client is None or not self.trader.adapter.armed:
+            return                      # silahsız: key alınamaz, sessizce beklenir (denetçi tekrar dener)
+        shadow = ud.mode == "shadow"
+        self.userdata = UserDataConnection(
+            base_url=ud.stream_base,
+            get_key=lambda: client.listen_key(int(time.time() * 1000)),
+            keepalive=lambda: client.keepalive_listen_key(int(time.time() * 1000)),
+            on_frame=lambda raw, recv_ns, mono_ns: self._on_private_frame(raw, recv_ns, mono_ns, shadow),
+            on_ctrl=lambda kind, info: self.ctrl(kind, info, notify=False),
+            keepalive_s=ud.keepalive_s, jitter_s=ud.jitter_s, seed=ud.seed,
+            backoff_initial_s=self.cfg.backoff_initial_s, backoff_max_s=self.cfg.backoff_max_s)
+        self.conns["private"] = self.userdata.conn          # bayatlık izleyicisi ve istatistikler görsün
+        self.frames.setdefault("private", 0)
+        self._userdata_task = asyncio.create_task(self.userdata.run())
+        self.ctrl("userdata_start", {"mode": ud.mode, "stream_base": ud.stream_base,
+                                     "note": "shadow: çekirdek tüketmez, yalnız kayda yazılır"}, notify=False)
+
+    def _on_private_frame(self, raw: bytes, recv_ns: int, mono_ns: int, shadow: bool) -> None:
+        """Tek sıralama noktası (Rule Zero #1): private çerçeve de `emit` üzerinden akışa girer."""
+        self.frames["private"] = self.frames.get("private", 0) + 1
+        self.emit("private", "user", raw, recv_ns, mono_ns, notify=False)
+        if shadow:
+            return
+        mapped = map_user_event(json.loads(raw))
+        if mapped is not None:
+            self.trader.on_user_event(mapped, recv_ns)
 
     async def _pre_beat(self) -> None:
         """Silahlanma denetimi ve mutabakat **REST çağrısıdır**: olay döngüsünde çalışırsa loop lag

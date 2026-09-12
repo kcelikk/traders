@@ -108,3 +108,15 @@ connect_timeout_ms = 2000        # bağlanma bütçesi; okuma bütçesinden ayr�
 read_timeout_ms = 5000           # POST'ta zaman aşımı = yürütme durumu bilinmiyor → mutabakat
 queue_max = 256
 reserve_slots = 8                # koruma ve çıkış emirleri için ayrılmış slot; giriş önce reddedilir
+
+[userdata]                       # Gate 3 — borsa doğruluğu: dolum olayları
+enabled = true
+mode = "shadow"                  # shadow: yalnız kayda yazılır, çekirdek tüketmez (gözlem adımı)
+stream_base = "wss://stream.binancefuture.com"   # Gate 0 §1 ile doğrulandı; REST tabanından farklı
+keepalive_s = 1800               # key ömrü 60 dk
+jitter_s = 60
+seed = 20260912
+staleness_s = 3600               # private akışta sessizlik normaldir (emir yoksa olay yok)
+
+[reconcile]                      # Gate 3 — sahipsiz koruma emri temizliği
+orphan_cancel = "dry_run"        # yalnız plan raporlanır; "apply" bir hafta gözlem + onay sonrası

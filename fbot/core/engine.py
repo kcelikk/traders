@@ -54,6 +54,7 @@ class CoreState:
     kill_switch: bool = False
     reconciled: bool = True
     events: int = 0
+    private_events: int = 0            # shadow modda tüketilmeyen user data çerçeveleri (Gate 3b)
     parse_errors: int = 0
     last_seq: int = 0
     last_data: dict | None = None      # son market olayının çözülmüş `data` sözlüğü (tüketiciler yeniden parse etmesin)
@@ -84,6 +85,11 @@ class Engine:
                 self._apply_freeze(state)
                 cmds += self._tick_positions(state, now_ns)
                 return state, cmds
+        elif ev.cat == "private":
+            # Gate 3b (shadow): user data çerçevesi kayda girer, çekirdek **tüketmez**. Gate 3c'de
+            # OMS (`cid → pos_id`) üzerinden bağlanacak. Şimdilik sayılır ki replay'de görünür olsun.
+            state.private_events += 1
+            return state, cmds
         elif ev.cat == "exec":
             cmds += self._exec(state, ev, now_ns)
         else:

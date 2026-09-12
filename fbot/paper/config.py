@@ -31,6 +31,26 @@ class ExecutionConfig:
 
 
 @dataclass(frozen=True)
+class ReconcileConfig:
+    """Sahipsiz koruma emri temizliği. `dry_run`: yalnız plan raporlanır, borsaya dokunulmaz.
+    `apply` bir hafta gözlemden sonra ve proje sahibi onayıyla açılır (ADR 0020)."""
+    orphan_cancel: str = "dry_run"     # dry_run | apply
+
+
+@dataclass(frozen=True)
+class UserDataConfig:
+    """User data akışı (Gate 3). `mode="shadow"`: çerçeveler yalnız kayda yazılır, çekirdek tüketmez.
+    Geri alma: `enabled = false` → sistem Gate 2 davranışına döner (REST ack tabanlı)."""
+    enabled: bool = False
+    mode: str = "shadow"               # shadow | active
+    stream_base: str = "wss://stream.binancefuture.com"
+    keepalive_s: int = 1800            # Binance: key ömrü 60 dk
+    jitter_s: int = 60
+    seed: int = 0
+    staleness_s: int = 3600            # private akış sessizliği: emir yoksa olay da yok
+
+
+@dataclass(frozen=True)
 class PaperConfig:
     recorder: RecorderConfig
     core: CoreConfig
@@ -44,6 +64,8 @@ class PaperConfig:
     strategy_id: str | None = None        # [run] bölümünden; Gate 5'te strateji kaydı bunu doldurur
     strategy_version: str | None = None
     execution: ExecutionConfig = None
+    userdata: UserDataConfig = None
+    reconcile: ReconcileConfig = None
 
 
 def _dec(v):
@@ -118,6 +140,21 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                            reserve_slots=int(ex.get("reserve_slots", 8)))
     if ecfg.reserve_slots >= ecfg.queue_max:
         raise PaperConfigError("[execution] reserve_slots < queue_max olmalı (rezerv kuyruğu yutamaz)")
+    rc_sec = t.get("reconcile") or {}
+    oc = str(rc_sec.get("orphan_cancel", "dry_run"))
+    if oc not in ("dry_run", "apply"):
+        raise PaperConfigError(f"[reconcile] orphan_cancel 'dry_run' veya 'apply' olmalı: {oc!r}")
+    rccfg = ReconcileConfig(orphan_cancel=oc)
+    ud = t.get("userdata") or {}
+    ud_mode = str(ud.get("mode", "shadow"))
+    if ud_mode not in ("shadow", "active"):
+        raise PaperConfigError(f"[userdata] mode 'shadow' veya 'active' olmalı: {ud_mode!r}")
+    ucfg = UserDataConfig(enabled=bool(ud.get("enabled", False)), mode=ud_mode,
+                          stream_base=str(ud.get("stream_base", "wss://stream.binancefuture.com")),
+                          keepalive_s=int(ud.get("keepalive_s", 1800)), jitter_s=int(ud.get("jitter_s", 60)),
+                          seed=int(ud.get("seed", 0)), staleness_s=int(ud.get("staleness_s", 3600)))
+    if ucfg.keepalive_s >= 3600:
+        raise PaperConfigError("[userdata] keepalive_s < 3600 olmalı: listenKey ömrü 60 dakikadır")
     sim = t["sim"]
     book_levels = int(sim.get("book_levels", 20))
     has_depth = any("depth" in x.lower() for x in rec.public_streams + rec.market_streams)
@@ -129,4 +166,4 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                        sim_prob_fill_on_touch=float(sim.get("prob_fill_on_touch", 0.0)),
                        sim_book_levels=book_levels, cost_drift=drift,
                        strategy_id=t["run"].get("strategy_id"), strategy_version=t["run"].get("strategy_version"),
-                       execution=ecfg), h
+                       execution=ecfg, userdata=ucfg, reconcile=rccfg), h

@@ -132,12 +132,13 @@ class Recorder:
         while not self.stop_ev.is_set():
             await asyncio.sleep(1.0)
             now = time.monotonic_ns()
-            for cat, conn in self.conns.items():
+            # list(): bağlantı sözlüğü koşu sırasında büyüyebilir (private akış silahlanınca eklenir)
+            for cat, conn in list(self.conns.items()):
                 thr = self.cfg.staleness_s.get(cat)
                 if thr is None or conn.last_frame_mono_ns == 0:
-                    continue
+                    continue          # eşiği olmayan kategori (private) burada değil, kendi yaşıyla izlenir
                 age = (now - conn.last_frame_mono_ns) / 1e9
-                if age > thr and not self.stale_flag[cat]:
+                if age > thr and not self.stale_flag.get(cat):
                     self.stale_flag[cat] = True
                     self.ctrl("stale", {"cat": cat, "age_s": round(age, 1), "threshold_s": thr})
                     await conn.force_reconnect("stale")
