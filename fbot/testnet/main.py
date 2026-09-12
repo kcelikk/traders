@@ -48,7 +48,7 @@ class TestnetTrader(PaperTrader):
         self.adapter = adapter
         self.orders = OrderTracker()
         self.errors = {"rejected": 0, "unknown": 0, "failed": 0, "dropped": 0}
-        self.queue = queue            # None → legacy: gönderim olay yolunda, senkron (geri alma yolu)
+        self.exec_queue = queue       # None → legacy: gönderim olay yolunda, senkron (geri alma yolu)
         self.rtt_ns: list[int] = []   # gönderim RTT ölçümü (Gate 2.1)
 
     def _step(self, ev, now_ns: int) -> None:
@@ -72,13 +72,13 @@ class TestnetTrader(PaperTrader):
         cev = self.emit("ctrl", "command", json.dumps(payload, separators=(",", ":")).encode(), now_ns, now_ns)
         if self.store is not None:
             self.store.record_order({**payload, "seq": cev.seq, "t_ns": now_ns})
-        if self.queue is not None:
-            accepted, klass = self.queue.put(c, now_ns)
+        if self.exec_queue is not None:
+            accepted, klass = self.exec_queue.put(c, now_ns)
             if not accepted:
                 # Sıkışıklıkta önce giriş reddedilir; koruma/çıkış için rezerv slot durur.
                 self.errors["dropped"] += 1
                 self.emit("ctrl", "order_dropped", json.dumps({"cmd": payload["cmd"], "class": klass,
-                                                               "queue": self.queue.stats}, separators=(",", ":"), default=str).encode(), now_ns, now_ns)
+                                                               "queue": self.exec_queue.stats}, separators=(",", ":"), default=str).encode(), now_ns, now_ns)
             return
         self._send_now(c, payload, now_ns)
 
@@ -158,10 +158,11 @@ class TestnetRecorder(PaperRecorder):
         # Silahsız doğar; anahtar dosyasını denetçi okur ve gerekirse çalışırken silahlandırır
         adapter = TestnetAdapter(None, armed=False, symbols=core.filters)
         ex = self.pcfg.execution
-        self.queue = ExecutionQueue(maxsize=ex.queue_max, reserve_slots=ex.reserve_slots) if ex.transport == "persistent_async" else None
+        # İsim `exec_queue`: `Recorder.queue` olay yazım kuyruğudur, gölgelenemez
+        self.exec_queue = ExecutionQueue(maxsize=ex.queue_max, reserve_slots=ex.reserve_slots) if ex.transport == "persistent_async" else None
         self.trader = TestnetTrader(Engine(core), adapter,
                                     lambda cat, stream, raw, recv_ns=None, mono_ns=None: self.emit(cat, stream, raw, recv_ns, mono_ns, notify=False),
-                                    store=self.store, queue=self.queue)
+                                    store=self.store, queue=self.exec_queue)
         self.arming = ArmingSupervisor(
             env_path=testnet_paths(ROOT), adapter=adapter,
             make_client=lambda creds: TestnetClient(creds, http=self._transport(), reserve_orders=self.pcfg.core.risk.reserve_orders),
@@ -198,12 +199,12 @@ class TestnetRecorder(PaperRecorder):
 
     def _exec_stats(self) -> dict | None:
         """Gate 2.1 ölçümü: kuyruk derinliği, reddedilen giriş sayısı, gönderim RTT'si, TLS el sıkışması."""
-        if self.queue is None:
+        if getattr(self, "exec_queue", None) is None:
             return None
         r = sorted(self.trader.rtt_ns) if self.trader is not None else []
         def pct(q):
             return round(r[min(len(r) - 1, int(q * (len(r) - 1) + 0.5))] / 1e6, 1) if r else None
-        out = {**self.queue.stats, "rtt_ms": {"n": len(r), "p50": pct(0.5), "p95": pct(0.95), "p99": pct(0.99)}}
+        out = {**self.exec_queue.stats, "rtt_ms": {"n": len(r), "p50": pct(0.5), "p95": pct(0.95), "p99": pct(0.99)}}
         if getattr(self, "pool", None) is not None:
             out["pool"] = dict(self.pool.stats)
         return out
@@ -236,19 +237,16 @@ class TestnetRecorder(PaperRecorder):
         print(json.dumps({"msg": ev["kind"], **ev}, ensure_ascii=False), flush=True)
 
     async def main(self):
-        if self.queue is not None:
-            # İşçi, evren çözüldükten sonra (trader hazırken) başlatılır
-            self._queue_task = None
         await super().main()
-        if self.queue is not None:
-            await self.queue.aclose()
+        if getattr(self, "exec_queue", None) is not None:
+            await self.exec_queue.aclose()
         if getattr(self, "pool", None) is not None:
             self.pool.close()
 
     async def paper_status_task(self):
         """Kuyruk işçisi ilk durum turunda başlatılır: trader o an hazırdır."""
-        if self.queue is not None and self.trader is not None:
-            self.queue.start(lambda c, now_ns: self.trader.adapter.submit(c, now_ms=now_ns // 1_000_000),
+        if getattr(self, "exec_queue", None) is not None and self.trader is not None:
+            self.exec_queue.start(lambda c, now_ns: self.trader.adapter.submit(c, now_ms=now_ns // 1_000_000),
                              self.trader.on_send_result)
         await super().paper_status_task()
 

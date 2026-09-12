@@ -155,3 +155,17 @@ def test_periodic_exchange_poll_runs_off_the_event_loop():
         await task
         assert r.calls == 1 and ticks > 10, f"döngü sorgu boyunca {ticks} kez dönebildi"
     asyncio.run(main())
+
+
+def test_execution_queue_does_not_shadow_the_recorder_event_queue(tmp_path):
+    """Canlıda yakalanan regresyon: `Recorder.queue` olay yazım kuyruğudur. Gönderim kuyruğu aynı
+    isme yazılınca `emit` çöküyordu ve süreç açılışta ölüyordu."""
+    from fbot.config import load_recorder_config
+    from fbot.recorder.main import Recorder
+
+    cfg, h = load_recorder_config("config/testnet.toml")
+    cfg = type(cfg)(**{**cfg.__dict__, "out_dir": str(tmp_path)})
+    r = Recorder(cfg, h, "t", None)
+    r.exec_queue = ExecutionQueue(maxsize=4, reserve_slots=1)     # Gate 2.1 alanı
+    ev = r.emit("ctrl", "tick", b'{"n":1}', 1, 1)
+    assert r.queue.qsize() == 1 and ev.seq == 1
