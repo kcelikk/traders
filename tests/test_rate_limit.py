@@ -56,3 +56,31 @@ def test_reserve_keeps_room_for_protection_orders():
         r.on_order(i)
     assert not r.allow_order(8, entry=True)     # giriş için yer yok (rezerv korunur)
     assert r.allow_order(8, entry=False)        # koruma/çıkış emri rezervi kullanabilir
+
+
+def test_429_backoff_uses_retry_after_when_the_exchange_sends_it():
+    """Sabit 10 s beklemek, borsa 60 s dediğinde yeni bir 429 üretir."""
+    r = RateLimiter(Limits(weight_1m=6000, orders_10s=300, orders_1m=1200), backoff_ms=10_000)
+    assert r.on_response(429, now_ms=1_000, headers={"Retry-After": "60"}) == "backoff"
+    assert r.backoff_until_ms == 1_000 + 60_000
+    assert not r.allow_order(now_ms=30_000)
+    assert r.allow_order(now_ms=61_001)
+
+
+def test_429_without_the_header_falls_back_to_the_configured_backoff():
+    r = RateLimiter(Limits(weight_1m=6000, orders_10s=300, orders_1m=1200), backoff_ms=10_000)
+    r.on_response(429, now_ms=0, headers={})
+    assert r.backoff_until_ms == 10_000
+
+
+def test_unreadable_retry_after_does_not_crash_the_limiter():
+    r = RateLimiter(Limits(weight_1m=6000, orders_10s=300, orders_1m=1200), backoff_ms=10_000)
+    r.on_response(429, now_ms=0, headers={"retry-after": "yarın"})
+    assert r.backoff_until_ms == 10_000
+
+
+def test_418_bans_and_also_backs_off():
+    r = RateLimiter(Limits(weight_1m=6000, orders_10s=300, orders_1m=1200), backoff_ms=10_000)
+    assert r.on_response(418, now_ms=0, headers={"Retry-After": "120"}) == "kill_switch"
+    assert r.banned and r.backoff_until_ms == 120_000
+    assert not r.allow_order(now_ms=10**9), "ban elle sıfırlanmadan açılmaz"

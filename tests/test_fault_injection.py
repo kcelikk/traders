@@ -20,18 +20,32 @@ def client(responses):
     return TestnetClient(CREDS, http=FakeHTTP(responses))
 
 
-def test_timeout_propagates_as_an_exception_not_a_response():
-    """Bugün `TestnetClient` timeout'u yakalamıyor; bu test mevcut davranışı sabitler.
-    Gate 2 bunu `unknown_execution=True` ile UNKNOWN'a çevirecek ve test o zaman güncellenecek."""
+def test_post_timeout_becomes_unknown_execution():
+    """Gate 2.1: POST'ta zaman aşımı "gönderilmedi" demek değildir; emir gerçekleşmiş olabilir.
+    Yürütme durumu bilinmiyor → mutabakat gerekir."""
     c = client([timeout()])
-    with pytest.raises(socket.timeout):
+    with pytest.raises(TestnetError) as e:
         c.signed("POST", "/fapi/v1/order", {"symbol": "BTCUSDT"}, now_ms=0)
+    assert e.value.unknown_execution is True and "zaman aşımı" in str(e.value)
 
 
-def test_connection_reset_propagates():
+def test_read_timeout_is_not_unknown_execution():
+    """GET idempotenttir ve hiçbir şey yürütmez; UNKNOWN işaretlemek gereksiz mutabakat kilidi üretir."""
+    c = client([timeout()])
+    with pytest.raises(TestnetError) as e:
+        c.signed("GET", "/fapi/v1/positionRisk", {}, now_ms=0)
+    assert e.value.unknown_execution is False
+
+
+def test_connection_reset_is_classified_by_method():
     c = client([drop_connection()])
-    with pytest.raises(ConnectionResetError):
+    with pytest.raises(TestnetError) as e:
         c.signed("GET", "/fapi/v1/order", {}, now_ms=0)
+    assert e.value.unknown_execution is False
+    c = client([drop_connection()])
+    with pytest.raises(TestnetError) as e:
+        c.signed("POST", "/fapi/v1/order", {}, now_ms=0)
+    assert e.value.unknown_execution is True
 
 
 def test_delay_is_actually_applied():

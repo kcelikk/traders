@@ -21,6 +21,16 @@ class PaperConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class ExecutionConfig:
+    """Emir gönderim yolu (Gate 2.1). `legacy` geri alma yoludur: gönderim olay yolunda, senkron."""
+    transport: str = "legacy"          # legacy | persistent_async
+    connect_timeout_ms: int = 2000
+    read_timeout_ms: int = 5000
+    queue_max: int = 256
+    reserve_slots: int = 8
+
+
+@dataclass(frozen=True)
 class PaperConfig:
     recorder: RecorderConfig
     core: CoreConfig
@@ -33,6 +43,7 @@ class PaperConfig:
     cost_drift: CostDriftConfig | None = None
     strategy_id: str | None = None        # [run] bölümünden; Gate 5'te strateji kaydı bunu doldurur
     strategy_version: str | None = None
+    execution: ExecutionConfig = None
 
 
 def _dec(v):
@@ -96,6 +107,17 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                             cost_to_capital_max=_dec(cd.get("cost_to_capital_max")),
                             net_per_trade_min=_dec(cd.get("net_per_trade_min")),
                             min_trades=int(cd.get("min_trades", 10))) if cd else None
+    ex = t.get("execution") or {}
+    transport = str(ex.get("transport", "legacy"))
+    if transport not in ("legacy", "persistent_async"):
+        raise PaperConfigError(f"[execution] transport 'legacy' veya 'persistent_async' olmalı: {transport!r}")
+    ecfg = ExecutionConfig(transport=transport,
+                           connect_timeout_ms=int(ex.get("connect_timeout_ms", 2000)),
+                           read_timeout_ms=int(ex.get("read_timeout_ms", 5000)),
+                           queue_max=int(ex.get("queue_max", 256)),
+                           reserve_slots=int(ex.get("reserve_slots", 8)))
+    if ecfg.reserve_slots >= ecfg.queue_max:
+        raise PaperConfigError("[execution] reserve_slots < queue_max olmalı (rezerv kuyruğu yutamaz)")
     sim = t["sim"]
     book_levels = int(sim.get("book_levels", 20))
     has_depth = any("depth" in x.lower() for x in rec.public_streams + rec.market_streams)
@@ -106,4 +128,5 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
                        sim_jitter_ms=int(sim.get("jitter_ms", 0)), sim_partial_timeout_ms=sim.get("partial_timeout_ms"),
                        sim_prob_fill_on_touch=float(sim.get("prob_fill_on_touch", 0.0)),
                        sim_book_levels=book_levels, cost_drift=drift,
-                       strategy_id=t["run"].get("strategy_id"), strategy_version=t["run"].get("strategy_version")), h
+                       strategy_id=t["run"].get("strategy_id"), strategy_version=t["run"].get("strategy_version"),
+                       execution=ecfg), h

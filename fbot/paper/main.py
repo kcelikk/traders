@@ -84,6 +84,7 @@ class PaperRecorder(Recorder):
             await asyncio.sleep(10.0)
             ks = KillSwitch(self.kill.path)
             if self.trader is not None:
+                await self._pre_beat()        # bloklayan borsa sorguları thread'e taşınır (Gate 2.1)
                 self._beat(ks.active)
                 self.trader.engine_state.kill_switch = ks.active
                 st = self.trader.engine_state
@@ -92,6 +93,9 @@ class PaperRecorder(Recorder):
                                           "open": sum(1 for p in st.positions.values() if p.state.value not in ("CLOSED",)),
                                           "intents": st.intents_made, "rejected": st.intents_rejected,
                                           "kill_switch": ks.active, "persist": self._persist_stats()}, notify=False)
+
+    async def _pre_beat(self) -> None:
+        """Canlılık damgasından önce yapılacak bloklayan iş (borsa sorguları). Paper'da yok."""
 
     def _persist_stats(self) -> dict | None:
         """Kalıcılık kuyruğu ölçümü: derinlik p99 ve düşen satır sayısı (senkron store'da yok)."""

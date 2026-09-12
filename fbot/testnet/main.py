@@ -22,10 +22,12 @@ from pathlib import Path
 from fbot.core.engine import Engine
 from fbot.core.order_state import OrderBook as OrderTracker
 from fbot.execution.exchange_state import ReconcileSupervisor
+from fbot.execution.queue import ExecutionQueue
 from fbot.execution.testnet_adapter import TestnetAdapter, TestnetDisarmed
 from fbot.gateway.killswitch import KillSwitch
-from fbot.gateway.testnet import TestnetClient, TestnetError
+from fbot.gateway.testnet import _HOST as TESTNET_HOST, TestnetClient, TestnetError, _http as default_http
 from fbot.gateway.credfile import testnet_paths
+from fbot.gateway.http_pool import HTTPPool
 from fbot.testnet.arming import ArmingSupervisor
 from fbot.paper.config import load_paper_config
 from fbot.paper.main import PaperRecorder, filters_from_exchange_info, run_identity
@@ -41,11 +43,13 @@ ROOT = Path(__file__).resolve().parents[2]
 class TestnetTrader(PaperTrader):
     """PaperTrader'ın execution'ı değişmiş hâli: komutlar simülatöre değil testnet'e gider."""
 
-    def __init__(self, engine, adapter: TestnetAdapter, emit, store=None):
+    def __init__(self, engine, adapter: TestnetAdapter, emit, store=None, queue: ExecutionQueue | None = None):
         super().__init__(engine, sim=_NullSim(), emit=emit, store=store)
         self.adapter = adapter
         self.orders = OrderTracker()
-        self.errors = {"rejected": 0, "unknown": 0, "failed": 0}
+        self.errors = {"rejected": 0, "unknown": 0, "failed": 0, "dropped": 0}
+        self.queue = queue            # None → legacy: gönderim olay yolunda, senkron (geri alma yolu)
+        self.rtt_ns: list[int] = []   # gönderim RTT ölçümü (Gate 2.1)
 
     def _step(self, ev, now_ns: int) -> None:
         self.engine_state, cmds = self.engine.step(self.engine_state, ev, now_ns)
@@ -68,16 +72,39 @@ class TestnetTrader(PaperTrader):
         cev = self.emit("ctrl", "command", json.dumps(payload, separators=(",", ":")).encode(), now_ns, now_ns)
         if self.store is not None:
             self.store.record_order({**payload, "seq": cev.seq, "t_ns": now_ns})
-        try:
-            out = self.adapter.submit(c, now_ms=now_ns // 1_000_000)
-        except TestnetDisarmed as e:
+        if self.queue is not None:
+            accepted, klass = self.queue.put(c, now_ns)
+            if not accepted:
+                # Sıkışıklıkta önce giriş reddedilir; koruma/çıkış için rezerv slot durur.
+                self.errors["dropped"] += 1
+                self.emit("ctrl", "order_dropped", json.dumps({"cmd": payload["cmd"], "class": klass,
+                                                               "queue": self.queue.stats}, separators=(",", ":"), default=str).encode(), now_ns, now_ns)
+            return
+        self._send_now(c, payload, now_ns)
+
+    def on_send_result(self, c, klass: str, out: dict | None, err: Exception | None, queued_ns: int, rtt_ns: int) -> None:
+        """Kuyruk işçisinden gelen sonuç; döngü thread'inde çalışır ve tek sıralama noktasına yazar."""
+        self.rtt_ns.append(rtt_ns)
+        del self.rtt_ns[10_000:]
+        now_ns = queued_ns
+        if err is not None:
+            self._send_error(err, _cmd_payload(c), now_ns)
+            return
+        self._emit_send_result(out, now_ns)
+
+    def _send_error(self, e: Exception, payload: dict, now_ns: int) -> None:
+        if isinstance(e, TestnetDisarmed):
             self.emit("ctrl", "order_skipped", json.dumps({"reason": str(e), "cmd": payload["cmd"]}, separators=(",", ":")).encode(), now_ns, now_ns)
             return
-        except TestnetError as e:
+        if isinstance(e, TestnetError):
             self.errors["failed"] += 1
             self.emit("ctrl", "order_failed", json.dumps({"status": e.status, "code": e.code, "msg": str(e)[:200],
+                                                          "unknown_execution": e.unknown_execution,
                                                           "cmd": payload["cmd"]}, separators=(",", ":")).encode(), now_ns, now_ns)
             return
+        raise e
+
+    def _emit_send_result(self, out: dict, now_ns: int) -> None:
         kind = out.get("kind", "")
         if kind.endswith("_rejected"):
             self.errors["rejected"] += 1
@@ -88,6 +115,15 @@ class TestnetTrader(PaperTrader):
         elif kind.startswith("algo"):
             self.stats["algos"] += 1
         self.emit("exec", kind, json.dumps(out, separators=(",", ":"), default=str).encode(), now_ns, now_ns)
+
+    def _send_now(self, c, payload: dict, now_ns: int) -> None:
+        """Legacy yol: HTTP isteği olay işleme yolunun içinde (bloklar). `transport = "legacy"`."""
+        try:
+            out = self.adapter.submit(c, now_ms=now_ns // 1_000_000)
+        except (TestnetDisarmed, TestnetError) as e:
+            self._send_error(e, payload, now_ns)
+            return
+        self._emit_send_result(out, now_ns)
 
     def on_user_event(self, mapped: dict, now_ns: int) -> None:
         """User data akışından gelen olay: emir durumu güncellenir, çekirdeğe exec olayı olarak verilir."""
@@ -121,12 +157,14 @@ class TestnetRecorder(PaperRecorder):
         # Adapter borsa filtreleriyle çalışır (step_size / tick_size); pricePrecision kullanılmaz (Gate 2.0)
         # Silahsız doğar; anahtar dosyasını denetçi okur ve gerekirse çalışırken silahlandırır
         adapter = TestnetAdapter(None, armed=False, symbols=core.filters)
+        ex = self.pcfg.execution
+        self.queue = ExecutionQueue(maxsize=ex.queue_max, reserve_slots=ex.reserve_slots) if ex.transport == "persistent_async" else None
         self.trader = TestnetTrader(Engine(core), adapter,
                                     lambda cat, stream, raw, recv_ns=None, mono_ns=None: self.emit(cat, stream, raw, recv_ns, mono_ns, notify=False),
-                                    store=self.store)
+                                    store=self.store, queue=self.queue)
         self.arming = ArmingSupervisor(
             env_path=testnet_paths(ROOT), adapter=adapter,
-            make_client=lambda creds: TestnetClient(creds, reserve_orders=self.pcfg.core.risk.reserve_orders),
+            make_client=lambda creds: TestnetClient(creds, http=self._transport(), reserve_orders=self.pcfg.core.risk.reserve_orders),
             probe=self._probe_balance,
             open_positions=lambda: sum(1 for p in self.trader.engine_state.positions.values() if p.state.value != "CLOSED"))
         ev = self.arming.check()
@@ -148,6 +186,28 @@ class TestnetRecorder(PaperRecorder):
                                     "note": "testnet tesisat doğrulama ortamıdır; kârlılık kanıtı değildir (ADR 0015)"}, notify=False)
         return syms
 
+    def _transport(self):
+        """`persistent_async`: kalıcı bağlantı havuzu (TLS el sıkışması bağlantı başına).
+        `legacy`: her istekte yeni bağlantı (`TestnetClient` varsayılanı)."""
+        if self.pcfg.execution.transport != "persistent_async":
+            return default_http
+        ex = self.pcfg.execution
+        self.pool = HTTPPool(TESTNET_HOST, connect_timeout_s=ex.connect_timeout_ms / 1000,
+                             read_timeout_s=ex.read_timeout_ms / 1000)
+        return self.pool.as_callable()
+
+    def _exec_stats(self) -> dict | None:
+        """Gate 2.1 ölçümü: kuyruk derinliği, reddedilen giriş sayısı, gönderim RTT'si, TLS el sıkışması."""
+        if self.queue is None:
+            return None
+        r = sorted(self.trader.rtt_ns) if self.trader is not None else []
+        def pct(q):
+            return round(r[min(len(r) - 1, int(q * (len(r) - 1) + 0.5))] / 1e6, 1) if r else None
+        out = {**self.queue.stats, "rtt_ms": {"n": len(r), "p50": pct(0.5), "p95": pct(0.95), "p99": pct(0.99)}}
+        if getattr(self, "pool", None) is not None:
+            out["pool"] = dict(self.pool.stats)
+        return out
+
     def _probe_balance(self, client) -> float:
         """Silahlanma kanıtı: yeni anahtarla bakiye okunabiliyor mu? Hesap görünümünü de günceller."""
         bal = client.balance(int(time.time() * 1000))
@@ -156,9 +216,12 @@ class TestnetRecorder(PaperRecorder):
         return usdt
 
     def _reconcile(self, now_ms) -> None:
-        """Mutabakat sonucunu çekirdeğe ve kayda yazar. Kilit çekirdekte: K2 her girişi reddeder."""
+        """Açılış mutabakatı (senkron; henüz döngü yok). Periyodik yol `_pre_beat`."""
         self.recon.client = self.trader.adapter.client        # silahlanma değiştiyse istemci de değişti
-        ev = self.recon.check(now_ms)
+        self._apply_reconcile(self.recon.check(now_ms))
+
+    def _apply_reconcile(self, ev) -> None:
+        """Mutabakat sonucunu çekirdeğe ve kayda yazar. Kilit çekirdekte: K2 her girişi reddeder."""
         if ev is None:
             return
         self._recon_state = ev
@@ -172,19 +235,43 @@ class TestnetRecorder(PaperRecorder):
         self.ctrl(ev["kind"], ev, notify=False)
         print(json.dumps({"msg": ev["kind"], **ev}, ensure_ascii=False), flush=True)
 
-    def _beat(self, kill: bool) -> None:
-        """Periyodik durum görevi: önce anahtar dosyasını denetle, sonra canlılık damgasını bas."""
+    async def main(self):
+        if self.queue is not None:
+            # İşçi, evren çözüldükten sonra (trader hazırken) başlatılır
+            self._queue_task = None
+        await super().main()
+        if self.queue is not None:
+            await self.queue.aclose()
+        if getattr(self, "pool", None) is not None:
+            self.pool.close()
+
+    async def paper_status_task(self):
+        """Kuyruk işçisi ilk durum turunda başlatılır: trader o an hazırdır."""
+        if self.queue is not None and self.trader is not None:
+            self.queue.start(lambda c, now_ns: self.trader.adapter.submit(c, now_ms=now_ns // 1_000_000),
+                             self.trader.on_send_result)
+        await super().paper_status_task()
+
+    async def _pre_beat(self) -> None:
+        """Silahlanma denetimi ve mutabakat **REST çağrısıdır**: olay döngüsünde çalışırsa loop lag
+        dikeni üretir (Gate 1 ölçümünde en kötü p99 3,2 s). Thread'e taşınır; sonuçların akışa
+        yazımı yine döngü thread'inde olur (tek sıralama noktası)."""
         try:
-            ev = self.arming.check()
+            ev = await asyncio.to_thread(self.arming.check)
             if ev:
                 self._emit_arming(ev)
         except Exception as e:  # noqa: BLE001 — denetçi hatası kaydı durdurmaz
             print(json.dumps({"msg": "arming_error", "err": repr(e)}), flush=True)
         try:
-            self._reconcile(lambda: int(time.time() * 1000))
+            self.recon.client = self.trader.adapter.client
+            ev = await asyncio.to_thread(self.recon.check, lambda: int(time.time() * 1000))
+            self._apply_reconcile(ev)
         except Exception as e:  # noqa: BLE001 — mutabakat hatası kaydı durdurmaz, kilidi açmaz
             self.trader.engine_state.reconciled = False
             print(json.dumps({"msg": "reconcile_error", "err": repr(e)}), flush=True)
+
+    def _beat(self, kill: bool) -> None:
+        """Canlılık damgası. Bloklayan sorgular `_pre_beat`'te, thread'te yapıldı."""
         st = self.trader.engine_state
         self.store.heartbeat(now_ns=time.time_ns(),
                              detail={"kill_switch": kill, "positions": len(st.positions), "stats": dict(self.trader.stats),
@@ -196,6 +283,7 @@ class TestnetRecorder(PaperRecorder):
                                      "fills": self.trader.orders._stats["fills"],
                                      "rejected": self.trader.errors["rejected"],
                                      "persist": self._persist_stats(),
+                                     "execution": self._exec_stats(),
                                      "reconciled": getattr(self, "_recon_state", {}).get("reconciled"),
                                      "reconcile_reason": getattr(self, "_recon_state", {}).get("reason"),
                                      "mismatches": getattr(self, "_recon_state", {}).get("mismatches") or []})

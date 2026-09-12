@@ -98,11 +98,24 @@ class RateLimiter:
             elif t == "ORDERS" and iv == "MINUTE":
                 self.o1m.override = c
 
-    def on_response(self, status: int, now_ms: int) -> str | None:
+    def on_response(self, status: int, now_ms: int, headers: dict | None = None) -> str | None:
+        """429'da geri çekilme süresi **borsanın söylediği** kadardır: `Retry-After` (saniye).
+        Başlık yoksa config'teki sabit süre kullanılır. 418 kalıcı bandır; çağıran kill switch'e bağlar."""
         if status == 418:
             self.banned = True
+            self.backoff_until_ms = max(self.backoff_until_ms, now_ms + self._retry_after_ms(headers, self.backoff_ms))
             return "kill_switch"
         if status == 429:
-            self.backoff_until_ms = now_ms + self.backoff_ms
+            self.backoff_until_ms = now_ms + self._retry_after_ms(headers, self.backoff_ms)
             return "backoff"
         return None
+
+    @staticmethod
+    def _retry_after_ms(headers: dict | None, default_ms: int) -> int:
+        v = {k.lower(): x for k, x in (headers or {}).items()}.get("retry-after")
+        if v is None:
+            return default_ms
+        try:
+            return max(0, int(float(v) * 1000))
+        except (TypeError, ValueError):
+            return default_ms

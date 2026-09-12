@@ -101,3 +101,10 @@ commission_to_gross_max = "0.30"   # komisyon / brüt kâr
 cost_to_capital_max = "0.02"       # toplam maliyet / sermaye
 net_per_trade_min = "-0.05"        # işlem başına ortalama net (%)
 min_trades = 20
+
+[execution]                      # Gate 2.1 — emir gönderim yolu
+transport = "persistent_async"   # legacy = gönderim olay yolunda senkron (geri alma yolu)
+connect_timeout_ms = 2000        # bağlanma bütçesi; okuma bütçesinden ayrı
+read_timeout_ms = 5000           # POST'ta zaman aşımı = yürütme durumu bilinmiyor → mutabakat
+queue_max = 256
+reserve_slots = 8                # koruma ve çıkış emirleri için ayrılmış slot; giriş önce reddedilir

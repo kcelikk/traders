@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import socket
 from dataclasses import dataclass
 
 from fbot.core.rate_limit import Limits, RateLimiter
@@ -58,12 +59,28 @@ class TestnetClient:
                                        backoff_ms=10_000, reserve_orders=self.reserve_orders)
 
     # ---------------- düşük seviye
+    def _call(self, method: str, path: str, query: str, headers: dict):
+        """Taşıma katmanı hataları burada sınıflanır. Bugüne kadar timeout hiç yakalanmıyordu:
+        istisna çağrı zincirinde yukarı çıkıyor ve emir "gönderilmedi" sayılıyordu. Oysa POST'ta
+        zaman aşımı **yürütme durumu bilinmiyor** demektir (mutabakat gerekir)."""
+        try:
+            return self.http(method, path, query, headers, self.timeout)
+        except (socket.timeout, TimeoutError) as e:
+            raise TestnetError(f"{method} {path}: zaman aşımı ({self.timeout}s)", status=0,
+                               unknown_execution=method != "GET") from e
+        except (ConnectionResetError, BrokenPipeError, http.client.HTTPException) as e:
+            raise TestnetError(f"{method} {path}: bağlantı koptu ({type(e).__name__})", status=0,
+                               unknown_execution=method != "GET") from e
+        except OSError as e:
+            raise TestnetError(f"{method} {path}: ağ hatası ({type(e).__name__})", status=0,
+                               unknown_execution=method != "GET") from e
+
     def signed(self, method: str, path: str, params: dict, now_ms: int) -> dict:
         p = {**params, "recvWindow": self.recv_window, "timestamp": now_ms}
         q, sig = sign_query(p, self.creds)
-        status, headers, body = self.http(method, path, f"{q}&signature={sig}", {"X-MBX-APIKEY": self.creds.api_key}, self.timeout)
+        status, headers, body = self._call(method, path, f"{q}&signature={sig}", {"X-MBX-APIKEY": self.creds.api_key})
         self.limiter.sync_headers(headers, now_ms)
-        act = self.limiter.on_response(status, now_ms)
+        act = self.limiter.on_response(status, now_ms, headers)
         if status == 200:
             try:
                 return json.loads(body or b"{}")
@@ -120,11 +137,11 @@ class TestnetClient:
 
     def listen_key(self, now_ms: int) -> str:
         """User data stream: listenKey (ADR 0003). Keepalive private bağlantı yöneticisinin işidir."""
-        status, headers, body = self.http("POST", "/fapi/v1/listenKey", "", {"X-MBX-APIKEY": self.creds.api_key}, self.timeout)
+        status, headers, body = self._call("POST", "/fapi/v1/listenKey", "", {"X-MBX-APIKEY": self.creds.api_key})
         self.limiter.sync_headers(headers, now_ms)
         if status != 200:
             raise TestnetError(f"listenKey HTTP {status}", status=status)
         return json.loads(body)["listenKey"]
 
     def keepalive_listen_key(self, now_ms: int) -> None:
-        self.http("PUT", "/fapi/v1/listenKey", "", {"X-MBX-APIKEY": self.creds.api_key}, self.timeout)
+        self._call("PUT", "/fapi/v1/listenKey", "", {"X-MBX-APIKEY": self.creds.api_key})
