@@ -9,6 +9,7 @@ from fbot.core.beta_tracker import BetaTracker
 from fbot.core.commands import BarClosed, PlaceOrder, StalenessChanged
 from fbot.core.decision import DecisionConfig, decide_explain
 from fbot.core.health import HALTED, HealthFacts, entry_allowed, exit_mode
+from fbot.core.lease import LeaseTable
 from fbot.core.ids import pos_id_of
 from fbot.core.market import SymbolMarket
 from fbot.core.oms import ENTRY, EXIT, PARTIAL, PROTECTIVE, OrderRegistry
@@ -16,6 +17,7 @@ from fbot.core.reactors import OFF, ReactorConfig, enabled_reactors, react
 from fbot.core.position import Filters, Position, PositionConfig, PositionManager, PosState
 from fbot.core.risk import EntryIntent as RiskIntent, RiskConfig, RiskInputs, assess
 from fbot.core.state_engine import StateEngineConfig, SymbolStateEngine
+from fbot.strategy.base import StrategyContext
 from fbot.events import RawEvent
 
 
@@ -27,6 +29,8 @@ class CoreConfig:
     filters: dict[str, Filters] = field(default_factory=dict)
     tick_ms: int = 1000
     pending_entry_ttl_ms: int = 60_000   # giriş emri dolum/ret bildirmezse sembol bu süre sonunda serbest kalır
+    strategy_id: str = "v1_state_cell"   # kira sahibi ve atıf etiketi (Gate 5; tek strateji hâlinde sabit)
+    strategies: object = None            # StrategyRegistry | None — None ise gömülü karar motoru
     order_ack_ttl_ms: int = 30_000       # emir bu süre içinde cevap vermezse UNKNOWN (mutabakat çözer)
     user_stream_staleness_ms: int = 3_600_000   # private akış sessizliği eşiği (emir yoksa olay da yok)
     reactors: ReactorConfig = field(default_factory=ReactorConfig)   # varsayılan: off
@@ -58,6 +62,7 @@ class CoreState:
     no_intent: dict = field(default_factory=dict)
     last_verdicts: list = field(default_factory=list)
     pending_entries: dict = field(default_factory=dict)   # sembol → son geçerlilik (ns). TTL ile süpürülür
+    leases: LeaseTable = field(default_factory=LeaseTable)   # sembol kirası: tek sahip (Gate 5)
     orders: OrderRegistry = field(default_factory=OrderRegistry)   # cid → pozisyon/rol (Gate 3c)
     kill_switch: bool = False
     reconciled: bool = True
@@ -78,6 +83,7 @@ class Engine:
         self.cfg = cfg
         self.pm = PositionManager(cfg.position) if cfg.position else None
         self.reactors = enabled_reactors(cfg.reactors) if cfg.reactors.mode != OFF else []
+        self.strategies = cfg.strategies
 
     def step(self, state: CoreState, ev: RawEvent, now_ns: int) -> tuple[CoreState, list]:
         state.events += 1
@@ -94,6 +100,7 @@ class Engine:
                     state.last_recv_ns[cat] = ev.recv_ns
             elif ev.stream == "tick":
                 self._sweep_pending(state, now_ns)
+                state.leases.sweep(now_ns)
                 state.orders.sweep(now_ns, self.cfg.order_ack_ttl_ms * 1_000_000)
                 cmds += self._staleness(state, now_ns)
                 cmds += self._tick_positions(state, now_ns)
@@ -180,6 +187,7 @@ class Engine:
             state.positions[pos.pos_id] = pos
             state.by_symbol.setdefault(sym, set()).add(pos.pos_id)
             state.pending_entries.pop(sym, None)
+            state.leases.bind(sym, pos.pos_id)          # kira artık pozisyona bağlı: TTL ile düşmez
             return self.pm.on_entry_fill(pos, Decimal(d["price"]), Decimal(d["qty"]), Decimal(d["sl"]), Decimal(d["tp"]), now_ns,
                                          is_maker=bool(d.get("is_maker", False)), entry_state=d.get("entry_state"))
         if pos is None:
@@ -263,8 +271,15 @@ class Engine:
                     if pid in state.positions and state.positions[pid].state != PosState.CLOSED}
             if live:
                 state.by_symbol[sym] = live
-            else:
-                del state.by_symbol[sym]
+                continue
+            del state.by_symbol[sym]
+        # Kira yalnız pozisyon kapandıktan **ve** koruma emirleri terminal olduktan sonra bırakılır:
+        # erken bırakılırsa ikinci giriş, ilkinin korumaları hâlâ borsadayken açılır. Tarama
+        # pozisyonlar üzerinden yapılır; sembol indeksten düştükten sonra da çalışmalı.
+        for pid in sorted(state.positions):
+            p = state.positions[pid]
+            if p.state == PosState.CLOSED and not p.active_algos:
+                state.leases.release_position(pid)
 
     def _react(self, state: CoreState, sym: str, e: str, now_ns: int) -> list:
         """Olay-tetiklemeli çıkış değerlendirmesi (Gate 4a). Açık pozisyon yoksa O(1) döner."""
@@ -347,11 +362,34 @@ class Engine:
         cmds += self._decide(state, bar, m, se, label, feats, now_ns)
         return cmds
 
+    def _intent_from(self, view: dict, now_ns: int, default_id: str):
+        """Niyeti kim üretti: kayıt defteri varsa plugin, yoksa gömülü karar motoru.
+
+        Gate 5 parite koşulu: tek strateji kayıtlıyken iki yol **aynı niyeti** üretir; plugin
+        zaten `decide_explain`'i sarmalıyor, yeniden yazmıyor.
+        """
+        reg = self.strategies
+        if reg is None:
+            # Kayıt defteri yok: gömülü karar motoru (planlanan geri alma yolu, Gate 4 davranışı).
+            intent, blocked = decide_explain(view, self.cfg.decision)
+            return intent, blocked, default_id
+        if not reg.active():
+            # Kayıt defteri var ama hiçbir strateji bu modda yetkili değil. Gömülü motora **düşmek
+            # fail-open olurdu**: aynı mantık kapıyı atlayarak çalışırdı. Niyet üretilmez.
+            return None, "strateji_yetkili_degil", default_id
+        for item in reg.active():          # sıra sabittir; ilk niyet üreten kazanır (kira tekil sahiplik)
+            got = item.strategy.on_bar(StrategyContext(view["symbol"], view, now_ns, item.manifest.params))
+            if got:
+                return got[0], None, item.manifest.id
+        last = getattr(reg.active()[-1].strategy, "last_block", None)
+        return None, last, reg.active()[-1].manifest.id
+
     # ---------------- giriş zinciri (Faz 6): karar → risk → emir
     def _decide(self, state: CoreState, bar: BarClosed, m: SymbolMarket, se: SymbolStateEngine, label: str, feats: dict, now_ns: int) -> list:
         if self.cfg.decision is None or self.cfg.risk is None:
             return []
         sym = bar.symbol
+        strategy_id = self.cfg.strategy_id
         if m.best_bid is None or m.best_ask is None:
             return []
         spread_bps = Decimal((m.best_ask - m.best_bid) / m.best_ask * 10000) if m.best_ask else None
@@ -360,7 +398,7 @@ class Engine:
                 "best_bid": m.best_bid, "best_ask": m.best_ask, "spread_bps": spread_bps,
                 "stale": any(state.stale.values()), "now_ms": bar.end_ms, "next_funding_ms": m.next_funding_ms,
                 "bar_end_ms": bar.end_ms, "has_position": has_pos}
-        intent, blocked = decide_explain(view, self.cfg.decision)
+        intent, blocked, strategy_id = self._intent_from(view, now_ns, strategy_id)
         if intent is None:
             state.no_intent[blocked] = state.no_intent.get(blocked, 0) + 1
             if blocked not in ("S0_durum_yok", "allowed_cells_bos", "pozisyon_acik"):
@@ -380,9 +418,12 @@ class Engine:
             state.intents_rejected += 1
             return []
         state.intents_made += 1
-        state.pending_entries[sym] = now_ns + self.cfg.pending_entry_ttl_ms * 1_000_000
+        ttl_ns = self.cfg.pending_entry_ttl_ms * 1_000_000
+        state.pending_entries[sym] = now_ns + ttl_ns
+        state.leases.acquire(sym, strategy_id, now_ns, ttl_ns)
         state.entry_meta[intent.client_order_id] = {"symbol": sym, "side": intent.side, "sl_pct": str(intent.sl_pct),
-                                                    "tp_pct": str(intent.tp_pct), "state": label, "cell": intent.cell, "explain": intent.explain}
+                                                    "tp_pct": str(intent.tp_pct), "state": label, "cell": intent.cell,
+                                                    "explain": intent.explain, "strategy_id": strategy_id}
         return [PlaceOrder(sym, "BUY" if intent.side == "long" else "SELL", "MARKET", verdict.qty, None, False, intent.client_order_id, None)]
 
     @staticmethod
@@ -405,6 +446,8 @@ class Engine:
         return RiskInputs(kill_switch=state.kill_switch, reconciled=state.reconciled, warmup_bars=warm,
                           stale=dict(state.stale), skew_ms=acc.get("skew_ms", 0), open_positions=open_pos,
                           pending_entries=set(state.pending_entries), gross_usdt=gross, beta_exposure_usdt=Decimal(0),
+                          lease_busy=state.leases.busy_for(bar.symbol, self.cfg.strategy_id),
+                          strategy_id=self.cfg.strategy_id,
                           betas=self._betas(state, bar.symbol), account_leverage=lev_view,
                           available_balance=Decimal(str(acc["available_balance"])) if acc.get("available_balance") is not None else None,
                           filters=self.cfg.filters, spread_bps={bar.symbol: spread_bps} if spread_bps is not None else {},

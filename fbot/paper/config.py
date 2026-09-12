@@ -16,6 +16,10 @@ from fbot.core.position import PositionConfig
 from fbot.core.reactors import OFF, ReactorConfig
 from fbot.core.risk import RiskConfig
 from fbot.core.state_engine import StateEngineConfig
+from fbot.identity import code_hash
+from fbot.strategy.manifest import parse_manifest
+from fbot.strategy.registry import StrategyRegistry
+from fbot.strategy.v1_state_cell import StateCellStrategy
 
 
 class PaperConfigError(ValueError):
@@ -70,6 +74,32 @@ class PaperConfig:
     execution: ExecutionConfig = None
     userdata: UserDataConfig = None
     reconcile: ReconcileConfig = None
+
+
+# Kayıtlı plugin'ler: manifest dosyadan, kod buradan. Yeni strateji eklemek kod değişikliğidir.
+PLUGINS = {"v1_state_cell": StateCellStrategy}
+
+
+def load_strategies(root: Path, ids, mode: str, decision_cfg) -> StrategyRegistry | None:
+    """`strategies/<id>/manifest.toml` yükler ve kayıt defterini kurar.
+
+    Boş liste → `None` döner ve çekirdek gömülü karar motoruyla çalışır (Gate 4 davranışı,
+    planlanan geri alma yolu).
+    """
+    if not ids:
+        return None
+    reg = StrategyRegistry(mode=mode)
+    for sid in ids:
+        cls = PLUGINS.get(sid)
+        if cls is None:
+            raise PaperConfigError(f"[[strategies]] bilinmeyen plugin: {sid!r} (bilinenler: {', '.join(PLUGINS)})")
+        path = Path(root) / "strategies" / sid / "manifest.toml"
+        if not path.exists():
+            raise PaperConfigError(f"manifest bulunamadı: {path}")
+        manifest = parse_manifest(tomllib.loads(path.read_bytes().decode()))
+        # Kod parmak izi: hangi kararın hangi kodla üretildiği sonradan sorulabilmeli
+        reg.register(manifest, cls(decision_cfg), code_hash=code_hash(Path(root) / "fbot" / "strategy"))
+    return reg
 
 
 def _dec(v):
@@ -139,12 +169,16 @@ def load_paper_config(path: str | Path) -> tuple[PaperConfig, str]:
         # shadow gözlemi ve ayrı onay olmadan açılmaz.
         raise PaperConfigError("[reactors] mode='active' henüz yok: shadow gözlemi ve onay gerekir")
     rxcfg = ReactorConfig(mode=rx_mode, enabled=tuple(rx.get("enabled", ())))
+    strategy_ids = list((t.get("strategy") or {}).get("enabled", []))
+    registry = load_strategies(path.parent.parent if path.parent.name == "config" else Path("."),
+                               strategy_ids, str((t.get("mode") or {}).get("mode", "replay")), dcfg)
     core = CoreConfig(bar_ms=int(t["core"]["bar_ms"]), staleness_ms={k: int(v * 1000) for k, v in rec.staleness_s.items()},
                       position=pcfg, filters={}, tick_ms=rec.tick_ms, state_engine=se, decision=dcfg, risk=rcfg,
                       account=dict(t["account"]),
                       pending_entry_ttl_ms=int(t["core"].get("pending_entry_ttl_ms", 60_000)),
                       user_stream_staleness_ms=int((t.get("userdata") or {}).get("staleness_s", 3600)) * 1000,
-                      reactors=rxcfg)
+                      reactors=rxcfg, strategies=registry,
+                      strategy_id=(strategy_ids[0] if strategy_ids else "v1_state_cell"))
     cd = t.get("cost_drift")
     drift = CostDriftConfig(window_ms=int(cd["window_ms"]), capital_usdt=Decimal(str(cd["capital_usdt"])),
                             commission_to_gross_max=_dec(cd.get("commission_to_gross_max")),

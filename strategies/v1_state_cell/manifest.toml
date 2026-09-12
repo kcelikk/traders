@@ -1,0 +1,15 @@
+# Strateji manifest'i (Gate 5). Kimlik, terfi durumu ve bütçe burada; parametreler config'te.
+id = "v1_state_cell"
+version = "1.0"
+
+# Terfi zinciri: draft → replay_ok → paper_ok → testnet_ok → live. Her adım ayrı kanıt ister.
+# Bugün replay_ok: replay'de bit-eşit çalıştığı `make parity` ile gösterildi.
+promotion_state = "replay_ok"
+allowed_modes = ["replay", "paper"]
+
+required_streams = ["aggTrade", "bookTicker", "markPrice"]
+
+# Strateji bütçesi global K1–K18'in **altında** ikinci katmandır; global her zaman kazanır.
+[risk_budget]
+max_positions = 3
+gross_cap_usdt = "240"

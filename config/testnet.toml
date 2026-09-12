@@ -131,3 +131,8 @@ mode = "alarm"                   # alarm: karar değişmez, yalnız olay üretil
 daily_net_loss_usdt = "40"       # 80 USDT notional × 5 pozisyon sınırının yarısı; ölçümle güncellenecek
 consecutive_loss_limit = 5
 kill_on_runaway = true           # arıza dedektörü (anormal emir/ret) kalıcı kill switch tetikler
+
+[strategy]                       # Gate 5 — kayıtlı stratejiler
+# Boş liste: çekirdek gömülü karar motoruyla çalışır (planlanan geri alma yolu).
+# Manifest `strategies/<id>/manifest.toml`; terfi durumu ve moda uygunluk orada zorlanır.
+enabled = ["v1_state_cell"]

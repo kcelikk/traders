@@ -41,7 +41,7 @@ class RiskInputs:
     stale: dict                  # kategori → bayat mı
     skew_ms: int | None
     open_positions: dict         # pos_id → sembol
-    pending_entries: set         # sembol
+    pending_entries: set         # sembol (kira tablosunun sembol kümesi; K6/K7 girdisi)
     gross_usdt: Decimal
     beta_exposure_usdt: Decimal  # Σ yön × notional × beta
     betas: dict                  # sembol → beta
@@ -59,6 +59,12 @@ class RiskInputs:
     last_429_ms: int | None
     banned: bool
     now_ms: int
+    # ---- Gate 5: kira sahipliği ve strateji bütçesi (hepsi opsiyonel; tek strateji hâlinde etkisiz)
+    lease_busy: str | None = None      # sembol bu strateji için neden meşgul; None = boş
+    strategy_id: str | None = None     # niyeti üreten strateji (atıf ve iki katmanlı risk)
+    strategy_budget: dict = field(default_factory=dict)   # {"max_positions","gross_cap_usdt"}
+    strategy_open: int = 0
+    strategy_gross_usdt: Decimal = Decimal(0)
 
 
 @dataclass(frozen=True)
@@ -105,6 +111,18 @@ def assess(intent: EntryIntent, x: RiskInputs, cfg: RiskConfig) -> Verdict:
             reasons.append("K6_max_positions")
         if sym in x.open_positions.values() or sym in x.pending_entries:
             reasons.append("K7_symbol_busy")
+        elif x.lease_busy:
+            # Aynı semantik, sahibi de söyleniyor: başka stratejinin kirasındaysa da meşgul.
+            reasons.append(f"K7_symbol_busy:{x.lease_busy}")
+        # Strateji bütçesi **global limitlerin altında** ikinci bir katmandır; global her zaman kazanır.
+        b = x.strategy_budget or {}
+        if b.get("max_positions") is not None and x.strategy_open >= int(b["max_positions"]):
+            reasons.append("K19_strategy_max_positions")
+        if b.get("gross_cap_usdt") is not None:
+            room = Decimal(str(b["gross_cap_usdt"])) - x.strategy_gross_usdt
+            if room < notional:
+                reasons.append("K19_strategy_gross_cap")
+                notional = max(room, Decimal(0)); resized = True
         if cfg.gross_cap_usdt is not None:
             room = cfg.gross_cap_usdt - x.gross_usdt
             if room < notional:
@@ -167,7 +185,10 @@ def assess(intent: EntryIntent, x: RiskInputs, cfg: RiskConfig) -> Verdict:
         elif x.last_429_ms is not None and x.now_ms - x.last_429_ms < cfg.backoff_ms:
             reasons.append("K18_backoff")
 
-    hard = [r for r in reasons if not r.startswith(("K8_", "K9_beta_cap", "K14_participation")) or r.endswith("unknown")]
+    # Yumuşak nedenler küçültme üretir, ret değil. Strateji `gross_cap`'i global K8 ile aynı
+    # mekaniktir; strateji pozisyon limiti ise K6 gibi serttir.
+    SOFT = ("K8_", "K9_beta_cap", "K14_participation", "K19_strategy_gross_cap")
+    hard = [r for r in reasons if not r.startswith(SOFT) or r.endswith("unknown")]
     if hard:
         return Verdict("REJECT", list(reasons), None)
     if resized:

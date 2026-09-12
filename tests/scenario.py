@@ -86,9 +86,10 @@ def snapshot_event(host, trader):
     trader.on_event(ev, host.now)
 
 
-def live_run(cells):
+def live_run(cells, cfg=None):
+    """`cfg`: parite kontrolü aynı senaryoyu farklı çekirdek yapılandırmasıyla koşturur."""
     host = Host()
-    trader = PaperTrader(Engine(core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit)
+    trader = PaperTrader(Engine(cfg or core_cfg(cells)), SimExecutor(SimConfig(latency_ms=400, seed=1)), host.emit)
     snapshot_event(host, trader)
     for cat, s, d in market_events():
         host.now += 200_000_000       # 200 ms
