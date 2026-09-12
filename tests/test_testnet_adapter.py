@@ -10,16 +10,7 @@ from fbot.core.commands import CancelAlgo, PlaceAlgo, PlaceOrder
 from fbot.execution.testnet_adapter import TestnetAdapter, TestnetDisarmed
 from fbot.gateway.signing import Credentials
 from fbot.gateway.testnet import TestnetClient, TestnetError
-
-
-class FakeHTTP:
-    def __init__(self, responses):
-        self.responses, self.calls = list(responses), []
-
-    def __call__(self, method, path, query, headers, timeout):
-        self.calls.append((method, path, query))
-        r = self.responses.pop(0)
-        return r() if callable(r) else r
+from tests.fake import FakeHTTP
 
 
 def adapter(responses, armed=True):
@@ -37,7 +28,7 @@ def test_disarmed_adapter_refuses_every_command():
 def test_market_order_maps_to_rest_params():
     a = adapter([(200, {}, b'{"orderId":1,"status":"NEW","clientOrderId":"e1"}')])
     out = a.submit(PlaceOrder("BTCUSDT", "BUY", "MARKET", D("0.001"), None, False, "e1", None), now_ms=1700000000000)
-    _, path, q = a.client.http.calls[0]
+    _, path, q, _hdr = a.client.http.calls[0]
     assert path == "/fapi/v1/order"
     assert "symbol=BTCUSDT" in q and "side=BUY" in q and "type=MARKET" in q and "quantity=0.001" in q
     assert "newClientOrderId=e1" in q and "reduceOnly" not in q
@@ -53,7 +44,7 @@ def test_reduce_only_exit_sets_flag():
 def test_algo_order_uses_trigger_price_and_close_position():
     a = adapter([(200, {}, b'{"algoId":9,"clientAlgoId":"p1-SL-v1","algoStatus":"NEW"}')])
     out = a.submit(PlaceAlgo("BTCUSDT", "SELL", "STOP_MARKET", D("77000.5"), True, "MARK_PRICE", True, "p1-SL-v1"), now_ms=0)
-    _, path, q = a.client.http.calls[0]
+    _, path, q, _hdr = a.client.http.calls[0]
     assert path == "/fapi/v1/algoOrder" and "algoType=CONDITIONAL" in q
     assert "triggerPrice=77000.5" in q and "closePosition=true" in q and "workingType=MARK_PRICE" in q
     assert "priceProtect=true" in q and "clientAlgoId=p1-SL-v1" in q
@@ -64,7 +55,7 @@ def test_algo_order_uses_trigger_price_and_close_position():
 def test_cancel_algo():
     a = adapter([(200, {}, b'{"algoStatus":"CANCELED"}')])
     out = a.submit(CancelAlgo("BTCUSDT", "p1-SL-v1"), now_ms=0)
-    m, path, q = a.client.http.calls[0]
+    m, path, q, _hdr = a.client.http.calls[0]
     assert m == "DELETE" and path == "/fapi/v1/algoOrder" and "clientAlgoId=p1-SL-v1" in q
     assert out["kind"] == "algo_canceled"
 

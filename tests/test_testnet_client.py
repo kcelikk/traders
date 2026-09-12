@@ -3,16 +3,7 @@ import pytest
 
 from fbot.gateway.signing import Credentials
 from fbot.gateway.testnet import BASE, TestnetClient, TestnetError
-
-
-class FakeHTTP:
-    def __init__(self, responses):
-        self.responses = list(responses)
-        self.calls = []
-
-    def __call__(self, method, path, query, headers, timeout):
-        self.calls.append((method, path, query, dict(headers)))
-        return self.responses.pop(0)
+from tests.fake import FakeHTTP
 
 
 CREDS = Credentials(api_key="KEY1234567890", api_secret="SECRET")

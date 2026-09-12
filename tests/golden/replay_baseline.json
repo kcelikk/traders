@@ -1,0 +1,13 @@
+{
+ "fixture": "tests/fixtures/rec-mini",
+ "hash": "7e1b29e1c915b3c7c2346d951d78a999a130df7092c161b6b0697d01aa0175de",
+ "events": 27493,
+ "commands": 50,
+ "by_kind": {
+  "BarClosed": 50
+ },
+ "first_seq": 1,
+ "last_seq": 370439,
+ "parse_errors": 0,
+ "not": "Sabitlenmiş davranış baseline'ı. Bu değer değişirse davranış değişmiştir; planlı re-baseline dışında değişmesi bugdur. Güncelleme bir ADR ve komut düzeyi diff raporu gerektirir."
+}

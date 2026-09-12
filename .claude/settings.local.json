@@ -21,7 +21,10 @@
       "Bash(.venv/bin/python -c \"import json,sys; print\\(json.load\\(sys.stdin\\)['services']['testnet']\\)\")",
       "Bash(echo *)",
       "Bash(.venv/bin/pytest -q tests/test_ui_build.py)",
-      "Bash(.venv/bin/pytest -q tests)"
+      "Bash(.venv/bin/pytest -q tests)",
+      "Bash(kill 204397)",
+      "Bash(ps -eo pid,etime,args)",
+      "Bash(ps -eo pid,etime,pcpu,args --sort=-pcpu)"
     ]
   }
 }

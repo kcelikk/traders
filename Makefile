@@ -6,7 +6,7 @@ RUN ?= baseline-24h-20260910
 REC ?= rec-72h
 GIT_SHA := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
-.PHONY: setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down testnet-up testnet-down testnet-logs testnet-summary test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
+.PHONY: golden bench bench-guard ui-build determinism-report barrier-scan shuffle-control verify-exchange setup status ui ui-stop run-paper paper-stop paper-summary paper-up paper-down testnet-up testnet-down testnet-logs testnet-summary test test-determinism replay replay-positions export-bars research-report research-scan fetch-history build-history-bars measure-latency summarize-latency unit-economics run-recorder verify-recording verify-orderbook docker-build up down logs
 
 setup:
 	python3 -m venv .venv
@@ -34,8 +34,23 @@ ui-stop:                 # pidfile ile (pkill -f pattern'i kendi shell'ini de ö
 test:
 	$(PYTEST) -q tests
 
-test-determinism:        # Rule Zero: fixture iki ayrı process'te, hash eşit; mutasyonda farklı
-	$(PYTEST) -q tests/test_replay_determinism.py tests/test_purity.py
+golden:                  # sabitlenmiş davranış baseline'ı (kırılırsa kasıtsız değişiklik var)
+	$(PYTEST) -q -m golden tests
+
+bench:                   # Engine.step mikro-ölçümü; --json-out ile baseline güncellenir
+	$(PY) -m scripts.bench_core $(if $(OUT),--json-out $(OUT),)
+
+bench-baseline:          # baseline'ı güncelle (yalnız kasıtlı performans değişiminde)
+	$(PY) -m scripts.bench_core --json-out tests/golden/bench_baseline.json
+
+bench-guard:             # performans regresyon kapısı (yavaş testler)
+	$(PYTEST) -q -m slow tests
+
+test-determinism:        # Rule Zero: saflık + iki process bit-eşitliği + sabitlenmiş golden hash
+	$(PYTEST) -q tests/test_replay_determinism.py tests/test_purity.py tests/test_golden_replay.py
+
+verify-exchange:         # Gate 0: testnet'e karşı API davranış doğrulaması (GERÇEK testnet emri gönderir)
+	PYTHONPATH=. $(PY) -m scripts.verify_exchange_behavior $(if $(DRY),--dry-run,)
 
 determinism-report:      # gerçek kayıtla iki process; konsolun determinizm kutusunu besler (MAXF=dosya)
 	$(PY) -m scripts.determinism_report data/recordings/$(REC) --max-files $(or $(MAXF),1)
